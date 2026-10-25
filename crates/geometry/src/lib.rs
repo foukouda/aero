@@ -12,13 +12,28 @@
 //! | [`naca`](mod@naca) | `naca.f`: `NACA4`, `NACA5` |
 //! | [`leading_edge`] | `xgeom.f`: `LEFIND`, `NSFIND` |
 //! | [`transform`] | `xgeom.f`: `NORM` |
+//! | [`paneling`] | `xfoil.f`: `PANGEN` |
 //! | [`properties`] | `xgeom.f`: `GEOPAR`, `TCCALC`, `SOPPS`; `xutils.f`: `ATANC` |
+//!
+//! # Example
+//!
+//! ```
+//! use aero_geometry::{NacaOptions, PanelingOptions, naca};
+//!
+//! let airfoil = naca("2412", &NacaOptions::default())?;
+//! let paneled = airfoil.paneled(&PanelingOptions::default())?;
+//! assert_eq!(paneled.len(), 160);
+//! let props = airfoil.properties();
+//! assert!((props.max_camber - 0.02).abs() < 1e-3);
+//! # Ok::<(), aero_geometry::GeometryError>(())
+//! ```
 
 mod airfoil;
 mod error;
 pub mod io;
 pub mod leading_edge;
 pub mod naca;
+pub mod paneling;
 pub mod properties;
 pub mod spline;
 pub mod transform;
@@ -28,6 +43,7 @@ pub use error::{GeometryError, Result};
 pub use io::{DatFormat, ImportReport, ImportWarning, parse_dat, to_selig_string};
 pub use leading_edge::{LeadingEdge, LeadingEdgeMethod};
 pub use naca::{NacaOptions, TrailingEdge, naca};
+pub use paneling::{Paneling, PanelingOptions, panel, panel_with_report};
 pub use properties::GeometricProperties;
 pub use spline::{EndCondition, Spline, SplineCurve};
 pub use transform::{Normalization, NormalizationTransform};
