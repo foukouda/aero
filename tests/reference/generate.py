@@ -54,7 +54,7 @@ def lednicer_to_selig(src: pathlib.Path, dst: pathlib.Path) -> None:
         lower = lower[1:]  # shared leading-edge point
     selig = list(reversed(upper)) + lower
     out = [name] + [f" {x} {y}" for x, y in selig]
-    dst.write_text("\n".join(out) + "\n")
+    dst.write_text("\n".join(out) + "\n", newline="\n")
 
 
 def build_script(case: dict) -> str:
@@ -134,7 +134,7 @@ def main() -> int:
         lednicer = case["airfoil"].get("lednicer_source")
         if lednicer:
             lednicer_to_selig(case_dir / lednicer, case_dir / case["airfoil"]["file"])
-        (case_dir / "xfoil.in").write_text(build_script(case))
+        (case_dir / "xfoil.in").write_text(build_script(case), newline="\n")
         print(f"[{case_dir.name}] script written")
 
         if args.scripts_only:

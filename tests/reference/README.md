@@ -19,6 +19,8 @@ solver against XFOIL. Every sub-directory with a `case.toml` is one case.
   <https://web.mit.edu/drela/Public/web/xfoil/xfoil6.996.tgz>
   (SHA-256 `0feb71b5…3dff3f23`), built with gfortran in **double precision**
   exactly as in Drela's `bin/Makefile_gfortran` (`-fdefault-real-8`).
+- The banner of the logs reads "XFOIL Version 7.00": that is `VERSION =
+  6.996` printed with an `F5.2` format, not a different release.
 - The build and the runs are performed by the manually triggered GitHub
   workflow `.github/workflows/xfoil-reference.yml`; its artifact is reviewed
   and committed here. Outputs are never edited by hand.
