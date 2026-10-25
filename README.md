@@ -96,7 +96,19 @@ at Mach 0 and 0.3 (`tests/reference`, `crates/foil2d/tests/xfoil_reference.rs`):
 | Cl, Cm | ≤ 5·10⁻⁵ | 4 decimals |
 | Cp at every node | ≤ 5·10⁻⁶ | 5 decimals |
 
-i.e. the results agree to the precision XFOIL prints them. Theoretical
+i.e. the results agree to the precision XFOIL prints them. Three more
+reference cases cover contours with corners (doubled points); on one of them
+XFOIL itself produces NaN nodes, and aero reports an error instead.
+
+An **extended validation** (`tests/validation`, `crates/foil2d/tests/xfoil_validation.rs`)
+compares 100 randomly drawn cases with XFOIL — 60 airfoils of the UIUC
+database and 40 NACA sections, with random paneling (60 to 360 nodes,
+bunching, refinement zones) and Mach numbers — over 1292 polar points plus
+the Cp distributions: all agree within the same bounds, and the importer
+reads the 60 original UIUC files exactly like an independent Python
+conversion. Mutation testing (deliberately injected bugs in the solver,
+paneling, NACA generator and splines) confirmed that each injected bug
+makes these tests fail. Theoretical
 checks (`crates/foil2d/tests/theory.rs`): zero lift of symmetric sections at
 zero incidence, lift slope tending to 2π for thin sections, thin-airfoil zero
 lift angle, exact solutions for the circle, the ellipse and a Kármán–Trefftz
