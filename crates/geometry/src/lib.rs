@@ -9,13 +9,25 @@
 //! | Module | XFOIL |
 //! |---|---|
 //! | [`spline`] | `spline.f`: `SPLIND`, `SEGSPL`, `SEVAL`, `DEVAL`, `D2VAL`, `CURV`, `SINVRT`, `SCALC`, `TRISOL` |
+//! | [`naca`](mod@naca) | `naca.f`: `NACA4`, `NACA5` |
+//! | [`leading_edge`] | `xgeom.f`: `LEFIND`, `NSFIND` |
+//! | [`transform`] | `xgeom.f`: `NORM` |
+//! | [`properties`] | `xgeom.f`: `GEOPAR`, `TCCALC`, `SOPPS`; `xutils.f`: `ATANC` |
 
 mod airfoil;
 mod error;
 pub mod io;
+pub mod leading_edge;
+pub mod naca;
+pub mod properties;
 pub mod spline;
+pub mod transform;
 
 pub use airfoil::{Airfoil, MIN_POINTS};
 pub use error::{GeometryError, Result};
 pub use io::{DatFormat, ImportReport, ImportWarning, parse_dat, to_selig_string};
+pub use leading_edge::{LeadingEdge, LeadingEdgeMethod};
+pub use naca::{NacaOptions, TrailingEdge, naca};
+pub use properties::GeometricProperties;
 pub use spline::{EndCondition, Spline, SplineCurve};
+pub use transform::{Normalization, NormalizationTransform};
