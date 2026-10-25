@@ -14,6 +14,7 @@ use crate::leading_edge::lefind;
 use crate::spline::SplineCurve;
 
 /// Geometric properties of an airfoil. Lengths are divided by the chord.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct GeometricProperties {
     /// Chord (leading edge to trailing edge midpoint), in input units.

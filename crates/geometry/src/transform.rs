@@ -7,6 +7,7 @@ use crate::error::{GeometryError, Result};
 use crate::leading_edge::{LeadingEdge, LeadingEdgeMethod, find_leading_edge};
 
 /// How an airfoil is normalized to unit chord.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Normalization {
     /// XFOIL `NORM`: translate the leading edge to the origin and scale the

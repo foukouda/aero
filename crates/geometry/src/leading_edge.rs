@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::spline::{SplineCurve, trisol};
 
 /// How the leading edge of a contour is defined.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LeadingEdgeMethod {
     /// XFOIL `LEFIND` (default): the point whose tangent is perpendicular to
@@ -17,6 +18,7 @@ pub enum LeadingEdgeMethod {
 }
 
 /// Location of the leading edge on a splined contour.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct LeadingEdge {
     /// Arc length at the leading edge.

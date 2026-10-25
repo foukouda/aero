@@ -15,6 +15,11 @@ aero-geometry.workspace = true
 faer.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+specta = { workspace = true, optional = true }
+
+[features]
+# Derives `specta::Type` on the public data types (TypeScript bindings).
+specta = ["dep:specta", "aero-geometry/specta"]
 
 [dev-dependencies]
 criterion.workspace = true

@@ -18,6 +18,7 @@ use crate::airfoil::Airfoil;
 use crate::error::{GeometryError, Result};
 
 /// Trailing-edge closure of a generated NACA section.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TrailingEdge {
     /// Standard NACA thickness distribution, open trailing edge.
@@ -28,6 +29,7 @@ pub enum TrailingEdge {
 }
 
 /// Options of the NACA generators.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct NacaOptions {

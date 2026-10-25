@@ -21,6 +21,7 @@ use crate::leading_edge::lefind;
 use crate::transform::Normalization;
 
 /// CST parameters of an airfoil.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CstParameters {
     /// Upper-surface shape weights (`order + 1` values).
@@ -38,6 +39,7 @@ pub struct CstParameters {
 }
 
 /// Options of [`fit_cst`].
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CstFitOptions {
@@ -70,6 +72,7 @@ impl Default for CstFitOptions {
 }
 
 /// Result of a CST fit.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CstFit {
     /// Fitted parameters (in normalized, chord-aligned axes).

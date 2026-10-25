@@ -13,6 +13,7 @@ use crate::leading_edge::lefind;
 use crate::spline::{deval, segspl, seval, trisol};
 
 /// Paneling parameters, with the names and meaning of XFOIL's `PPAR` menu.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PanelingOptions {

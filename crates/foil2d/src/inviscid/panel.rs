@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use super::error::Result;
 
 /// Trailing-edge panel data (XFOIL `TECALC`).
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct TrailingEdgePanel {
     /// Normal-projected trailing-edge gap area `ANTE`.

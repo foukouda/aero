@@ -20,6 +20,7 @@ const GAMMA: f64 = 1.4;
 const BWT: f64 = 0.1;
 
 /// Solver options.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct InviscidOptions {
@@ -44,6 +45,7 @@ impl Default for InviscidOptions {
 }
 
 /// Freestream conditions of one analysis.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct OperatingPoint {
     /// Angle of attack in degrees.
@@ -67,6 +69,7 @@ impl OperatingPoint {
 /// Force coefficients are integrated like XFOIL's `CLCALC`: they are
 /// referred to a unit chord in airfoil coordinates (normalize the airfoil to
 /// get conventional coefficients).
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InviscidSolution {
     /// Angle of attack in degrees.
@@ -103,6 +106,7 @@ pub struct InviscidSolution {
 }
 
 /// An angle-of-attack sweep, with the semantics of XFOIL's `ASEQ`.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct AlphaSweep {
     /// First angle of attack, degrees.
@@ -152,6 +156,7 @@ impl AlphaSweep {
 }
 
 /// Coefficients of one converged point of a polar.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PolarPoint {
     /// Angle of attack, degrees.
@@ -185,6 +190,7 @@ impl From<&InviscidSolution> for PolarPoint {
 }
 
 /// A point of a sweep that could not be computed.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SweepFailure {
     /// Angle of attack, degrees.
@@ -194,6 +200,7 @@ pub struct SweepFailure {
 }
 
 /// Result of an angle-of-attack sweep.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Polar {
     /// Freestream Mach number.
@@ -207,6 +214,7 @@ pub struct Polar {
 }
 
 /// Progress report passed to the sweep callback after each point.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SweepProgress {
     /// 0-based index of the point just computed.
@@ -217,6 +225,8 @@ pub struct SweepProgress {
     pub alpha_deg: f64,
     /// The computed point, or `None` if it failed.
     pub point: Option<PolarPoint>,
+    /// Reason of the failure when `point` is `None`.
+    pub error: Option<String>,
 }
 
 /// XFOIL's linear-vorticity streamfunction panel method for one geometry.
@@ -539,18 +549,19 @@ impl InviscidSolver {
             cancelled: false,
         };
         for (index, &alpha_deg) in alphas.iter().enumerate() {
-            let point = match self.solve(OperatingPoint { alpha_deg, mach }) {
+            let (point, error) = match self.solve(OperatingPoint { alpha_deg, mach }) {
                 Ok(solution) => {
                     let p = PolarPoint::from(&solution);
                     polar.points.push(p);
-                    Some(p)
+                    (Some(p), None)
                 }
                 Err(e) => {
+                    let message = e.to_string();
                     polar.failures.push(SweepFailure {
                         alpha_deg,
-                        message: e.to_string(),
+                        message: message.clone(),
                     });
-                    None
+                    (None, Some(message))
                 }
             };
             let progress = SweepProgress {
@@ -558,6 +569,7 @@ impl InviscidSolver {
                 total,
                 alpha_deg,
                 point,
+                error,
             };
             if on_progress(&progress).is_break() {
                 polar.cancelled = index + 1 < total;

@@ -24,6 +24,7 @@ use crate::airfoil::{Airfoil, dedup_points};
 use crate::error::{GeometryError, Result};
 
 /// Layout of an airfoil coordinate file.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DatFormat {
     /// Selig (XFOIL) ordering.
@@ -37,6 +38,7 @@ pub enum DatFormat {
 }
 
 /// Non-fatal observation made while importing a file.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ImportWarning {
@@ -80,6 +82,7 @@ impl fmt::Display for ImportWarning {
 }
 
 /// Outcome of an import: detected format and warnings.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ImportReport {
     /// Detected file layout.
@@ -120,6 +123,13 @@ pub fn parse_dat(text: &str, fallback_name: &str) -> Result<(Airfoil, ImportRepo
             None if name.is_none() && rows.is_empty() => name = Some(line.to_string()),
             None => ignored.push(line_no),
         }
+    }
+
+    if rows.is_empty() {
+        return Err(GeometryError::Parse {
+            line: text.lines().count().max(1),
+            message: "no coordinate lines (pairs of numbers) were found".into(),
+        });
     }
 
     let mut format = DatFormat::Selig;
@@ -438,6 +448,14 @@ mod tests {
     #[test]
     fn invalid_files_are_errors() {
         assert!(parse_dat("", "e").is_err());
+        let err = parse_dat(
+            "just text
+more text
+",
+            "e",
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("no coordinate lines"), "{err}");
         assert!(parse_dat("name only\n", "e").is_err());
         assert!(parse_dat("foil\n0 0\n1 0\n", "e").is_err());
     }
