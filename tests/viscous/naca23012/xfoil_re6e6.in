@@ -1,0 +1,35 @@
+PLOP
+G
+
+NACA 23012
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+PSAV panels.dat
+OPER
+CINC
+VISC 6000000.0
+MACH 0.0
+VPAR
+N 9.0
+XTR 1.0 1.0
+
+PACC
+vpolar_re6e6.txt
+vdump_re6e6.bin
+ASEQ -4.0 16.0 2.0
+PACC
+PACC
+vpoints_re6e6.txt
+vpdump_re6e6.bin
+INIT
+ALFA 5.0
+CPWR vcp_re6e6_a+05.0.txt
+DUMP vbl_re6e6_a+05.0.txt
+PACC
+
+QUIT

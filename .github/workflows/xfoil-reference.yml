@@ -2,14 +2,14 @@ name: XFOIL reference data
 
 # Builds the official XFOIL 6.996 sources (gfortran, double precision, as in
 # Drela's bin/Makefile_gfortran) and regenerates the raw reference outputs in
-# tests/reference. The result is uploaded as an artifact to be reviewed and
+# tests/reference, tests/validation or tests/viscous. The result is uploaded as an artifact to be reviewed and
 # committed; this workflow never pushes anything.
 
 on:
   workflow_dispatch:
     inputs:
       root:
-        description: Directory of the cases (tests/reference or tests/validation)
+        description: Directory of the cases (tests/reference, tests/validation or tests/viscous)
         default: tests/reference
         required: true
 

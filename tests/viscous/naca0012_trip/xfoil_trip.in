@@ -1,0 +1,39 @@
+PLOP
+G
+
+NACA 0012
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+PSAV panels.dat
+OPER
+CINC
+VISC 1000000.0
+MACH 0.0
+VPAR
+N 9.0
+XTR 0.1 0.1
+
+PACC
+vpolar_trip.txt
+vdump_trip.bin
+ASEQ 0.0 10.0 2.0
+PACC
+PACC
+vpoints_trip.txt
+vpdump_trip.bin
+INIT
+ALFA 2.0
+CPWR vcp_trip_a+02.0.txt
+DUMP vbl_trip_a+02.0.txt
+INIT
+ALFA 6.0
+CPWR vcp_trip_a+06.0.txt
+DUMP vbl_trip_a+06.0.txt
+PACC
+
+QUIT

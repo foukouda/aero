@@ -1,0 +1,34 @@
+PLOP
+G
+
+NACA 2412
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+OPER
+CINC
+VISC 3000000.0
+MACH 0.3
+VPAR
+N 9.0
+XTR 1.0 1.0
+
+PACC
+vpolar_re3e6_m03.txt
+vdump_re3e6_m03.bin
+ASEQ -4.0 8.0 2.0
+PACC
+PACC
+vpoints_re3e6_m03.txt
+vpdump_re3e6_m03.bin
+INIT
+ALFA 4.0
+CPWR vcp_re3e6_m03_a+04.0.txt
+DUMP vbl_re3e6_m03_a+04.0.txt
+PACC
+
+QUIT

@@ -1,0 +1,39 @@
+PLOP
+G
+
+LOAD clarky.dat
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+PSAV panels.dat
+OPER
+CINC
+VISC 500000.0
+MACH 0.0
+VPAR
+N 9.0
+XTR 1.0 1.0
+
+PACC
+vpolar_re5e5.txt
+vdump_re5e5.bin
+ASEQ -4.0 14.0 1.0
+PACC
+PACC
+vpoints_re5e5.txt
+vpdump_re5e5.bin
+INIT
+ALFA 2.0
+CPWR vcp_re5e5_a+02.0.txt
+DUMP vbl_re5e5_a+02.0.txt
+INIT
+ALFA 8.0
+CPWR vcp_re5e5_a+08.0.txt
+DUMP vbl_re5e5_a+08.0.txt
+PACC
+
+QUIT
