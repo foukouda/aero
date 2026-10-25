@@ -29,6 +29,7 @@
 //! ```
 
 mod airfoil;
+pub mod cst;
 mod error;
 pub mod io;
 pub mod leading_edge;
@@ -39,6 +40,7 @@ pub mod spline;
 pub mod transform;
 
 pub use airfoil::{Airfoil, MIN_POINTS};
+pub use cst::{CstFit, CstFitOptions, CstParameters, fit_cst};
 pub use error::{GeometryError, Result};
 pub use io::{DatFormat, ImportReport, ImportWarning, parse_dat, to_selig_string};
 pub use leading_edge::{LeadingEdge, LeadingEdgeMethod};
