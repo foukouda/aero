@@ -5,31 +5,82 @@ A modern rewrite of [XFOIL](https://web.mit.edu/drela/Public/web/xfoil/)
 parallel-friendly airfoil analysis — and later optimization — toolkit that is
 usable as a library.
 
-> **Status:** step 1 in progress — geometry, XFOIL-compatible inviscid solver,
-> desktop application. Viscous analysis, shape optimization, 3D methods,
-> Python bindings and WebAssembly come later.
+> **Status:** step 1 — geometry, XFOIL-compatible inviscid solver and desktop
+> application. Viscous analysis, shape optimization, 3D methods, Python
+> bindings and WebAssembly come later; the architecture is prepared for them.
 
 ## Workspace layout
 
 ```
 crates/
-  geometry/     aero-geometry: airfoils, splines, .dat I/O, NACA/CST, paneling
-  foil2d/       aero-foil2d:   2D solvers (inviscid panel method; viscous later)
-app/            Tauri 2 + Svelte 5 desktop application (thin layer over the crates)
-tests/reference XFOIL 6.996 reference results used for validation
-docs/           specifications and design notes
+  geometry/       aero-geometry: airfoils, splines, .dat I/O, NACA/CST, PANGEN paneling
+  foil2d/         aero-foil2d:   2D solvers (XFOIL inviscid panel method; viscous later)
+app/
+  src-tauri/      aero-app: thin Tauri layer (commands -> Tauri-free engine -> crates)
+  src/            Svelte 5 + TypeScript frontend (uPlot charts)
+tests/reference/  XFOIL 6.996 reference results used for validation
+docs/             specifications and design notes
 ```
 
-The computational crates never depend on Tauri and hold no global state.
+The computational crates never depend on Tauri, hold no global state, use
+`f64` everywhere and return errors instead of panicking. Their public types
+are serializable (`serde`) and, with the `specta` feature, exported to
+TypeScript.
 
-## Building
+## Requirements
 
-Requirements: Rust (the pinned toolchain in `rust-toolchain.toml` is
-installed automatically by `rustup`).
+- Rust: the pinned toolchain (`rust-toolchain.toml`) is installed
+  automatically by `rustup`.
+- Node.js 20 or later (for the desktop application).
+- Tauri system dependencies:
+  - **Windows**: Microsoft C++ Build Tools and WebView2 (preinstalled on
+    Windows 10/11).
+  - **macOS**: Xcode Command Line Tools.
+  - **Linux** (Debian/Ubuntu): `sudo apt install libwebkit2gtk-4.1-dev
+    libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+    build-essential`.
+
+## Running the desktop application
 
 ```sh
-cargo test --workspace
+cd app
+npm install
+npm run tauri dev      # development build with hot reload
+npm run tauri build    # optimized installer in target/release/bundle
+```
+
+Features: airfoil library (NACA 4/5-digit generator with open or closed
+trailing edge, `.dat` import in Selig or Lednicer format by button or drag
+and drop, duplicate, rename, delete), true-scale shape view with optional
+panel nodes and overlays, geometric properties, XFOIL `PANGEN` paneling
+controls with immediate preview, single angle-of-attack analysis driven by a
+live slider (Cp with −Cp up, Cl, Cm, Cp min, optional Mach number with the
+Kármán–Tsien correction and a clear error beyond the critical Mach number),
+angle-of-attack sweeps with progress and cancellation (Cl(α), Cm(α) for
+several airfoils), exports (`.dat`, CSV, PNG, SVG), JSON project files with
+a format version, light and dark themes.
+
+## Libraries and tests
+
+```sh
+cargo test --workspace                                 # all Rust tests
 cargo clippy --workspace --all-targets -- -D warnings
+cargo bench -p aero-foil2d                             # criterion benchmarks
+cd app && npm run check && npm test                    # frontend type check and tests
+```
+
+TypeScript bindings (`app/src/lib/bindings.ts`) are generated from the Rust
+types by `tauri-specta`; a test fails when they are out of date. Regenerate
+them with `npm run bindings` in `app/`.
+
+```rust
+use aero_foil2d::inviscid::{InviscidOptions, InviscidSolver, OperatingPoint};
+use aero_geometry::{NacaOptions, PanelingOptions, naca};
+
+let airfoil = naca("2412", &NacaOptions::default())?.paneled(&PanelingOptions::default())?;
+let solver = InviscidSolver::new(&airfoil, &InviscidOptions::default())?; // factorized once
+let solution = solver.solve(OperatingPoint::incompressible(4.0))?;        // O(N) per alpha
+println!("Cl = {:.4}, Cm = {:.4}", solution.cl, solution.cm);
 ```
 
 ## Validation

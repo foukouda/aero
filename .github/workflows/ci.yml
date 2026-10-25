@@ -14,8 +14,8 @@ env:
   RUSTDOCFLAGS: -D warnings
 
 jobs:
-  core:
-    name: core (${{ matrix.os }})
+  rust:
+    name: rust (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -23,6 +23,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Tauri system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev libssl-dev build-essential
 
       - name: Install pinned toolchain
         run: rustup show active-toolchain || rustup toolchain install
@@ -40,3 +47,30 @@ jobs:
 
       - name: Docs
         run: cargo doc --workspace --no-deps
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Type check
+        run: npm run check
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
