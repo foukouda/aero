@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+*.dat text eol=lf
+*.txt text eol=lf
+*.toml text eol=lf
+*.xfoil text eol=lf
+
+*.png binary
+*.ico binary
+*.icns binary

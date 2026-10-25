@@ -1,0 +1,58 @@
+name: XFOIL reference data
+
+# Builds the official XFOIL 6.996 sources (gfortran, double precision, as in
+# Drela's bin/Makefile_gfortran) and regenerates the raw reference outputs in
+# tests/reference. The result is uploaded as an artifact to be reviewed and
+# committed; this workflow never pushes anything.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  XFOIL_URL: https://web.mit.edu/drela/Public/web/xfoil/xfoil6.996.tgz
+  XFOIL_SHA256: 0feb71b58070d8514d830fcb0b609a10a11399d362493d7b9bbfb7343dff3f23
+  FORTRAN_FLAGS: -O -fdefault-real-8 -std=legacy -fallow-argument-mismatch -w
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Fortran toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran libx11-dev xvfb
+
+      - name: Download XFOIL 6.996
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/xfoil.tgz" "$XFOIL_URL"
+          echo "$XFOIL_SHA256  $RUNNER_TEMP/xfoil.tgz" | sha256sum -c
+          tar xzf "$RUNNER_TEMP/xfoil.tgz" -C "$RUNNER_TEMP"
+
+      - name: Build plotlib (double precision)
+        working-directory: ${{ runner.temp }}/Xfoil/plotlib
+        run: |
+          cp config.make.gfortranDP config.make
+          make -f Makefile.all lib FFLAGS="$FORTRAN_FLAGS" CFLAGS="-O2 -DUNDERSCORE -DDBL_ARGS"
+
+      - name: Build XFOIL (double precision)
+        working-directory: ${{ runner.temp }}/Xfoil/bin
+        run: |
+          make -f Makefile_gfortran xfoil \
+            FFLAGS="$FORTRAN_FLAGS" FFLOPT="$FORTRAN_FLAGS" \
+            INSTALLCMD=true BINDIR=.
+          ls -l xfoil
+
+      - name: Run reference cases
+        run: xvfb-run -a python3 tests/reference/generate.py --xfoil "$RUNNER_TEMP/Xfoil/bin/xfoil"
+
+      - name: Upload reference outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xfoil-reference
+          path: tests/reference/

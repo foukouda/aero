@@ -1,0 +1,18 @@
+aero — a modern rewrite of XFOIL in Rust
+
+This project contains Rust ports of algorithms from XFOIL 6.996
+(https://web.mit.edu/drela/Public/web/xfoil/), in particular:
+
+  - spline.f   (SPLIND, SEGSPL, SEVAL, DEVAL, D2VAL, CURV, SINVRT, SCALC, TRISOL)
+  - naca.f     (NACA4, NACA5)
+  - xgeom.f    (LEFIND, NORM, SOPPS, TCCALC, GEOPAR)
+  - xfoil.f    (PANGEN, TECALC, CPCALC, CLCALC, COMSET)
+  - xpanel.f   (APCALC, NCALC, PSILIN, GGCALC, QISET)
+  - xutils.f   (ATANC)
+
+XFOIL is Copyright (C) 2000 Mark Drela and Harold Youngren, and is
+distributed under the GNU General Public License, version 2 or (at your
+option) any later version. Consequently, this project is distributed under
+the same terms: GPL-2.0-or-later. See the LICENSE file.
+
+Each ported Rust function documents the XFOIL routine it derives from.

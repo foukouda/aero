@@ -1,0 +1,35 @@
+[workspace]
+resolver = "3"
+members = ["crates/geometry", "crates/foil2d"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+license = "GPL-2.0-or-later"
+repository = "https://github.com/foukouda/aero"
+
+[workspace.dependencies]
+aero-geometry = { path = "crates/geometry" }
+aero-foil2d = { path = "crates/foil2d" }
+faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
+toml = "1"
+
+[workspace.lints.rust]
+missing_docs = "deny"
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+
+[profile.bench]
+debug = true

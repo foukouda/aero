@@ -1,0 +1,23 @@
+[package]
+name = "aero-foil2d"
+description = "2D airfoil flow solvers (XFOIL-compatible inviscid panel method)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aero_foil2d"
+
+[dependencies]
+aero-geometry.workspace = true
+faer.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,22 @@
+[package]
+name = "aero-geometry"
+description = "Airfoil geometry: splines, file I/O, NACA and CST generators, XFOIL-compatible paneling"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aero_geometry"
+
+[dependencies]
+faer.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

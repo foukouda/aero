@@ -1,0 +1,22 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# XFOIL sources and builds used as a porting reference (not redistributed here)
+/.xfoil/
+
+# Node / frontend
+node_modules/
+/app/dist/
+/app/.svelte-kit/
+
+# Tauri
+/app/src-tauri/target/
+/app/src-tauri/gen/schemas/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
