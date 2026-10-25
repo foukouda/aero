@@ -7,6 +7,11 @@ name: XFOIL reference data
 
 on:
   workflow_dispatch:
+    inputs:
+      root:
+        description: Directory of the cases (tests/reference or tests/validation)
+        default: tests/reference
+        required: true
 
 permissions:
   contents: read
@@ -47,12 +52,15 @@ jobs:
             INSTALLCMD=true BINDIR=.
           ls -l xfoil
 
-      - name: Run reference cases
-        run: xvfb-run -a python3 tests/reference/generate.py --xfoil "$RUNNER_TEMP/Xfoil/bin/xfoil"
+      - name: Run the cases
+        env:
+          ROOT: ${{ inputs.root }}
+        run: |
+          xvfb-run -a python3 tests/reference/generate.py --xfoil "$RUNNER_TEMP/Xfoil/bin/xfoil"             --root "$ROOT" --keep-going
 
-      - name: Upload reference outputs
+      - name: Upload outputs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: xfoil-reference
-          path: tests/reference/
+          name: xfoil-outputs
+          path: ${{ inputs.root }}/

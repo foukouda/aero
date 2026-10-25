@@ -78,6 +78,12 @@ def build_script(case: dict) -> str:
         f"P {pan['cvpar']}",
         f"T {pan['cterat']}",
         f"R {pan['ctrrat']}",
+    ]
+    if "xsref" in pan:
+        lines.append(f"XT {pan['xsref'][0]} {pan['xsref'][1]}")
+    if "xpref" in pan:
+        lines.append(f"XB {pan['xpref'][0]} {pan['xpref'][1]}")
+    lines += [
         "",  # leave PPAR: re-panels with the new parameters
         "",  # leave the redisplayed PPAR menu
         "PSAV panels.dat",
@@ -119,13 +125,21 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--xfoil", help="path to the XFOIL executable")
     parser.add_argument("--scripts-only", action="store_true")
+    parser.add_argument("--root", default=str(HERE), help="directory holding the cases")
+    parser.add_argument(
+        "--keep-going",
+        action="store_true",
+        help="record failing cases in FAILED.txt instead of stopping",
+    )
     parser.add_argument("cases", nargs="*", help="case directories (default: all)")
     args = parser.parse_args()
 
     if not args.scripts_only and not args.xfoil:
         parser.error("either --xfoil or --scripts-only is required")
 
-    dirs = sorted(p.parent for p in HERE.glob("*/case.toml"))
+    root = pathlib.Path(args.root).resolve()
+    dirs = sorted(p.parent for p in root.glob("*/case.toml"))
+    failed: list[str] = []
     if args.cases:
         dirs = [d for d in dirs if d.name in args.cases]
 
@@ -140,23 +154,35 @@ def main() -> int:
         if args.scripts_only:
             continue
 
-        for name in outputs(case):
+        for name in outputs(case) + ["FAILED.txt"]:
             (case_dir / name).unlink(missing_ok=True)
-        with open(case_dir / "xfoil.in") as stdin, open(case_dir / "xfoil.log", "w") as log:
-            subprocess.run(
-                [str(pathlib.Path(args.xfoil).resolve())],
-                cwd=case_dir,
-                stdin=stdin,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                check=True,
-                timeout=600,
-            )
+        reason = None
+        try:
+            with open(case_dir / "xfoil.in") as stdin, open(case_dir / "xfoil.log", "w") as log:
+                subprocess.run(
+                    [str(pathlib.Path(args.xfoil).resolve())],
+                    cwd=case_dir,
+                    stdin=stdin,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    check=True,
+                    timeout=120,
+                )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            reason = f"XFOIL failed: {e}"
         missing = [n for n in outputs(case) if not (case_dir / n).exists()]
-        if missing:
-            print(f"[{case_dir.name}] MISSING OUTPUTS: {missing}", file=sys.stderr)
-            return 1
+        if missing and reason is None:
+            reason = f"missing outputs: {missing}"
+        if reason:
+            print(f"[{case_dir.name}] {reason}", file=sys.stderr)
+            if not args.keep_going:
+                return 1
+            (case_dir / "FAILED.txt").write_text(reason + "\n", newline="\n")
+            failed.append(case_dir.name)
+            continue
         print(f"[{case_dir.name}] done")
+    if failed:
+        print(f"{len(failed)} case(s) failed in XFOIL: {', '.join(failed)}")
     return 0
 
 

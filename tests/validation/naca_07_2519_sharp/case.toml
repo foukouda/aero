@@ -1,0 +1,19 @@
+# Extended validation case, built by ../build_cases.py.
+description = "NACA 2519 (closed TE, random draw)"
+
+[airfoil]
+kind = "naca_sharp"
+code = "2519"
+
+[paneling]
+n_nodes = 60
+cvpar = 1.0
+cterat = 0.15
+ctrrat = 0.2
+xsref = [0.1, 0.4]
+xpref = [0.2, 0.4]
+
+[[runs]]
+mach = 0.0
+polar = { start = -6.0, end = 14.0, step = 2.0 }
+cp_alphas = [-3.0, 2.0, 7.0]

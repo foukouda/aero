@@ -1,0 +1,29 @@
+PLOP
+G
+
+NACS 6521
+PPAR
+N 280
+P 0.3
+T 0.3
+R 0.2
+XB 0.2 0.4
+
+
+PSAV panels.dat
+OPER
+CINC
+MACH 0.0
+PACC
+polar_M0.00.txt
+
+ASEQ -6.0 14.0 2.0
+PACC
+ALFA -3.0
+CPWR cp_M0.00_a-03.0.txt
+ALFA 2.0
+CPWR cp_M0.00_a+02.0.txt
+ALFA 7.0
+CPWR cp_M0.00_a+07.0.txt
+
+QUIT

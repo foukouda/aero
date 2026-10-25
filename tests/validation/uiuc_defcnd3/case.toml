@@ -1,0 +1,24 @@
+# Extended validation case, built by ../build_cases.py.
+description = "UIUC defcnd3 (random draw)"
+
+[airfoil]
+kind = "file"
+file = "airfoil.dat"
+original = "original.dat"
+
+[paneling]
+n_nodes = 100
+cvpar = 0.7
+cterat = 0.6
+ctrrat = 0.2
+xsref = [0.5, 0.8]
+
+[[runs]]
+mach = 0.0
+polar = { start = -6.0, end = 14.0, step = 2.0 }
+cp_alphas = [-3.0, 2.0, 7.0]
+
+[[runs]]
+mach = 0.4
+polar = { start = -4.0, end = 6.0, step = 2.0 }
+cp_alphas = [1.0]

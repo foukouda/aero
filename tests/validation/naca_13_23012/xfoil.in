@@ -1,0 +1,30 @@
+PLOP
+G
+
+NACA 23012
+PPAR
+N 100
+P 0.7
+T 0.05
+R 0.4
+XT 0.3 0.6
+XB 0.2 0.4
+
+
+PSAV panels.dat
+OPER
+CINC
+MACH 0.0
+PACC
+polar_M0.00.txt
+
+ASEQ -6.0 14.0 2.0
+PACC
+ALFA -3.0
+CPWR cp_M0.00_a-03.0.txt
+ALFA 2.0
+CPWR cp_M0.00_a+02.0.txt
+ALFA 7.0
+CPWR cp_M0.00_a+07.0.txt
+
+QUIT
