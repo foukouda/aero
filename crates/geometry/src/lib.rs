@@ -42,7 +42,10 @@ pub mod transform;
 pub use airfoil::{Airfoil, MIN_POINTS};
 pub use cst::{CstFit, CstFitOptions, CstParameters, fit_cst};
 pub use error::{GeometryError, Result};
-pub use io::{DatFormat, ImportReport, ImportWarning, parse_dat, to_selig_string};
+pub use io::{
+    DatFormat, ImportOptions, ImportReport, ImportWarning, parse_dat, parse_dat_with,
+    to_selig_string,
+};
 pub use leading_edge::{LeadingEdge, LeadingEdgeMethod};
 pub use naca::{NacaOptions, TrailingEdge, naca};
 pub use paneling::{Paneling, PanelingOptions, panel, panel_with_report};

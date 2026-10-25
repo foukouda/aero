@@ -9,7 +9,10 @@ use std::path::{Path, PathBuf};
 use aero_foil2d::inviscid::{
     InviscidError, InviscidOptions, InviscidSolution, InviscidSolver, OperatingPoint,
 };
-use aero_geometry::{Airfoil, NacaOptions, PanelingOptions, TrailingEdge, naca, panel, parse_dat};
+use aero_geometry::{
+    Airfoil, ImportOptions, NacaOptions, PanelingOptions, TrailingEdge, naca, panel, parse_dat,
+    parse_dat_with,
+};
 
 /// One reference case.
 pub struct Case {
@@ -144,7 +147,14 @@ impl Case {
             "file" => {
                 let file = airfoil["file"].as_str().unwrap();
                 let text = std::fs::read_to_string(self.dir.join(file)).unwrap();
-                parse_dat(&text, file).unwrap().0
+                // Doubled points are corners for XFOIL; keep them when asked.
+                let options = ImportOptions {
+                    merge_duplicate_points: airfoil
+                        .get("merge_duplicates")
+                        .and_then(toml::Value::as_bool)
+                        .unwrap_or(true),
+                };
+                parse_dat_with(&text, file, &options).unwrap().0
             }
             other => panic!("unknown kind {other}"),
         }

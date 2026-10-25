@@ -99,9 +99,38 @@ struct Row {
     count: usize,
 }
 
-/// Parses an airfoil coordinate file. `fallback_name` is used when the file
-/// has no name line (for instance the file stem).
+/// Options of [`parse_dat_with`].
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ImportOptions {
+    /// Merge exactly repeated successive points (default). When false, a
+    /// doubled point is kept and marks a corner of the contour, as in
+    /// XFOIL's buffer airfoil (sharp leading edges, flap hinges...).
+    pub merge_duplicate_points: bool,
+}
+
+impl Default for ImportOptions {
+    fn default() -> Self {
+        Self {
+            merge_duplicate_points: true,
+        }
+    }
+}
+
+/// Parses an airfoil coordinate file with the default [`ImportOptions`].
+/// `fallback_name` is used when the file has no name line (for instance the
+/// file stem).
 pub fn parse_dat(text: &str, fallback_name: &str) -> Result<(Airfoil, ImportReport)> {
+    parse_dat_with(text, fallback_name, &ImportOptions::default())
+}
+
+/// Parses an airfoil coordinate file.
+pub fn parse_dat_with(
+    text: &str,
+    fallback_name: &str,
+    options: &ImportOptions,
+) -> Result<(Airfoil, ImportReport)> {
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let mut warnings = Vec::new();
     let mut name: Option<String> = None;
@@ -188,13 +217,18 @@ pub fn parse_dat(text: &str, fallback_name: &str) -> Result<(Airfoil, ImportRepo
         }
     };
 
-    let before = x.len();
-    let (x, y) = dedup_points(&x, &y);
-    if x.len() != before {
-        warnings.push(ImportWarning::DuplicatePointsRemoved {
-            count: before - x.len(),
-        });
-    }
+    let (x, y) = if options.merge_duplicate_points {
+        let before = x.len();
+        let (x, y) = dedup_points(&x, &y);
+        if x.len() != before {
+            warnings.push(ImportWarning::DuplicatePointsRemoved {
+                count: before - x.len(),
+            });
+        }
+        (x, y)
+    } else {
+        (x, y)
+    };
 
     let (airfoil, reversed) = Airfoil::new_reoriented(name, x, y)?;
     if reversed {
@@ -426,6 +460,25 @@ mod tests {
         for w in &report.warnings {
             assert!(!w.to_string().is_empty());
         }
+    }
+
+    #[test]
+    fn corners_can_be_kept() {
+        let text = SELIG.replace(
+            "  0.000000  0.000000
+",
+            "  0.000000  0.000000
+  0.000000  0.000000
+",
+        );
+        let keep = ImportOptions {
+            merge_duplicate_points: false,
+        };
+        let (af, report) = parse_dat_with(&text, "c", &keep).unwrap();
+        assert_eq!(af.len(), 10);
+        assert!(report.warnings.is_empty());
+        let (merged, _) = parse_dat(&text, "c").unwrap();
+        assert_eq!(merged.len(), 9);
     }
 
     #[test]

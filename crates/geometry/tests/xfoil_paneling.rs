@@ -5,7 +5,10 @@
 
 use std::path::{Path, PathBuf};
 
-use aero_geometry::{Airfoil, NacaOptions, PanelingOptions, TrailingEdge, naca, panel, parse_dat};
+use aero_geometry::{
+    Airfoil, ImportOptions, NacaOptions, PanelingOptions, TrailingEdge, naca, panel, parse_dat,
+    parse_dat_with,
+};
 
 /// Maximum node-position difference, in chord units. XFOIL writes nodes with
 /// 7 significant digits (`G15.7`), i.e. a rounding error of up to 5e-8: the
@@ -44,7 +47,14 @@ fn buffer_airfoil(dir: &Path, case: &toml::Table) -> Airfoil {
         "file" => {
             let file = airfoil["file"].as_str().expect("file");
             let text = std::fs::read_to_string(dir.join(file)).expect("airfoil file");
-            parse_dat(&text, file).expect("parse").0
+            // Doubled points are corners for XFOIL; keep them when asked.
+            let options = ImportOptions {
+                merge_duplicate_points: airfoil
+                    .get("merge_duplicates")
+                    .and_then(toml::Value::as_bool)
+                    .unwrap_or(true),
+            };
+            parse_dat_with(&text, file, &options).expect("parse").0
         }
         other => panic!("unknown kind {other}"),
     }
