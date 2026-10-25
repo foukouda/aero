@@ -17,8 +17,13 @@ serde.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
 serde_json.workspace = true
 toml.workspace = true
+
+[[bench]]
+name = "inviscid"
+harness = false
 
 [lints]
 workspace = true

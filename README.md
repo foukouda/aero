@@ -32,6 +32,39 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
+## Validation
+
+The inviscid solver is checked against **XFOIL 6.996** (built from the
+official sources, double precision) on seven cases — NACA 0012 (blunt TE,
+sharp TE, 240-node paneling), NACA 2412, 4415, 23012 and the UIUC Clark Y —
+at Mach 0 and 0.3 (`tests/reference`, `crates/foil2d/tests/xfoil_reference.rs`):
+
+| Quantity | Our pipeline vs XFOIL | XFOIL print precision |
+|---|---|---|
+| Panel nodes (`PANGEN`) | ≤ 7·10⁻⁸ | 7 significant digits |
+| Cl, Cm | ≤ 5·10⁻⁵ | 4 decimals |
+| Cp at every node | ≤ 5·10⁻⁶ | 5 decimals |
+
+i.e. the results agree to the precision XFOIL prints them. Theoretical
+checks (`crates/foil2d/tests/theory.rs`): zero lift of symmetric sections at
+zero incidence, lift slope tending to 2π for thin sections, thin-airfoil zero
+lift angle, exact solutions for the circle, the ellipse and a Kármán–Trefftz
+airfoil (lift within 10⁻⁴, second-order convergence of Cp), and convergence
+of the lift with the number of panels.
+
+## Performance
+
+`cargo bench -p aero-foil2d` (NACA 2412, release build, one core of a
+desktop CPU):
+
+| Operation | Time |
+|---|---|
+| Assembly + LU factorization, 160 nodes | 1.7 ms |
+| Assembly + LU factorization, 320 nodes | 7.5 ms |
+| One angle of attack (Cp, Cl, Cm, Cp min) | 2.6 µs |
+| Sweep of 101 angles of attack | 0.27 ms |
+| `PANGEN` repaneling, 160 nodes | 0.23 ms |
+
 ## License
 
 The solver and paneling code are direct ports of XFOIL routines, so the

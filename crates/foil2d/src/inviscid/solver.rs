@@ -1,6 +1,7 @@
 //! The inviscid panel solver (XFOIL `GGCALC`, `SPECAL`, `CLCALC`, `CPCALC`).
 
 use std::ops::ControlFlow;
+use std::sync::OnceLock;
 
 use aero_geometry::Airfoil;
 use faer::linalg::solvers::{PartialPivLu, Solve};
@@ -225,14 +226,72 @@ pub struct SweepProgress {
 /// solutions `α = 0°` and `α = 90°`. Each operating point is then a
 /// superposition costing `O(N)`. The solver is immutable and `Send + Sync`:
 /// it can be shared between threads to run analyses in parallel.
+///
+/// The source influence matrix, only needed by a viscous coupling, is
+/// computed on first access.
 #[derive(Debug, Clone)]
 pub struct InviscidSolver {
     geometry: PanelGeometry,
     options: InviscidOptions,
     aij: Mat<f64>,
-    bij: Mat<f64>,
+    bij: OnceLock<Mat<f64>>,
     lu: PartialPivLu<f64>,
     gamu: Mat<f64>,
+}
+
+/// Control point and bisector direction `(cos, sin)` of the sharp
+/// trailing-edge condition (XFOIL `GGCALC`), `None` for a blunt edge.
+fn te_bisector(geometry: &PanelGeometry) -> Option<(FieldPoint, f64, f64)> {
+    if !geometry.te_panel.sharp {
+        return None;
+    }
+    let n = geometry.len();
+    let (x, y) = (&geometry.x, &geometry.y);
+    let ag1 = (-geometry.yp[0]).atan2(-geometry.xp[0]);
+    let ag2 = atanc(geometry.yp[n - 1], geometry.xp[n - 1], ag1);
+    let abis = 0.5 * (ag1 + ag2);
+    let (sbis, cbis) = abis.sin_cos();
+
+    // Minimum panel length adjacent to the trailing edge.
+    let ds1 = (x[0] - x[1]).hypot(y[0] - y[1]);
+    let ds2 = (x[n - 1] - x[n - 2]).hypot(y[n - 1] - y[n - 2]);
+    let dsmin = ds1.min(ds2);
+    let [xte, yte] = geometry.te;
+    let point = FieldPoint {
+        node: None,
+        x: xte - BWT * dsmin * cbis,
+        y: yte - BWT * dsmin * sbis,
+        nx: -sbis,
+        ny: cbis,
+    };
+    Some((point, cbis, sbis))
+}
+
+/// Source influence matrix `BIJ` (XFOIL `GGCALC` with `SIGLIN`).
+fn assemble_source_influence(geometry: &PanelGeometry) -> Mat<f64> {
+    let n = geometry.len();
+    let mut bij = Mat::<f64>::zeros(n + 1, n);
+    let mut inf = Influence::new(n);
+    for i in 0..n {
+        let point = FieldPoint {
+            node: Some(i),
+            x: geometry.x[i],
+            y: geometry.y[i],
+            nx: geometry.nx[i],
+            ny: geometry.ny[i],
+        };
+        psilin(geometry, &point, true, &mut inf);
+        for j in 0..n {
+            bij[(i, j)] = -inf.dpsi_dsigma[j];
+        }
+    }
+    if let Some((point, _, _)) = te_bisector(geometry) {
+        psilin(geometry, &point, true, &mut inf);
+        for j in 0..n {
+            bij[(n - 1, j)] = -inf.dq_dsigma[j];
+        }
+    }
+    bij
 }
 
 impl InviscidSolver {
@@ -252,7 +311,6 @@ impl InviscidSolver {
         let y = &geometry.y;
 
         let mut aij = Mat::<f64>::zeros(n + 1, n + 1);
-        let mut bij = Mat::<f64>::zeros(n + 1, n);
         let mut rhs = Mat::<f64>::zeros(n + 1, 2);
         let mut inf = Influence::new(n);
 
@@ -265,10 +323,9 @@ impl InviscidSolver {
                 nx: geometry.nx[i],
                 ny: geometry.ny[i],
             };
-            psilin(&geometry, &point, true, &mut inf);
+            psilin(&geometry, &point, false, &mut inf);
             for j in 0..n {
                 aij[(i, j)] = inf.dpsi_dgamma[j];
-                bij[(i, j)] = -inf.dpsi_dsigma[j];
             }
             aij[(i, n)] = -1.0;
             rhs[(i, 0)] = -y[i];
@@ -279,30 +336,13 @@ impl InviscidSolver {
         aij[(n, 0)] = 1.0;
         aij[(n, n - 1)] = 1.0;
 
-        if geometry.te_panel.sharp {
+        if let Some((point, cbis, sbis)) = te_bisector(&geometry) {
             // Zero internal velocity in the trailing-edge corner: the last
             // node equation is replaced by a zero velocity component along
             // the bisector at a point just inside the trailing edge.
-            let ag1 = (-geometry.yp[0]).atan2(-geometry.xp[0]);
-            let ag2 = atanc(geometry.yp[n - 1], geometry.xp[n - 1], ag1);
-            let abis = 0.5 * (ag1 + ag2);
-            let (sbis, cbis) = abis.sin_cos();
-
-            let ds1 = (x[0] - x[1]).hypot(y[0] - y[1]);
-            let ds2 = (x[n - 1] - x[n - 2]).hypot(y[n - 1] - y[n - 2]);
-            let dsmin = ds1.min(ds2);
-            let [xte, yte] = geometry.te;
-            let point = FieldPoint {
-                node: None,
-                x: xte - BWT * dsmin * cbis,
-                y: yte - BWT * dsmin * sbis,
-                nx: -sbis,
-                ny: cbis,
-            };
-            psilin(&geometry, &point, true, &mut inf);
+            psilin(&geometry, &point, false, &mut inf);
             for j in 0..n {
                 aij[(n - 1, j)] = inf.dq_dgamma[j];
-                bij[(n - 1, j)] = -inf.dq_dsigma[j];
             }
             aij[(n - 1, n)] = 0.0;
             rhs[(n - 1, 0)] = -cbis;
@@ -325,7 +365,7 @@ impl InviscidSolver {
             geometry,
             options: *options,
             aij,
-            bij,
+            bij: OnceLock::new(),
             lu,
             gamu: rhs,
         })
@@ -360,9 +400,11 @@ impl InviscidSolver {
 
     /// The `(N+1)×N` source influence matrix (XFOIL `BIJ`):
     /// `−∂(residual)/∂σ_j` for the airfoil mass defects, needed by the
-    /// viscous coupling.
+    /// viscous coupling. Computed on first access.
     pub fn source_influence_matrix(&self) -> MatRef<'_, f64> {
-        self.bij.as_ref()
+        self.bij
+            .get_or_init(|| assemble_source_influence(&self.geometry))
+            .as_ref()
     }
 
     /// LU factorization of [`Self::influence_matrix`].
@@ -722,6 +764,12 @@ mod tests {
         assert_eq!(s.influence_matrix().ncols(), n + 1);
         assert_eq!(s.source_influence_matrix().nrows(), n + 1);
         assert_eq!(s.source_influence_matrix().ncols(), n);
+        // Computed lazily, once, with non-trivial coefficients; the Kutta
+        // row has no source influence.
+        assert!(s.source_influence_matrix()[(10, 10)].abs() > 0.0);
+        assert!((0..n).all(|j| s.source_influence_matrix()[(n, j)] == 0.0));
+        let sharp = solver("0012", TrailingEdge::Closed);
+        assert!(sharp.source_influence_matrix()[(n - 1, 5)].abs() > 0.0);
         assert_eq!(s.base_solutions().ncols(), 2);
         assert_eq!(s.lu().U().nrows(), n + 1);
         assert!(!s.is_empty());
