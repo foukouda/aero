@@ -9,5 +9,6 @@
 //! influence matrices.
 
 pub mod inviscid;
+pub mod viscous;
 
 pub use faer;
