@@ -42,7 +42,7 @@
 </script>
 
 <aside class="library panel">
-  <form class="naca" onsubmit={generate}>
+  <form class="naca" onsubmit={generate} data-tour="naca">
     <h2>New NACA airfoil</h2>
     <div class="row">
       <input
@@ -60,7 +60,7 @@
     </label>
   </form>
 
-  <div class="import">
+  <div class="import" data-tour="import">
     <button onclick={() => app.importDialog()}>Import .dat…</button>
     <span class="muted hint">or drop files on the window</span>
   </div>
@@ -70,7 +70,7 @@
     <p class="muted empty">No airfoil yet. Generate a NACA section or import a coordinate file
       (Selig or Lednicer format).</p>
   {/if}
-  <ul>
+  <ul data-tour="airfoil-list">
     {#each app.airfoils as airfoil (airfoil.id)}
       <li class:selected={airfoil.id === app.selectedId}>
         <input

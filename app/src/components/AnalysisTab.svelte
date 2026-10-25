@@ -37,7 +37,7 @@
 
 <div class="analysis">
   <section class="panel controls">
-    <div class="alpha">
+    <div class="alpha" data-tour="alpha">
       <label for="alpha">Angle of attack α</label>
       <input
         type="range"
@@ -57,7 +57,7 @@
       />
       <span class="muted">°</span>
     </div>
-    <div class="mach">
+    <div class="mach" data-tour="mach">
       <label for="mach">Mach</label>
       <input
         id="mach"
@@ -79,7 +79,7 @@
     </div>
   </section>
 
-  <section class="panel coefficients">
+  <section class="panel coefficients" data-tour="coefficients">
     <table class="mono">
       <thead>
         <tr>
@@ -124,6 +124,7 @@
   <PlotPanel
     title={`Pressure coefficient, α = ${fixed(alpha, 1)}°${mach > 0 ? `, M = ${fixed(mach, 2)}` : ""}`}
     fileName="cp"
+    tour="cp-plot"
     {curves}
     xLabel="x"
     yLabel="Cp"

@@ -11,16 +11,18 @@
     equal?: boolean;
     yInverted?: boolean;
     emptyMessage?: string;
+    /** Anchor for the guided tour. */
+    tour?: string;
   }
 
-  let { title, fileName, curves, xLabel, yLabel, equal, yInverted, emptyMessage }: Props =
+  let { title, fileName, curves, xLabel, yLabel, equal, yInverted, emptyMessage, tour }: Props =
     $props();
 
   let plot: Plot | undefined = $state();
   const hasData = $derived(curves.some((c) => c.x.length > 0));
 </script>
 
-<section class="panel plot-panel">
+<section class="panel plot-panel" data-tour={tour}>
   <header>
     <h2>{title}</h2>
     <div class="actions">

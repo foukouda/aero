@@ -15,6 +15,7 @@ import type {
   SweepEvent,
 } from "./bindings";
 import { latestRunner } from "./latest";
+import { TOUR_STEPS, defaultTourLang, type TourAction, type TourLang } from "./tour";
 
 export type Tab = "geometry" | "analysis" | "polars";
 export type Theme = "light" | "dark";
@@ -55,6 +56,28 @@ function initialTheme(): Theme {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+function stored(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function store(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Not persisted.
+  }
+}
+
+function initialTourLang(): TourLang {
+  const saved = stored("aero-tour-lang");
+  if (saved === "en" || saved === "fr") return saved;
+  return defaultTourLang(navigator.language);
+}
+
 function baseName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
 }
@@ -71,6 +94,9 @@ class AppState {
   toasts = $state<Toast[]>([]);
   dirty = $state(false);
   busy = $state(false);
+  /** Current step of the guided tour, `null` when it is closed. */
+  tourIndex = $state<number | null>(null);
+  tourLang = $state<TourLang>(initialTourLang());
 
   #nextToast = 1;
 
@@ -137,6 +163,49 @@ class AppState {
     await this.guard(async () => {
       this.applySession(await commands.getSession());
     });
+    // First launch: offer the guided tour.
+    if (stored("aero-tour-seen") === null && this.airfoils.length === 0) this.startTour();
+  }
+
+  // ------------------------------------------------------------ guided tour
+
+  startTour() {
+    this.tourGo(0);
+  }
+
+  endTour() {
+    this.tourIndex = null;
+    store("aero-tour-seen", "1");
+  }
+
+  tourGo(index: number) {
+    const i = Math.max(0, Math.min(TOUR_STEPS.length - 1, index));
+    this.tourIndex = i;
+    const tab = TOUR_STEPS[i].tab;
+    if (tab) this.tab = tab;
+  }
+
+  setTourLang(lang: TourLang) {
+    this.tourLang = lang;
+    store("aero-tour-lang", lang);
+  }
+
+  /** "Do it for me" actions of the tour. */
+  async runTourAction(action: TourAction) {
+    switch (action) {
+      case "generate-naca":
+        await this.createNaca("2412", false);
+        break;
+      case "show-nodes":
+        this.updateSettings({ show_nodes: true });
+        break;
+      case "set-alpha":
+        this.updateSettings({ alpha_deg: 5 });
+        break;
+      case "run-sweep":
+        await this.runSweep();
+        break;
+    }
   }
 
   applySession(view: SessionView) {

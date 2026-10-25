@@ -45,7 +45,7 @@
 </script>
 
 <div class="geometry">
-  <div class="view">
+  <div class="view" data-tour="shape">
     <PlotPanel
       title="Airfoil shape"
       fileName="airfoils"

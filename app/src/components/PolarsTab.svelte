@@ -54,7 +54,7 @@
 </script>
 
 <div class="polars">
-  <section class="panel controls">
+  <section class="panel controls" data-tour="sweep">
     <label>α start <input type="number" step="0.5" value={sweep?.start_deg} disabled={running} onchange={(e) => updateSweep({ start_deg: value(e) })} /></label>
     <label>α end <input type="number" step="0.5" value={sweep?.end_deg} disabled={running} onchange={(e) => updateSweep({ end_deg: value(e) })} /></label>
     <label>step <input type="number" min="0.01" step="0.25" value={sweep?.step_deg} disabled={running} onchange={(e) => updateSweep({ step_deg: value(e) })} /></label>
@@ -74,7 +74,7 @@
     {/if}
   </section>
 
-  <div class="plots">
+  <div class="plots" data-tour="polar-plots">
     <PlotPanel
       title={`Lift coefficient${mach > 0 ? ` (M = ${mach.toFixed(2)})` : ""}`}
       fileName="cl_alpha"

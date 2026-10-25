@@ -7,7 +7,7 @@
   const p = $derived(geometry.properties);
 </script>
 
-<section class="panel props">
+<section class="panel props" data-tour="properties">
   <h2>{geometry.name}</h2>
   <dl class="mono">
     <dt>Max thickness</dt>

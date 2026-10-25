@@ -6,6 +6,7 @@
   import AnalysisTab from "./components/AnalysisTab.svelte";
   import PolarsTab from "./components/PolarsTab.svelte";
   import Toasts from "./components/Toasts.svelte";
+  import Tour from "./components/Tour.svelte";
   import { app, dialogs, type Tab } from "./lib/state.svelte";
 
   let dragging = $state(false);
@@ -67,22 +68,27 @@
         {app.projectName}{app.dirty ? " •" : ""}
       </span>
     </div>
-    <nav class="tabs" aria-label="Views">
+    <nav class="tabs" aria-label="Views" data-tour="tabs">
       {#each tabs as tab (tab.id)}
         <button class:active={app.tab === tab.id} onclick={() => (app.tab = tab.id)}>{tab.label}</button>
       {/each}
     </nav>
     <div class="actions">
-      <button onclick={() => app.newProject()} title="New project">New</button>
+      <button class="tour" onclick={() => app.startTour()} title="Guided tour of the application">
+        ? Tour
+      </button>
+      <span class="project-actions" data-tour="project">
+        <button onclick={() => app.newProject()} title="New project">New</button>
       <button onclick={() => app.openProject()} title="Open project (Ctrl+O)">Open…</button>
       <button onclick={() => app.saveProject()} title="Save project (Ctrl+S)">Save</button>
       <button onclick={() => app.saveProject(true)} title="Save project as (Ctrl+Shift+S)">Save as…</button>
-      <button
-        class="theme"
-        onclick={() => app.setTheme(app.theme === "dark" ? "light" : "dark")}
-        title="Toggle light/dark theme"
-        aria-label="Toggle theme">{app.theme === "dark" ? "☀" : "☾"}</button
-      >
+        <button
+          class="theme"
+          onclick={() => app.setTheme(app.theme === "dark" ? "light" : "dark")}
+          title="Toggle light/dark theme"
+          aria-label="Toggle theme">{app.theme === "dark" ? "☀" : "☾"}</button
+        >
+      </span>
     </div>
   </header>
 
@@ -105,6 +111,7 @@
     </div>
   {/if}
   <Toasts />
+  <Tour />
 </div>
 
 <style>
@@ -159,6 +166,15 @@
     display: flex;
     justify-content: flex-end;
     gap: 6px;
+  }
+  .project-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .tour {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
   }
   .theme {
     width: 32px;

@@ -25,7 +25,7 @@
   }
 </script>
 
-<section class="panel paneling">
+<section class="panel paneling" data-tour="paneling">
   <h2>Paneling <span class="muted">(XFOIL PANGEN)</span></h2>
 
   <label>
