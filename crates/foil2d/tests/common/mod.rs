@@ -100,9 +100,17 @@ impl Case {
             .collect()
     }
 
-    /// Reason recorded by the generator when XFOIL itself failed on this case.
+    /// Why XFOIL itself fails on this case: recorded by the generator
+    /// (`FAILED.txt`) or declared in the manifest (`xfoil_failure`).
     pub fn xfoil_failure(&self) -> Option<String> {
-        std::fs::read_to_string(self.dir.join("FAILED.txt")).ok()
+        std::fs::read_to_string(self.dir.join("FAILED.txt"))
+            .ok()
+            .or_else(|| {
+                self.manifest
+                    .get("xfoil_failure")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string)
+            })
     }
 
     /// XFOIL's paneled airfoil (`PSAV`).
@@ -180,7 +188,12 @@ impl Case {
 
     /// Our full pipeline: generator/import followed by our `PANGEN`.
     pub fn our_panels(&self) -> Airfoil {
-        panel(&self.buffer_airfoil(), &self.paneling()).unwrap()
+        self.try_our_panels().unwrap()
+    }
+
+    /// Our full pipeline, returning the paneling error if any.
+    pub fn try_our_panels(&self) -> aero_geometry::Result<Airfoil> {
+        panel(&self.buffer_airfoil(), &self.paneling())
     }
 
     pub fn polar(&self, mach: f64) -> Vec<XfoilPolarRow> {

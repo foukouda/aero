@@ -49,7 +49,7 @@ fn reference_cases_are_present() {
 fn solver_on_xfoil_nodes_matches_xfoil() {
     let mut report = Vec::new();
     let mut failures = Vec::new();
-    for case in cases() {
+    for case in cases().into_iter().filter(|c| c.xfoil_failure().is_none()) {
         let (stats, f) = compare(
             &case,
             "A",
@@ -72,7 +72,7 @@ fn solver_on_xfoil_nodes_matches_xfoil() {
 fn full_pipeline_matches_xfoil() {
     let mut report = Vec::new();
     let mut failures = Vec::new();
-    for case in cases() {
+    for case in cases().into_iter().filter(|c| c.xfoil_failure().is_none()) {
         let (stats, f) = compare(&case, "B", &solver(&case.our_panels()), CP_TOL_PIPELINE);
         report.push(line(&case.name, "B", &stats));
         failures.extend(f);
@@ -84,4 +84,25 @@ fn full_pipeline_matches_xfoil() {
         failures.join("\n"),
         report.join("\n")
     );
+}
+
+/// Where XFOIL itself breaks down (NaN output), aero must report an error
+/// rather than return garbage.
+#[test]
+fn inputs_that_break_xfoil_are_refused() {
+    let broken: Vec<_> = cases()
+        .into_iter()
+        .filter(|c| c.xfoil_failure().is_some())
+        .collect();
+    assert!(!broken.is_empty());
+    for case in broken {
+        match case.try_our_panels() {
+            Err(e) => println!("{}: refused ({e})", case.name),
+            Ok(af) => assert!(
+                af.points().all(|p| p[0].is_finite() && p[1].is_finite()),
+                "{}: non-finite nodes",
+                case.name
+            ),
+        }
+    }
 }

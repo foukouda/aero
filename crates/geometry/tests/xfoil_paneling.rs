@@ -83,6 +83,10 @@ fn paneling_matches_xfoil_nodes() {
             .unwrap()
             .parse()
             .unwrap();
+        if case.contains_key("xfoil_failure") {
+            // XFOIL itself fails on this input (see the manifest).
+            continue;
+        }
         let xfoil_text = std::fs::read_to_string(dir.join("panels.dat")).unwrap_or_else(|_| {
             panic!("{name}: panels.dat is missing; run tests/reference/generate.py")
         });
