@@ -2,13 +2,14 @@
 
 A modern rewrite of [XFOIL](https://web.mit.edu/drela/Public/web/xfoil/)
 (Mark Drela) in Rust, with a Tauri desktop application. The goal is a robust,
-parallel-friendly airfoil analysis — and later optimization — toolkit that is
-usable as a library.
+parallel-friendly airfoil analysis and optimization toolkit that is usable as
+a library.
 
-> **Status:** step 2 — geometry, XFOIL-compatible inviscid and viscous
-> solvers (boundary layer, transition, drag, stall) and desktop application.
-> Shape optimization, 3D methods, Python bindings and WebAssembly come later;
-> the architecture is prepared for them.
+> **Status:** step 3 — geometry, XFOIL-compatible inviscid and viscous
+> solvers (boundary layer, transition, drag, stall; prescribed angle or lift,
+> Mach and Reynolds numbers varying with the lift, flap hinge moments), shape
+> optimization and desktop application. 3D methods, Python bindings and
+> WebAssembly come later; the architecture is prepared for them.
 
 ## Workspace layout
 
@@ -16,6 +17,7 @@ usable as a library.
 crates/
   geometry/       aero-geometry: airfoils, splines, .dat I/O, NACA/CST, PANGEN paneling
   foil2d/         aero-foil2d:   2D solvers (XFOIL panel method and viscous-inviscid interaction)
+  optim/          aero-optim:    shape optimization (CST design space, CMA-ES, Nelder-Mead)
 app/
   src-tauri/      aero-app: thin Tauri layer (commands -> Tauri-free engine -> crates)
   src/            Svelte 5 + TypeScript frontend (uPlot charts)
@@ -55,16 +57,20 @@ Features: airfoil library (NACA 4/5-digit generator with open or closed
 trailing edge, `.dat` import in Selig or Lednicer format by button or drag
 and drop, duplicate, rename, delete), true-scale shape view with optional
 panel nodes and overlays, geometric properties, XFOIL `PANGEN` paneling
-controls with immediate preview, single angle-of-attack analysis driven by a
-live slider (Cp with −Cp up, Cl, Cm, Cp min, optional Mach number with the
-Kármán–Tsien correction and a clear error beyond the critical Mach number),
+controls with immediate preview, single-point analysis driven by a live slider,
+at a prescribed angle of attack or lift coefficient (Cp with −Cp up, Cl, Cm,
+Cp min, optional Mach number with the Kármán–Tsien correction and a clear
+error beyond the critical Mach number, optional flap hinge moment),
 viscous analysis as in XFOIL's `VISC` mode (Reynolds number, Ncrit and
-trips per surface; Cl, Cd, L/D, Cm, transition points, pressure and friction
-drag; viscous and inviscid Cp; boundary-layer plots of δ*, θ, H, Cf, N and
-Ue on both surfaces and the wake), angle-of-attack sweeps with progress and
-cancellation (Cl(α), drag polar Cl(Cd), Cm(α) and transition points for
-several airfoils; viscous sweeps warm-start each point from the previous one,
-as XFOIL's `ASEQ`), exports (`.dat`, CSV of polars, Cp and boundary layer,
+trips per surface, Mach and Reynolds numbers fixed or varying with the lift
+as XFOIL's `TYPE 2` and `3`, original or modified amplification rate as
+`DAMP`; Cl, Cd, L/D, Cm, transition points, pressure and friction drag;
+viscous and inviscid Cp; boundary-layer plots of δ*, θ, H, Cf, N and Ue on
+both surfaces and the wake), sweeps of the angle of attack or of the lift
+coefficient with progress and cancellation (Cl(α), drag polar Cl(Cd), Cm(α),
+hinge moments and transition points for several airfoils; viscous sweeps
+warm-start each point from the previous one, as XFOIL's `ASEQ` and `CSEQ`),
+shape optimization (see below) with live progress, exports (`.dat`, CSV of polars, Cp and boundary layer,
 PNG, SVG), JSON project files with a format version (older projects are
 migrated), light and dark themes, and a guided tour in English and French.
 
@@ -73,7 +79,7 @@ migrated), light and dark themes, and a guided tour in English and French.
 ```sh
 cargo test --workspace                                 # all Rust tests
 cargo clippy --workspace --all-targets -- -D warnings
-cargo bench -p aero-foil2d                             # criterion benchmarks
+cargo bench -p aero-foil2d -p aero-optim               # criterion benchmarks
 cd app && npm run check && npm test                    # frontend type check and tests
 ```
 
@@ -101,7 +107,31 @@ let polar = viscous.sweep(&AlphaSweep { start_deg: -4.0, end_deg: 14.0, step_deg
 
 `ViscousSolver::session()` gives full control over the warm starts (XFOIL's
 `ALFA` without `INIT`) and can record XFOIL's console messages (iteration
-history, transition points) for diagnosis.
+history, transition points) for diagnosis. `solve_cl` and `sweep_cl`
+prescribe the lift instead of the angle (XFOIL `CL`, `CSEQ`).
+
+```rust
+use std::ops::ControlFlow;
+use aero_geometry::{NacaOptions, naca};
+use aero_optim::{Constraints, DesignPoint, OptimizeOptions, Problem, Target, optimize};
+
+// Minimum drag at CL = 0.5 and Re = 1e6 (the default viscous options),
+// keeping the thickness at least 12 %.
+let problem = Problem {
+    points: vec![DesignPoint { target: Target::Cl(0.5), weight: 1.0 }],
+    objective: Default::default(), // weighted mean Cd
+    constraints: Constraints { min_thickness: Some(0.12), ..Default::default() },
+    viscous: Default::default(),
+    paneling: Default::default(),
+    design: Default::default(), // CST of order 6: 14 variables
+};
+let options = OptimizeOptions { max_evaluations: 300, ..Default::default() };
+let result = optimize(&naca("2412", &NacaOptions::default())?, &problem, &options, |progress| {
+    println!("{} evaluations, best Cd {:?}", progress.evaluations, progress.best.objective);
+    ControlFlow::Continue(()) // Break cancels and keeps the best design
+})?;
+let optimized = result.airfoil; // regular Airfoil: analyze it, export it as .dat
+```
 
 ## Validation
 
@@ -143,23 +173,31 @@ coupling routines of `xpanel.f`, `VISCAL`): two-equation integral boundary
 layer with Drela's closures, eᴺ transition (free or tripped), lag-dissipation
 turbulence model, wake, source influence matrix and XFOIL's global Newton
 system and block solver, with the same relaxations, limits and sequence
-semantics. It is checked against XFOIL 6.996 on ten reference cases
-(`tests/viscous`, `crates/foil2d/tests/xfoil_viscous.rs`): NACA 0012 (blunt
-and sharp TE, trips, 240 nodes), NACA 2412 (Mach 0.3, different Ncrit on each
-side), 4415, 23012, Clark Y and Eppler 387 (laminar separation bubbles), at
-Reynolds numbers from 2·10⁵ to 6·10⁶, as polars (warm-started sequences) and
-single points:
+semantics, including the prescribed-lift mode (`CL`, `CSEQ`: the angle of
+attack is a Newton variable), the Mach and Reynolds numbers varying with the
+lift (`TYPE 2`, `3`), the modified amplification rate (`DAMP`) and the flap
+hinge moments (`FNEW`, `FMOM`). It is checked against XFOIL 6.996 on 17
+reference cases (`tests/viscous`, `crates/foil2d/tests/xfoil_viscous.rs`):
+NACA 0012 (blunt and sharp TE, trips, 240 nodes, `DAMP`), NACA 2412 (Mach
+0.3, different Ncrit on each side, prescribed CL, flap hinge), 4415
+(prescribed CL, `TYPE 2`), 23012 (`TYPE 3`), Clark Y and Eppler 387 (laminar
+separation bubbles, also at prescribed CL), at Reynolds numbers from 2·10⁵ to
+6·10⁶, as polars (warm-started sequences) and single points:
 
-- the same points converge and fail to converge as in XFOIL (156 converged
-  points);
+- the same points converge and fail to converge as in XFOIL (253 converged
+  points). One case is a point XFOIL cannot converge: NACA 4415 at Re = 10⁶
+  and CL = 0.8, where the bottom transition jumps between x/c = 0.99 and the
+  trailing edge at every Newton iteration; ours reproduces the same limit
+  cycle iteration by iteration;
 - forces, transition points and x, Cp, θ, δ*, Cf and N or √Cτ at every
   boundary-layer station agree with XFOIL's full-precision dump files to
   10⁻¹⁰ on most points (10⁻⁵ at worst, on a point that needs all its Newton
   iterations);
 - XFOIL's console output — the rms change of every Newton iteration, the
-  transition points, the marching failures — is reproduced line by line: six
-  of the ten sessions are identical over their whole length (thousands of
-  lines), the four others until a last printed digit late in a sequence.
+  transition points, the marching failures — is reproduced line by line: 14
+  of the 19 sessions are identical over their whole length (thousands of
+  lines), the five others until a last printed digit late in a sequence;
+- the hinge moments agree with XFOIL's to its printed precision.
 
 An **extended viscous validation** (`tests/viscous_validation`,
 `crates/foil2d/tests/xfoil_viscous_validation.rs`, [report](tests/viscous_validation/REPORT.md))
@@ -180,6 +218,43 @@ geometry and sources, the drag formula, the NaN handling — confirmed that
 every one of them makes the validation fail (two are caught only by the
 random set).
 
+## Shape optimization
+
+`aero-optim` reshapes an airfoil for a set of operating points. The shape is
+described by CST (class/shape transformation) functions — Bernstein
+polynomials of order 6 by default, 14 weights — fitted to the initial
+airfoil by least squares; the trailing-edge thickness is kept. Each
+operating point prescribes CL or α and has a weight; the objective is the
+weighted mean of Cd, or of L/D. Constraints: minimum and maximum thickness,
+minimum thickness at chord stations (spar), minimum Cm, minimum
+trailing-edge angle.
+
+Every candidate is analyzed by the same viscous solver, from a fresh
+boundary layer at each point (if a point fails, it is approached from zero
+lift in four warm-started steps, as one does with XFOIL). A point that still
+does not converge — about 2 % of the candidates, mostly the transition limit
+cycle described above — makes the candidate infeasible: it is never given a
+made-up drag. Candidates are compared with Deb's feasibility rules (a
+feasible design beats an infeasible one; infeasible designs compare by their
+constraint violation), so the result satisfies the constraints whenever a
+feasible design was found. The search is a CMA-ES (Hansen's default
+parameters; each generation evaluated in parallel) followed by a Nelder–Mead
+polish (Gao–Han coefficients). Runs are reproducible: the samples come from
+a seeded generator and parallel results are collected in order, so the
+result does not depend on the number of threads.
+
+Checks (`crates/optim`): the optimizers on the sphere, Rosenbrock, an
+anisotropic quadratic and a problem whose optimum lies on a constraint; the
+evaluation against a hand-made analysis of the same airfoil; and end to end,
+NACA 2412 at CL = 0.5, Re = 10⁶, t/c ≥ 12 %: 300 evaluations reduce Cd by
+20 % (0.00592 → 0.00475; the upper-surface transition moves from x/c = 0.51
+to 0.76). The optimized airfoil is then verified independently — written as
+a `.dat` file, read back, analyzed through a CSEQ sweep (another solution
+path) and with 240 panels instead of 160: the gain is unchanged (0.005946 →
+0.004756), so it is not an artifact of the discretization. As always with
+single-point optimization, the drag rises elsewhere on the polar; the
+application's "Compare polars" button shows it.
+
 ## Performance
 
 `cargo bench -p aero-foil2d` (NACA 2412, release build, one core of a
@@ -194,6 +269,17 @@ desktop CPU):
 | `PANGEN` repaneling, 160 nodes | 0.23 ms |
 | Viscous point from a fresh boundary layer, 160 nodes | 20 ms |
 | Viscous sweep, 33 warm-started points | 0.41 s |
+
+`cargo bench -p aero-optim` (same machine, 16 logical cores):
+
+| Operation | Time |
+|---|---|
+| Evaluation of one design (geometry, paneling, one viscous point) | 27 ms |
+| Optimization, 100 evaluations, one core | 3.3 s |
+| Optimization, 100 evaluations, all cores | 1.5 s |
+
+The CMA-ES generations run in parallel; the Nelder–Mead polish (a fifth of
+the budget by default) is sequential by nature, which bounds the speed-up.
 
 ## License
 

@@ -52,3 +52,22 @@ Tauri):
   shape and polar comparison, cancel, add the result to the library),
   project file, guided tour.
 - **P2e** — documentation and benchmarks.
+
+## Status
+
+Done (October 2026):
+
+- Part 1: prescribed CL (`CL`, `CSEQ`), `TYPE 2`/`3`, `DAMP` and flap hinge
+  moments, validated on 7 new XFOIL reference cases (including a transition
+  limit cycle that XFOIL does not converge either), and integrated in the
+  application (α/Cl toggles, advanced viscous options, hinge inputs).
+- Part 2: `aero-optim` (P2a design space and evaluation, P2b CMA-ES and
+  Nelder–Mead, P2c driver and end-to-end tests with independent
+  verification, P2d Optimize tab and project format 3, P2e documentation and
+  benchmarks).
+
+Decision taken during P2a: a point that does not converge is not retried
+at a perturbed Reynolds number (a common trick of XFOIL-based optimizers),
+because the design would then be judged on a slightly different problem;
+it is approached from zero lift in warm-started steps, and if it still
+fails the design is infeasible.

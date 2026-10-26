@@ -23,7 +23,12 @@ specta = { workspace = true, optional = true }
 specta = ["dep:specta", "aero-geometry/specta", "aero-foil2d/specta"]
 
 [dev-dependencies]
+criterion.workspace = true
 serde_json.workspace = true
+
+[[bench]]
+name = "optimize"
+harness = false
 
 [lints]
 workspace = true

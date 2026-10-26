@@ -11,6 +11,33 @@
 //! - [`optimizers`]: CMA-ES and Nelder–Mead;
 //! - [`optimize`](mod@optimize): the driver, from the initial airfoil to
 //!   the optimized one.
+//!
+//! # Example
+//!
+//! ```
+//! use std::ops::ControlFlow;
+//! use aero_geometry::{NacaOptions, naca};
+//! use aero_optim::{Constraints, DesignPoint, OptimizeOptions, Problem, Target, optimize};
+//!
+//! // Minimum drag at CL = 0.5 and Re = 1e6 (the default viscous options),
+//! // keeping the thickness at least 12 %.
+//! let problem = Problem {
+//!     points: vec![DesignPoint { target: Target::Cl(0.5), weight: 1.0 }],
+//!     objective: Default::default(), // weighted mean Cd
+//!     constraints: Constraints { min_thickness: Some(0.12), ..Default::default() },
+//!     viscous: Default::default(),
+//!     paneling: Default::default(),
+//!     design: Default::default(), // CST of order 6: 14 variables
+//! };
+//! let options = OptimizeOptions { max_evaluations: 40, ..Default::default() };
+//! let result = optimize(&naca("2412", &NacaOptions::default())?, &problem, &options, |progress| {
+//!     println!("{} evaluations, best Cd {:?}", progress.evaluations, progress.best.objective);
+//!     ControlFlow::Continue(()) // Break cancels and keeps the best design
+//! })?;
+//! assert!(result.best.feasible() && result.best.objective <= result.initial.objective);
+//! let optimized = result.airfoil; // regular Airfoil: analyze it, export it as .dat
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
 
 pub mod design;
 mod error;
