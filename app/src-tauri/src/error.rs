@@ -3,6 +3,7 @@
 use aero_foil2d::inviscid::InviscidError;
 use aero_foil2d::viscous::ViscousError;
 use aero_geometry::GeometryError;
+use aero_optim::OptimError;
 use serde::Serialize;
 use specta::Type;
 
@@ -84,6 +85,15 @@ impl From<ViscousError> for AppError {
             ViscousError::Inviscid(e) => e.into(),
             ViscousError::InvalidOption(_) => Self::new(ErrorKind::InvalidInput, e.to_string()),
             _ => Self::new(ErrorKind::Solver, e.to_string()),
+        }
+    }
+}
+
+impl From<OptimError> for AppError {
+    fn from(e: OptimError) -> Self {
+        match e {
+            OptimError::Geometry(g) => g.into(),
+            _ => Self::new(ErrorKind::InvalidInput, e.to_string()),
         }
     }
 }

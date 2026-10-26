@@ -8,8 +8,10 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::model::{
-    AirfoilId, AirfoilOrigin, OperatingMode, Settings, StoredPolar, ViscousSettings,
+    AirfoilId, AirfoilOrigin, OperatingMode, OptimizationSetup, Settings, Shape,
+    StoredOptimization, StoredPolar, ViscousSettings,
 };
+use aero_optim::{Evaluation, HistoryEntry, Phase};
 
 /// Static information about the application.
 #[derive(Debug, Clone, Serialize, Type)]
@@ -50,6 +52,10 @@ pub struct SessionView {
     pub polars: Vec<StoredPolar>,
     /// Path of the project file, if the session was saved or opened.
     pub project_path: Option<String>,
+    /// Shape optimization setup.
+    pub optimization: OptimizationSetup,
+    /// Result of the last shape optimization.
+    pub last_optimization: Option<StoredOptimization>,
 }
 
 /// Result of an import.
@@ -235,6 +241,61 @@ pub enum SweepEvent {
         total: u32,
     },
     /// The sweep ended.
+    Finished {
+        /// True if it was cancelled.
+        cancelled: bool,
+    },
+}
+
+/// A shape optimization to run.
+#[derive(Debug, Clone, PartialEq, Deserialize, Type)]
+pub struct OptimizeRequest {
+    /// Identifier used to cancel the job.
+    pub job_id: String,
+    /// Airfoil to optimize.
+    pub airfoil_id: AirfoilId,
+    /// Problem and options.
+    pub setup: OptimizationSetup,
+}
+
+/// New best design of an optimization.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+pub struct BestDesign {
+    /// Its evaluation.
+    pub evaluation: Evaluation,
+    /// Its coordinates.
+    pub shape: Shape,
+}
+
+/// Progress of an optimization, streamed over a channel.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum OptimizationEvent {
+    /// The initial airfoil is fitted.
+    Started {
+        /// Evaluation budget.
+        max_evaluations: u32,
+        /// Number of design variables.
+        dimension: u32,
+        /// Rms ordinate error of the CST fit.
+        fit_rms_error: f64,
+        /// Coordinates of the fitted initial design.
+        initial_shape: Shape,
+    },
+    /// Evaluations since the previous event.
+    Progress {
+        /// Current phase.
+        phase: Phase,
+        /// Evaluations so far.
+        evaluations: u32,
+        /// Step size of the optimizer.
+        step_size: f64,
+        /// The new evaluations.
+        history: Vec<HistoryEntry>,
+        /// The best design, when it changed.
+        best: Option<BestDesign>,
+    },
+    /// The optimization ended.
     Finished {
         /// True if it was cancelled.
         cancelled: bool,

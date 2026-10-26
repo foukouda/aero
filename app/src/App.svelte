@@ -5,6 +5,7 @@
   import GeometryTab from "./components/GeometryTab.svelte";
   import AnalysisTab from "./components/AnalysisTab.svelte";
   import PolarsTab from "./components/PolarsTab.svelte";
+  import OptimizeTab from "./components/OptimizeTab.svelte";
   import Toasts from "./components/Toasts.svelte";
   import Tour from "./components/Tour.svelte";
   import { app, dialogs, type Tab } from "./lib/state.svelte";
@@ -15,6 +16,7 @@
     { id: "geometry", label: "Geometry" },
     { id: "analysis", label: "Analysis" },
     { id: "polars", label: "Polars" },
+    { id: "optimize", label: "Optimize" },
   ];
 
   onMount(() => {
@@ -99,8 +101,10 @@
         <GeometryTab />
       {:else if app.tab === "analysis"}
         <AnalysisTab />
-      {:else}
+      {:else if app.tab === "polars"}
         <PolarsTab />
+      {:else}
+        <OptimizeTab />
       {/if}
     </main>
   </div>

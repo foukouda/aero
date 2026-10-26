@@ -8,6 +8,10 @@ use aero_foil2d::viscous::{
     AmplificationModel, MachReynoldsVariation, ViscousOptions, ViscousPolar,
 };
 use aero_geometry::{Airfoil, Normalization, PanelingOptions, panel};
+use aero_optim::{
+    Constraints, DesignPoint, Evaluation, HistoryEntry, Objective, OptimizeOptions, Problem, Stop,
+    Target,
+};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -20,7 +24,8 @@ pub type AirfoilId = u32;
 ///
 /// - 1: inviscid analyses only.
 /// - 2: viscous settings; stored polars are tagged `inviscid` or `viscous`.
-pub const PROJECT_FORMAT_VERSION: u32 = 2;
+/// - 3: shape optimization setup and last result.
+pub const PROJECT_FORMAT_VERSION: u32 = 3;
 
 /// Magic string identifying project files.
 pub const PROJECT_FORMAT: &str = "aero-project";
@@ -49,6 +54,11 @@ pub enum AirfoilOrigin {
     /// Copy of another airfoil.
     Duplicate {
         /// Name of the original airfoil.
+        of: String,
+    },
+    /// Result of a shape optimization.
+    Optimized {
+        /// Name of the initial airfoil.
         of: String,
     },
 }
@@ -231,6 +241,88 @@ pub struct StoredPolar {
     pub polar: PolarData,
 }
 
+/// Definition of the shape optimization of the Optimize tab.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct OptimizationSetup {
+    /// The problem; its paneling is replaced by the airfoil's when run.
+    pub problem: Problem,
+    /// Search options.
+    pub options: OptimizeOptions,
+}
+
+impl Default for OptimizationSetup {
+    /// Minimum drag at CL = 0.5, Re = 1e6, thickness at least 12 %.
+    fn default() -> Self {
+        Self {
+            problem: Problem {
+                points: vec![DesignPoint {
+                    target: Target::Cl(0.5),
+                    weight: 1.0,
+                }],
+                objective: Objective::MinDrag,
+                constraints: Constraints {
+                    min_thickness: Some(0.12),
+                    ..Constraints::default()
+                },
+                viscous: ViscousOptions::default(),
+                paneling: PanelingOptions::default(),
+                design: Default::default(),
+            },
+            options: OptimizeOptions {
+                max_evaluations: 600,
+                ..OptimizeOptions::default()
+            },
+        }
+    }
+}
+
+/// Airfoil coordinates.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct Shape {
+    /// Abscissas.
+    pub x: Vec<f64>,
+    /// Ordinates.
+    pub y: Vec<f64>,
+}
+
+impl From<&Airfoil> for Shape {
+    fn from(a: &Airfoil) -> Self {
+        Self {
+            x: a.x().to_vec(),
+            y: a.y().to_vec(),
+        }
+    }
+}
+
+/// Result of the last shape optimization.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct StoredOptimization {
+    /// Airfoil that was optimized.
+    pub airfoil_id: AirfoilId,
+    /// Its name at the time.
+    pub airfoil_name: String,
+    /// The problem, with the paneling used.
+    pub problem: Problem,
+    /// The search options.
+    pub options: OptimizeOptions,
+    /// The fitted initial design.
+    pub initial: Evaluation,
+    /// The best design.
+    pub best: Evaluation,
+    /// Coordinates of the fitted initial design.
+    pub initial_shape: Shape,
+    /// Coordinates of the best design.
+    pub best_shape: Shape,
+    /// Rms ordinate error of the CST fit of the initial airfoil.
+    pub fit_rms_error: f64,
+    /// Every evaluation, in order.
+    pub history: Vec<HistoryEntry>,
+    /// Why the search stopped.
+    pub stop: Stop,
+    /// Duration, seconds.
+    pub elapsed_s: f64,
+}
+
 /// The whole state of a working session.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Session {
@@ -242,6 +334,12 @@ pub struct Session {
     pub settings: Settings,
     /// Computed polars (one per airfoil, the latest sweep).
     pub polars: Vec<StoredPolar>,
+    /// Shape optimization setup (absent before format 3).
+    #[serde(default)]
+    pub optimization: OptimizationSetup,
+    /// Result of the last shape optimization.
+    #[serde(default)]
+    pub last_optimization: Option<StoredOptimization>,
 }
 
 impl Session {
@@ -292,6 +390,30 @@ impl Session {
             .id;
         self.get_mut(new_id)?.paneling = original.paneling;
         Ok(new_id)
+    }
+
+    /// Adds the best design of the last optimization to the library, with
+    /// the paneling it was optimized with, and returns its id.
+    pub fn add_optimized(&mut self) -> Result<AirfoilId, AppError> {
+        let opt = self
+            .last_optimization
+            .clone()
+            .ok_or_else(|| AppError::new(ErrorKind::NotFound, "no optimization result to add"))?;
+        let airfoil = Airfoil::new(
+            format!("{} optimized", opt.airfoil_name),
+            opt.best_shape.x,
+            opt.best_shape.y,
+        )?;
+        let id = self
+            .add(
+                airfoil,
+                AirfoilOrigin::Optimized {
+                    of: opt.airfoil_name,
+                },
+            )
+            .id;
+        self.get_mut(id)?.paneling = opt.problem.paneling;
+        Ok(id)
     }
 
     /// Renames an airfoil. The name must not be blank.
@@ -559,7 +681,10 @@ mod tests {
     fn project_versions_are_checked() {
         let (s, _, _) = session_with_two();
         let text = save_project(&s).unwrap();
-        let newer = text.replace("\"format_version\": 2", "\"format_version\": 99");
+        let newer = text.replace(
+            &format!("\"format_version\": {PROJECT_FORMAT_VERSION}"),
+            "\"format_version\": 99",
+        );
         let err = load_project(&newer).unwrap_err();
         assert!(err.message.contains("newer version"), "{}", err.message);
         assert!(load_project("{}").is_err());
@@ -591,5 +716,23 @@ mod tests {
         assert!(matches!(s.polars[0].polar, PolarData::Inviscid(_)));
         // Settings that did not exist in format 1 get their defaults.
         assert_eq!(s.settings.viscous, ViscousSettings::default());
+    }
+
+    #[test]
+    fn version_2_fixture_still_loads() {
+        // Frozen file of format version 2 (viscous settings, prescribed CL,
+        // flap hinge; no optimization).
+        let text = include_str!("../tests/fixtures/project_v2.json");
+        let s = load_project(text).unwrap();
+        assert_eq!(s.airfoils.len(), 1);
+        assert_eq!(s.settings.mode, OperatingMode::Cl);
+        assert_eq!(s.settings.cl, 0.6);
+        assert_eq!(s.settings.flap_hinge, Some([0.7, 0.0]));
+        assert_eq!(
+            s.settings.viscous.variation,
+            MachReynoldsVariation::InverseSqrtCl
+        );
+        assert_eq!(s.optimization, OptimizationSetup::default());
+        assert_eq!(s.last_optimization, None);
     }
 }

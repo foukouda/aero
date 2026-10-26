@@ -10,11 +10,13 @@ use tauri::ipc::Channel;
 
 use crate::dto::{
     AirfoilSummary, AnalysisRequest, AnalysisView, AppInfo, GeometryView, ImportResult,
-    SessionView, SweepEvent, SweepRequest,
+    OptimizationEvent, OptimizeRequest, SessionView, SweepEvent, SweepRequest,
 };
 use crate::engine::Engine;
 use crate::error::{AppError, ErrorKind};
-use crate::model::{AirfoilId, PROJECT_FORMAT_VERSION, Settings, StoredPolar};
+use crate::model::{
+    AirfoilId, OptimizationSetup, PROJECT_FORMAT_VERSION, Settings, StoredOptimization, StoredPolar,
+};
 
 type Shared<'a> = State<'a, Arc<Engine>>;
 
@@ -168,6 +170,39 @@ pub async fn run_sweep(
 ) -> Result<Vec<StoredPolar>, AppError> {
     let engine = engine.inner().clone();
     blocking(move || engine.sweep(&request, |event| on_event.send(event).is_ok())).await
+}
+
+/// Optimizes the shape of an airfoil, streaming progress on `on_event`.
+#[tauri::command]
+#[specta::specta]
+pub async fn run_optimization(
+    engine: Shared<'_>,
+    request: OptimizeRequest,
+    on_event: Channel<OptimizationEvent>,
+) -> Result<StoredOptimization, AppError> {
+    let engine = engine.inner().clone();
+    blocking(move || engine.optimize(&request, |event| on_event.send(event).is_ok())).await
+}
+
+/// Cancels a running optimization.
+#[tauri::command]
+#[specta::specta]
+pub fn cancel_optimization(engine: Shared<'_>, job_id: String) -> bool {
+    engine.cancel(&job_id)
+}
+
+/// Replaces the optimization setup of the session.
+#[tauri::command]
+#[specta::specta]
+pub fn update_optimization_setup(engine: Shared<'_>, setup: OptimizationSetup) {
+    engine.update_optimization_setup(setup);
+}
+
+/// Adds the best design of the last optimization to the library.
+#[tauri::command]
+#[specta::specta]
+pub fn add_optimized_airfoil(engine: Shared<'_>) -> Result<AirfoilSummary, AppError> {
+    engine.add_optimized_airfoil()
 }
 
 /// Cancels a running sweep.

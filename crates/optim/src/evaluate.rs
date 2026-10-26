@@ -91,7 +91,7 @@ pub struct PointResult {
     /// True if the viscous solution converged.
     pub converged: bool,
     /// Coefficients (of the last Newton iterate if not converged), absent
-    /// after an analysis error.
+    /// after an analysis error or if a coefficient is not finite.
     pub values: Option<PointValues>,
     /// Analysis error, e.g. critical Mach number exceeded.
     pub error: Option<String>,
@@ -195,6 +195,17 @@ impl Evaluator {
 
         let c = &self.problem.constraints;
         let props = airfoil.properties();
+        let measures = [
+            props.max_thickness,
+            props.max_thickness_x,
+            props.max_camber,
+            props.max_camber_x,
+            props.te_angle_deg,
+            props.area,
+        ];
+        if measures.iter().any(|v| !v.is_finite()) {
+            return Evaluation::invalid(x, 0.0, "degenerate geometry".into());
+        }
         let station_thickness: Vec<f64> = c
             .stations
             .iter()
@@ -315,12 +326,19 @@ fn solve_point(solver: &ViscousSolver, target: Target) -> PointResult {
         }
     };
     match retry.unwrap_or(first) {
-        Ok(s) => PointResult {
-            target,
-            converged: usable(&s),
-            values: Some(PointValues::from(&s)),
-            error: None,
-        },
+        Ok(s) => {
+            let v = PointValues::from(&s);
+            let finite = [v.alpha_deg, v.cl, v.cd, v.cdp, v.cdf, v.cm]
+                .iter()
+                .chain(&v.transition)
+                .all(|c| c.is_finite());
+            PointResult {
+                target,
+                converged: usable(&s) && finite,
+                values: finite.then_some(v),
+                error: None,
+            }
+        }
         Err(e) => PointResult {
             target,
             converged: false,

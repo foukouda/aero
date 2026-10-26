@@ -32,6 +32,8 @@
         return origin.file_name;
       case "duplicate":
         return `copy of ${origin.of}`;
+      case "optimized":
+        return `optimized from ${origin.of}`;
     }
   }
 

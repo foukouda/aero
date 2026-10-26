@@ -150,6 +150,8 @@ pub struct OptimizationResult {
     pub parameters: CstParameters,
     /// Coordinates of the best design (unit chord, not paneled).
     pub airfoil: Airfoil,
+    /// Coordinates of the fitted initial design.
+    pub initial_airfoil: Airfoil,
     /// Rms ordinate error of the CST fit of the initial airfoil.
     pub fit_rms_error: f64,
     /// Maximum ordinate error of the fit.
@@ -297,6 +299,7 @@ pub fn optimize(
     Ok(OptimizationResult {
         parameters: space.parameters(&best.x)?,
         airfoil: space.airfoil(&best.x, &name)?,
+        initial_airfoil: space.airfoil(&x0, &format!("{} (CST fit)", airfoil.name()))?,
         fit_rms_error: space.fit().rms_error,
         fit_max_error: space.fit().max_error,
         initial,

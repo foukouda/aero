@@ -7,20 +7,29 @@ import { call, CommandError, commands, errorTitle } from "./api";
 import type {
   AnalysisRequest,
   AnalysisView,
+  BestDesign,
+  Evaluation,
   GeometryView,
+  HistoryEntry,
   Normalization,
+  Objective,
+  OptimizationEvent,
+  OptimizationSetup,
   PanelingOptions,
+  Phase,
   PolarPoint,
   SessionView,
   Settings,
+  Shape,
   SweepEvent,
   ViscousPolarPoint,
   ViscousSettings,
 } from "./bindings";
+import { improvement, objectiveName } from "./optimize";
 import { latestRunner } from "./latest";
 import { TOUR_STEPS, defaultTourLang, type TourAction, type TourLang } from "./tour";
 
-export type Tab = "geometry" | "analysis" | "polars";
+export type Tab = "geometry" | "analysis" | "polars" | "optimize";
 export type Theme = "light" | "dark";
 
 export interface Toast {
@@ -41,6 +50,24 @@ export interface SweepProgress {
   /** Same for a viscous sweep. */
   liveViscous: Record<number, ViscousPolarPoint[]>;
   failures: number;
+}
+
+export interface OptimizationRun {
+  jobId: string;
+  airfoilId: number;
+  objective: Objective;
+  maxEvaluations: number;
+  evaluations: number;
+  phase: Phase;
+  /** Number of design variables. */
+  dimension: number;
+  /** Rms error of the CST fit of the initial airfoil. */
+  fitRms: number;
+  initialShape: Shape | null;
+  initial: Evaluation | null;
+  best: BestDesign | null;
+  history: HistoryEntry[];
+  startedAt: number;
 }
 
 /** Viscous settings of a new session (and of projects that predate them). */
@@ -108,6 +135,9 @@ class AppState {
   analyses = $state<Record<number, AnalysisView>>({});
   analysisErrors = $state<Record<number, string>>({});
   sweep = $state<SweepProgress | null>(null);
+  optimization = $state<OptimizationRun | null>(null);
+  /** Library entry made from the last optimization result. */
+  optimizedAirfoilId = $state<number | null>(null);
   toasts = $state<Toast[]>([]);
   dirty = $state(false);
   busy = $state(false);
@@ -513,6 +543,139 @@ class AppState {
     if (this.sweep) await commands.cancelSweep(this.sweep.jobId);
   }
 
+  // ---------------------------------------------------------- optimization
+
+  #saveOptimization = latestRunner(async (setup: OptimizationSetup) => {
+    await commands.updateOptimizationSetup(setup);
+  });
+
+  /** Changes the optimization setup. */
+  updateOptimizationSetup(setup: OptimizationSetup) {
+    if (!this.session) return;
+    this.session.optimization = setup;
+    this.dirty = true;
+    void this.#saveOptimization($state.snapshot(setup) as OptimizationSetup);
+  }
+
+  /** Optimizes an airfoil with the current setup, with live progress. */
+  async runOptimization(airfoilId: number) {
+    const setup = this.session?.optimization;
+    if (!setup || this.optimization || this.sweep) return;
+    const jobId = crypto.randomUUID();
+    const objective = setup.problem.objective ?? "min_drag";
+    this.optimization = {
+      jobId,
+      airfoilId,
+      objective,
+      maxEvaluations: setup.options.max_evaluations ?? 0,
+      evaluations: 0,
+      phase: "initial",
+      dimension: 0,
+      fitRms: Number.NaN,
+      initialShape: null,
+      initial: null,
+      best: null,
+      history: [],
+      startedAt: performance.now(),
+    };
+    const channel = new Channel<OptimizationEvent>();
+    channel.onmessage = (event) => {
+      const run = this.optimization;
+      if (!run || run.jobId !== jobId) return;
+      switch (event.type) {
+        case "started":
+          run.maxEvaluations = event.max_evaluations;
+          run.dimension = event.dimension;
+          run.fitRms = event.fit_rms_error ?? Number.NaN;
+          run.initialShape = event.initial_shape;
+          break;
+        case "progress":
+          run.phase = event.phase;
+          run.evaluations = event.evaluations;
+          run.history.push(...event.history);
+          if (event.best) {
+            run.best = event.best;
+            if (event.phase === "initial") run.initial = event.best.evaluation;
+          }
+          break;
+        case "finished":
+          break;
+      }
+    };
+    await this.guard(async () => {
+      const r = await call(
+        commands.runOptimization(
+          { job_id: jobId, airfoil_id: airfoilId, setup: $state.snapshot(setup) as OptimizationSetup },
+          channel,
+        ),
+      );
+      this.dirty = true;
+      this.optimizedAirfoilId = null;
+      const gain = improvement(objective, r.initial.objective, r.best.objective);
+      const summary =
+        gain === null
+          ? "No feasible design was found."
+          : `${objectiveName(objective)} improved by ${gain.toFixed(1)} % in ${r.history.length} evaluations.`;
+      this.notify("info", r.stop === "cancelled" ? "Optimization cancelled" : "Optimization finished", summary);
+    });
+    this.optimization = null;
+    await this.refresh();
+  }
+
+  async cancelOptimization() {
+    if (this.optimization) await commands.cancelOptimization(this.optimization.jobId);
+  }
+
+  /** Adds the best design of the last optimization to the library. */
+  async addOptimizedAirfoil(): Promise<number | null> {
+    const id = await this.guard(async () => {
+      const a = await call(commands.addOptimizedAirfoil());
+      this.dirty = true;
+      this.optimizedAirfoilId = a.id;
+      this.selectedId = a.id;
+      await this.refresh();
+      this.notify("info", "Added to the library", a.name);
+      return a.id;
+    });
+    return id ?? null;
+  }
+
+  /**
+   * Polars of the initial and optimized airfoils, at the flow conditions of
+   * the optimization (the optimized one is added to the library if needed).
+   */
+  async compareOptimizedPolars() {
+    const last = this.session?.last_optimization;
+    if (!last || this.sweep) return;
+    const added = this.airfoils.some((a) => a.id === this.optimizedAirfoilId) ? this.optimizedAirfoilId : null;
+    const id = added ?? (await this.addOptimizedAirfoil());
+    if (id === null) return;
+    await this.guard(async () => {
+      for (const a of this.airfoils) {
+        const shown = a.id === id || a.id === last.airfoil_id;
+        if (a.visible !== shown) await call(commands.setAirfoilVisible(a.id, shown));
+      }
+    });
+    await this.refresh();
+    const v = last.problem.viscous;
+    if (v) {
+      this.updateSettings({
+        mach: v.mach ?? 0,
+        viscous: {
+          ...($state.snapshot(this.viscous) as ViscousSettings),
+          enabled: true,
+          reynolds: v.reynolds ?? 1e6,
+          ncrit: v.ncrit ?? [9, 9],
+          xtr: v.xtr ?? [1, 1],
+          variation: v.variation ?? "fixed",
+          amplification: v.amplification ?? "original",
+        },
+      });
+    }
+    this.tab = "polars";
+    await this.runSweep();
+  }
+
   // --------------------------------------------------------------- exports
 
   async exportDat(id: number) {
@@ -591,6 +754,7 @@ class AppState {
   async newProject() {
     if (!(await this.confirmDiscard())) return;
     await this.guard(async () => {
+      this.optimizedAirfoilId = null;
       this.geometries = {};
       this.analyses = {};
       this.applySession(await commands.newSession());
@@ -607,6 +771,7 @@ class AppState {
   async openProjectPath(path: string) {
     await this.guard(async () => {
       const view = await call(commands.openProject(path));
+      this.optimizedAirfoilId = null;
       this.geometries = {};
       this.analyses = {};
       this.analysisErrors = {};

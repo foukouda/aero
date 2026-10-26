@@ -38,6 +38,14 @@ export const commands = {
 	runSweep: (request: SweepRequest, onEvent: Channel<SweepEvent>) => typedError<StoredPolar[], AppError>(__TAURI_INVOKE("run_sweep", { request, onEvent })),
 	/**  Cancels a running sweep. */
 	cancelSweep: (jobId: string) => __TAURI_INVOKE<boolean>("cancel_sweep", { jobId }),
+	/**  Optimizes the shape of an airfoil, streaming progress on `on_event`. */
+	runOptimization: (request: OptimizeRequest, onEvent: Channel<OptimizationEvent>) => typedError<StoredOptimization, AppError>(__TAURI_INVOKE("run_optimization", { request, onEvent })),
+	/**  Cancels a running optimization. */
+	cancelOptimization: (jobId: string) => __TAURI_INVOKE<boolean>("cancel_optimization", { jobId }),
+	/**  Replaces the optimization setup of the session. */
+	updateOptimizationSetup: (setup: OptimizationSetup) => __TAURI_INVOKE<void>("update_optimization_setup", { setup }),
+	/**  Adds the best design of the last optimization to the library. */
+	addOptimizedAirfoil: () => typedError<AirfoilSummary, AppError>(__TAURI_INVOKE("add_optimized_airfoil")),
 	/**  Writes an airfoil as a Selig `.dat` file. */
 	exportDat: (id: number, path: string) => typedError<null, AppError>(__TAURI_INVOKE("export_dat", { id, path })),
 	/**  Writes the polars of the given airfoils (all if empty) as CSV. */
@@ -70,6 +78,10 @@ file_name: string } |
 /**  Copy of another airfoil. */
 { kind: "duplicate"; 
 /**  Name of the original airfoil. */
+of: string } | 
+/**  Result of a shape optimization. */
+{ kind: "optimized"; 
+/**  Name of the initial airfoil. */
 of: string };
 
 /**  Library entry as listed in the user interface. */
@@ -185,6 +197,14 @@ export type AppInfo = {
 	project_format_version: number,
 };
 
+/**  New best design of an optimization. */
+export type BestDesign = {
+	/**  Its evaluation. */
+	evaluation: Evaluation,
+	/**  Its coordinates. */
+	shape: Shape,
+};
+
 /**
  *  Boundary-layer quantities at the stations of one surface (from the
  *  stagnation point to the trailing edge) or of the wake.
@@ -236,6 +256,23 @@ export type ClSweep = {
 	step: number | null,
 };
 
+/**  Constraints of the design; `None` or empty disables one. */
+export type Constraints = {
+	/**  Minimum of the maximum thickness `t/c`. */
+	min_thickness?: number | null,
+	/**  Maximum of the maximum thickness `t/c`. */
+	max_thickness?: number | null,
+	/**  Minimum thickness at given chord stations. */
+	stations?: ThicknessStation[],
+	/**
+	 *  Minimum moment coefficient `Cm` (about the quarter chord) at every
+	 *  operating point.
+	 */
+	min_cm?: number | null,
+	/**  Minimum trailing-edge included angle, degrees. */
+	min_te_angle_deg?: number | null,
+};
+
 /**  Layout of an airfoil coordinate file. */
 export type DatFormat = 
 /**  Selig (XFOIL) ordering. */
@@ -246,6 +283,28 @@ export type DatFormat =
 "LeadingEdgeFirst" | 
 /**  MSES/ISES file (domain line skipped). */
 "Mses";
+
+/**  Options of the design space. */
+export type DesignOptions = {
+	/**
+	 *  Bernstein order `n` of each surface: `n + 1` weights per surface,
+	 *  `2 (n + 1)` design variables.
+	 */
+	order?: number,
+	/**
+	 *  Points per surface of the generated airfoils (cosine spacing,
+	 *  leading edge shared), before paneling.
+	 */
+	points_per_side?: number,
+};
+
+/**  An operating point of the design. */
+export type DesignPoint = {
+	/**  Prescribed angle of attack or lift coefficient. */
+	target: Target,
+	/**  Weight of the point in the objective (positive). */
+	weight: number | null,
+};
 
 /**  Category of an error, for the user interface. */
 export type ErrorKind = 
@@ -267,6 +326,30 @@ export type ErrorKind =
 "io" | 
 /**  Unexpected internal error. */
 "internal";
+
+/**
+ *  Evaluation of a design.
+ * 
+ *  Designs are ranked with the feasibility rules of [`Ranked`]: the
+ *  violation is the sum of the relative constraint violations (thickness
+ *  bounds divided by the bound, `Cm` by [`CM_SCALE`]), plus
+ *  [`FAILED_POINT`] per unconverged operating point, or
+ *  [`INVALID_DESIGN`] when the design cannot be analyzed.
+ */
+export type Evaluation = {
+	/**  Design variables. */
+	x: (number | null)[],
+	/**  Objective, when every operating point converged. */
+	objective: number | null,
+	/**  Constraint violation, 0 for a feasible design. */
+	violation: number | null,
+	/**  Geometric properties, unless the design is invalid. */
+	geometry: GeometrySummary | null,
+	/**  Operating points, unless the design is invalid. */
+	points: PointResult[],
+	/**  Why the design could not be analyzed. */
+	failure: string | null,
+};
 
 /**  Geometric properties of an airfoil. Lengths are divided by the chord. */
 export type GeometricProperties = {
@@ -295,6 +378,27 @@ export type GeometricProperties = {
 	te_thickness: number | null,
 	/**  Cross-section area divided by the chord squared. */
 	area: number | null,
+};
+
+/**  Geometric properties of a design (chord units). */
+export type GeometrySummary = {
+	/**  Maximum thickness `t/c`. */
+	max_thickness: number | null,
+	/**  Its station `x/c`. */
+	max_thickness_x: number | null,
+	/**  Maximum camber `f/c`. */
+	max_camber: number | null,
+	/**  Its station `x/c`. */
+	max_camber_x: number | null,
+	/**  Trailing-edge included angle, degrees. */
+	te_angle_deg: number | null,
+	/**  Cross-section area. */
+	area: number | null,
+	/**
+	 *  Thickness at the constrained stations, in the order of
+	 *  [`crate::Constraints::stations`].
+	 */
+	station_thickness: (number | null)[],
 };
 
 /**  Geometry of an airfoil for display. */
@@ -344,6 +448,18 @@ export type HingeMoment = {
 	fy: number | null,
 };
 
+/**  One evaluation of the history. */
+export type HistoryEntry = {
+	/**  Evaluation number, from 1 (the initial design). */
+	evaluation: number,
+	/**  Phase that made it. */
+	phase: Phase,
+	/**  Objective, when every operating point converged. */
+	objective: number | null,
+	/**  Constraint violation, 0 when feasible. */
+	violation: number | null,
+};
+
 /**  Result of an import. */
 export type ImportResult = {
 	/**  The new library entry. */
@@ -373,6 +489,15 @@ export type MachReynoldsVariation =
  */
 "inverse_cl";
 
+/**  Search method. */
+export type Method = 
+/**  CMA-ES, then Nelder–Mead from the best design. */
+"cma_es_then_nelder_mead" | 
+/**  CMA-ES only. */
+"cma_es" | 
+/**  Nelder–Mead only, from the initial design. */
+"nelder_mead";
+
 /**  How an airfoil is normalized to unit chord. */
 export type Normalization = 
 /**
@@ -387,12 +512,94 @@ export type Normalization =
  */
 "ChordAligned";
 
+/**  Quantity minimized, as a weighted mean over the operating points. */
+export type Objective = 
+/**  Minimum drag: weighted mean of `Cd`. */
+"min_drag" | 
+/**  Maximum lift-to-drag ratio: weighted mean of `−Cl/Cd`. */
+"max_lift_to_drag";
+
 /**  What single-point analyses and sweeps prescribe. */
 export type OperatingMode = 
 /**  The angle of attack (XFOIL `ALFA`, `ASEQ`). */
 "alpha" | 
 /**  The lift coefficient (XFOIL `CL`, `CSEQ`). */
 "cl";
+
+/**  Progress of an optimization, streamed over a channel. */
+export type OptimizationEvent = 
+/**  The initial airfoil is fitted. */
+{ type: "started"; 
+/**  Evaluation budget. */
+max_evaluations: number; 
+/**  Number of design variables. */
+dimension: number; 
+/**  Rms ordinate error of the CST fit. */
+fit_rms_error: number | null; 
+/**  Coordinates of the fitted initial design. */
+initial_shape: Shape } | 
+/**  Evaluations since the previous event. */
+{ type: "progress"; 
+/**  Current phase. */
+phase: Phase; 
+/**  Evaluations so far. */
+evaluations: number; 
+/**  Step size of the optimizer. */
+step_size: number | null; 
+/**  The new evaluations. */
+history: HistoryEntry[]; 
+/**  The best design, when it changed. */
+best: BestDesign | null } | 
+/**  The optimization ended. */
+{ type: "finished"; 
+/**  True if it was cancelled. */
+cancelled: boolean };
+
+/**  Definition of the shape optimization of the Optimize tab. */
+export type OptimizationSetup = {
+	/**  The problem; its paneling is replaced by the airfoil's when run. */
+	problem: Problem,
+	/**  Search options. */
+	options: OptimizeOptions,
+};
+
+/**  Options of [`optimize`]. */
+export type OptimizeOptions = {
+	/**  Search method. */
+	method?: Method,
+	/**  Evaluation budget, the initial design included. */
+	max_evaluations?: number,
+	/**
+	 *  Share of the budget kept for the Nelder–Mead polish with
+	 *  [`Method::CmaEsThenNelderMead`]; the polish also gets what CMA-ES
+	 *  leaves when it converges early.
+	 */
+	polish_fraction?: number | null,
+	/**
+	 *  Initial step on the CST weights: CMA-ES `σ₀`, or the Nelder–Mead
+	 *  simplex edge with [`Method::NelderMead`].
+	 */
+	step?: number | null,
+	/**  CMA-ES population; 0 for the default `4 + ⌊3 ln n⌋`. */
+	population?: number,
+	/**  Seed of the CMA-ES sampling. */
+	seed?: number,
+	/**
+	 *  Threads evaluating designs; 0 for all cores. The results do not
+	 *  depend on it.
+	 */
+	threads?: number,
+};
+
+/**  A shape optimization to run. */
+export type OptimizeRequest = {
+	/**  Identifier used to cancel the job. */
+	job_id: string,
+	/**  Airfoil to optimize. */
+	airfoil_id: number,
+	/**  Problem and options. */
+	setup: OptimizationSetup,
+};
 
 /**  Paneling parameters, with the names and meaning of XFOIL's `PPAR` menu. */
 export type PanelingOptions = {
@@ -414,6 +621,48 @@ export type PanelingOptions = {
 	top_refinement?: [(number | null), (number | null)],
 	/**  Lower-surface refined area x/c limits (`XB`, `XPREF1`/`XPREF2`). */
 	bottom_refinement?: [(number | null), (number | null)],
+};
+
+/**  Phase of an optimization. */
+export type Phase = 
+/**  Evaluation of the fitted initial airfoil. */
+"initial" | 
+/**  CMA-ES. */
+"global" | 
+/**  Nelder–Mead. */
+"local";
+
+/**  Analysis of one operating point. */
+export type PointResult = {
+	/**  The prescribed value. */
+	target: Target,
+	/**  True if the viscous solution converged. */
+	converged: boolean,
+	/**
+	 *  Coefficients (of the last Newton iterate if not converged), absent
+	 *  after an analysis error or if a coefficient is not finite.
+	 */
+	values: PointValues | null,
+	/**  Analysis error, e.g. critical Mach number exceeded. */
+	error: string | null,
+};
+
+/**  Aerodynamic coefficients of an operating point. */
+export type PointValues = {
+	/**  Angle of attack, degrees. */
+	alpha_deg: number | null,
+	/**  Lift coefficient. */
+	cl: number | null,
+	/**  Drag coefficient. */
+	cd: number | null,
+	/**  Pressure drag coefficient. */
+	cdp: number | null,
+	/**  Skin-friction drag coefficient. */
+	cdf: number | null,
+	/**  Moment coefficient about the quarter chord. */
+	cm: number | null,
+	/**  Transition `x/c` on the top and bottom surfaces. */
+	transition: [(number | null), (number | null)],
 };
 
 /**  Result of an angle-of-attack sweep. */
@@ -459,6 +708,28 @@ export type PolarPoint = {
 	hinge_moment?: number | null,
 };
 
+/**
+ *  An airfoil optimization problem.
+ * 
+ *  Every operating point is analyzed by the viscous solver from a fresh
+ *  boundary layer; a point that does not converge makes the design
+ *  infeasible.
+ */
+export type Problem = {
+	/**  Operating points (at least one). */
+	points: DesignPoint[],
+	/**  Quantity minimized. */
+	objective?: Objective,
+	/**  Constraints. */
+	constraints?: Constraints,
+	/**  Viscous analysis options, shared by the operating points. */
+	viscous?: ViscousOptions,
+	/**  Paneling of the generated airfoils. */
+	paneling?: PanelingOptions,
+	/**  Design space. */
+	design?: DesignOptions,
+};
+
 /**  Whole session as shown by the user interface. */
 export type SessionView = {
 	/**  Airfoil library. */
@@ -469,6 +740,10 @@ export type SessionView = {
 	polars: StoredPolar[],
 	/**  Path of the project file, if the session was saved or opened. */
 	project_path: string | null,
+	/**  Shape optimization setup. */
+	optimization: OptimizationSetup,
+	/**  Result of the last shape optimization. */
+	last_optimization: StoredOptimization | null,
 };
 
 /**  Analysis settings of the session. */
@@ -493,6 +768,55 @@ export type Settings = {
 	cl_sweep?: ClSweep,
 	/**  Flap hinge for the hinge moments (XFOIL `FNEW`). */
 	flap_hinge?: [(number | null), (number | null)] | null,
+};
+
+/**  Airfoil coordinates. */
+export type Shape = {
+	/**  Abscissas. */
+	x: (number | null)[],
+	/**  Ordinates. */
+	y: (number | null)[],
+};
+
+/**  Why a minimization stopped. */
+export type Stop = 
+/**  The evaluation budget is spent. */
+"max_evaluations" | 
+/**  The step size fell below the tolerance. */
+"converged" | 
+/**  The best value did not improve for many iterations. */
+"stagnation" | 
+/**  Numerical limit reached (ill-conditioned covariance matrix). */
+"numerical_limit" | 
+/**  The observer asked to stop. */
+"cancelled";
+
+/**  Result of the last shape optimization. */
+export type StoredOptimization = {
+	/**  Airfoil that was optimized. */
+	airfoil_id: number,
+	/**  Its name at the time. */
+	airfoil_name: string,
+	/**  The problem, with the paneling used. */
+	problem: Problem,
+	/**  The search options. */
+	options: OptimizeOptions,
+	/**  The fitted initial design. */
+	initial: Evaluation,
+	/**  The best design. */
+	best: Evaluation,
+	/**  Coordinates of the fitted initial design. */
+	initial_shape: Shape,
+	/**  Coordinates of the best design. */
+	best_shape: Shape,
+	/**  Rms ordinate error of the CST fit of the initial airfoil. */
+	fit_rms_error: number | null,
+	/**  Every evaluation, in order. */
+	history: HistoryEntry[],
+	/**  Why the search stopped. */
+	stop: Stop,
+	/**  Duration, seconds. */
+	elapsed_s: number | null,
 };
 
 /**  Sweep result stored in the session. */
@@ -571,6 +895,21 @@ export type SweepRequest = {
 	viscous: ViscousSettings,
 	/**  Flap hinge for the hinge moments. */
 	flap_hinge: [(number | null), (number | null)] | null,
+};
+
+/**  What is prescribed at an operating point. */
+export type Target = 
+/**  Angle of attack, degrees (XFOIL `ALFA`). */
+{ kind: "alpha"; value: number | null } | 
+/**  Lift coefficient; the angle of attack is solved for (XFOIL `CL`). */
+{ kind: "cl"; value: number | null };
+
+/**  Minimum thickness at a chord station. */
+export type ThicknessStation = {
+	/**  Station `x/c`, strictly between 0 and 1. */
+	x: number | null,
+	/**  Minimum thickness `t/c` there. */
+	min: number | null,
 };
 
 /**  Transition point of one surface. */

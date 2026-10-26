@@ -2,7 +2,7 @@
 // components/Tour.svelte. Targets are `data-tour` attributes in the UI.
 
 export type TourLang = "en" | "fr";
-export type TourTab = "geometry" | "analysis" | "polars";
+export type TourTab = "geometry" | "analysis" | "polars" | "optimize";
 export type TourAction = "generate-naca" | "show-nodes" | "set-alpha" | "enable-viscous" | "run-sweep";
 
 export interface TourText {
@@ -30,11 +30,11 @@ export const TOUR_STEPS: TourStep[] = [
     text: {
       en: {
         title: "Welcome to Aero",
-        body: "Aero analyses 2D airfoils with XFOIL's methods — the panel method and the viscous boundary layer (transition, drag, stall) — rewritten in Rust and validated against XFOIL 6.996. This short tour walks you through a complete analysis: create an airfoil, check its geometry, compute its pressure distribution, boundary layer and polars. You can try everything while the tour is open.",
+        body: "Aero analyses 2D airfoils with XFOIL's methods — the panel method and the viscous boundary layer (transition, drag, stall) — rewritten in Rust and validated against XFOIL 6.996. This short tour walks you through a complete analysis: create an airfoil, check its geometry, compute its pressure distribution, boundary layer and polars, then optimize its shape. You can try everything while the tour is open.",
       },
       fr: {
         title: "Bienvenue dans Aero",
-        body: "Aero analyse des profils d'aile 2D avec les méthodes de XFOIL — la méthode de panneaux et la couche limite visqueuse (transition, traînée, décrochage) — réécrites en Rust et validées contre XFOIL 6.996. Cette visite te guide à travers une analyse complète : créer un profil, vérifier sa géométrie, calculer sa répartition de pression, sa couche limite et ses polaires. Tu peux tout essayer pendant que la visite est ouverte.",
+        body: "Aero analyse des profils d'aile 2D avec les méthodes de XFOIL — la méthode de panneaux et la couche limite visqueuse (transition, traînée, décrochage) — réécrites en Rust et validées contre XFOIL 6.996. Cette visite te guide à travers une analyse complète : créer un profil, vérifier sa géométrie, calculer sa répartition de pression, sa couche limite et ses polaires, puis optimiser sa forme. Tu peux tout essayer pendant que la visite est ouverte.",
       },
     },
   },
@@ -285,16 +285,48 @@ export const TOUR_STEPS: TourStep[] = [
     },
   },
   {
+    id: "optimize-setup",
+    target: "optimize-setup",
+    tab: "optimize",
+    needsAirfoil: true,
+    text: {
+      en: {
+        title: "16. Optimize the shape",
+        body: "The Optimize tab reshapes an airfoil for your operating points: each point prescribes Cl (or α) and has a weight; the objective is the weighted drag, or L/D. Constraints keep it buildable — minimum thickness (preset to the airfoil's own), thickness at a spar station, minimum Cm, trailing-edge angle. The shape is described by CST functions fitted to the airfoil, and every candidate is analyzed by the same viscous solver as elsewhere; a candidate that does not converge is rejected. The run is reproducible: the same seed gives the same result.",
+      },
+      fr: {
+        title: "16. Optimiser la forme",
+        body: "L'onglet Optimize remodèle un profil pour tes points de fonctionnement : chaque point impose Cl (ou α) et a un poids ; l'objectif est la traînée pondérée, ou L/D. Des contraintes le gardent réalisable — épaisseur minimale (préréglée sur celle du profil), épaisseur à l'emplacement d'un longeron, Cm minimal, angle de bord de fuite. La forme est décrite par des fonctions CST ajustées au profil, et chaque candidat est analysé par le même solveur visqueux qu'ailleurs ; un candidat qui ne converge pas est rejeté. Le calcul est reproductible : la même graine donne le même résultat.",
+      },
+    },
+  },
+  {
+    id: "optimize-results",
+    target: "optimize-results",
+    tab: "optimize",
+    needsAirfoil: true,
+    text: {
+      en: {
+        title: "17. Follow and use the result",
+        body: "During the run, the shape and the convergence plot update live (green: feasible designs, orange: designs violating a constraint, blue: best so far); Cancel keeps the best design found. The table compares the initial and optimized airfoils point by point. “Add to library” makes the optimized airfoil a regular one (analysis, export .dat), and “Compare polars” sweeps both at the optimization conditions — check the off-design behaviour there, a single-point optimum can be worse elsewhere.",
+      },
+      fr: {
+        title: "17. Suivre et utiliser le résultat",
+        body: "Pendant le calcul, la forme et la courbe de convergence se mettent à jour en direct (vert : formes admissibles, orange : formes violant une contrainte, bleu : meilleure jusque-là) ; Cancel garde la meilleure forme trouvée. Le tableau compare le profil initial et le profil optimisé point par point. « Add to library » en fait un profil comme les autres (analyse, export .dat), et « Compare polars » calcule les polaires des deux aux conditions de l'optimisation — vérifie-y le comportement hors point de calcul : un optimum en un seul point peut être moins bon ailleurs.",
+      },
+    },
+  },
+  {
     id: "project",
     target: "project",
     text: {
       en: {
-        title: "16. Save your work",
-        body: "Save stores the airfoils, settings and results in a project file (Ctrl+S); Open restores it. The last button switches between light and dark themes.",
+        title: "18. Save your work",
+        body: "Save stores the airfoils, settings, results and the last optimization in a project file (Ctrl+S); Open restores it. The last button switches between light and dark themes.",
       },
       fr: {
-        title: "16. Enregistrer ton travail",
-        body: "Save enregistre les profils, les réglages et les résultats dans un fichier projet (Ctrl+S) ; Open le rouvre. Le dernier bouton bascule entre thème clair et sombre.",
+        title: "18. Enregistrer ton travail",
+        body: "Save enregistre les profils, les réglages, les résultats et la dernière optimisation dans un fichier projet (Ctrl+S) ; Open le rouvre. Le dernier bouton bascule entre thème clair et sombre.",
       },
     },
   },

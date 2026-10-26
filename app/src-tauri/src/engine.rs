@@ -24,15 +24,17 @@ use aero_geometry::{
     to_selig_string,
 };
 
+use aero_optim::{DesignSpace, Phase, Stop};
+
 use crate::dto::{
-    AirfoilSummary, AnalysisRequest, AnalysisView, GeometryView, ImportResult, SessionView,
-    SweepEvent, SweepRequest, ViscousView,
+    AirfoilSummary, AnalysisRequest, AnalysisView, BestDesign, GeometryView, ImportResult,
+    OptimizationEvent, OptimizeRequest, SessionView, SweepEvent, SweepRequest, ViscousView,
 };
 use crate::error::{AppError, ErrorKind};
 use crate::export;
 use crate::model::{
-    AirfoilEntry, AirfoilId, AirfoilOrigin, OperatingMode, PolarData, Session, Settings,
-    StoredPolar, load_project, save_project,
+    AirfoilEntry, AirfoilId, AirfoilOrigin, OperatingMode, OptimizationSetup, PolarData, Session,
+    Settings, Shape, StoredOptimization, StoredPolar, load_project, save_project,
 };
 
 /// Largest accepted coordinate file, in bytes.
@@ -181,6 +183,8 @@ impl Engine {
             project_path: lock(&self.project_path)
                 .as_ref()
                 .map(|p| p.display().to_string()),
+            optimization: session.optimization.clone(),
+            last_optimization: session.last_optimization.clone(),
         }
     }
 
@@ -657,8 +661,106 @@ impl Engine {
         Ok(polar)
     }
 
-    /// Requests the cancellation of a running sweep. Returns false if no
-    /// such job is running.
+    /// Optimizes the shape of an airfoil, calling `on_event` with progress.
+    /// `on_event` returning false (receiver gone) cancels the optimization,
+    /// as does [`Engine::cancel`]; the best design so far is then returned.
+    /// The result and the setup are stored in the session.
+    pub fn optimize(
+        &self,
+        request: &OptimizeRequest,
+        mut on_event: impl FnMut(OptimizationEvent) -> bool,
+    ) -> Result<StoredOptimization, AppError> {
+        let entry = lock(&self.session).get(request.airfoil_id)?.clone();
+        let mut problem = request.setup.problem.clone();
+        problem.paneling = entry.paneling;
+        let mut options = request.setup.options;
+        if options.threads == 0 {
+            // Leave a core to the interface; the results do not depend on it.
+            options.threads = std::thread::available_parallelism()
+                .map_or(1, |n| n.get().saturating_sub(1).max(1));
+        }
+        problem.validate()?;
+        options.validate()?;
+        // The same fit as the optimizer's, to draw the designs.
+        let space = DesignSpace::new(&entry.source, &problem.design)?;
+        let shape = |x: &[f64]| {
+            space
+                .airfoil(x, entry.name())
+                .map(|a| Shape::from(&a))
+                .unwrap_or(Shape {
+                    x: Vec::new(),
+                    y: Vec::new(),
+                })
+        };
+        let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+
+        let flag = Arc::new(AtomicBool::new(false));
+        lock(&self.jobs).insert(request.job_id.clone(), flag.clone());
+        let started = Instant::now();
+        let mut proceed = on_event(OptimizationEvent::Started {
+            max_evaluations: count(options.max_evaluations),
+            dimension: count(space.dimension()),
+            fit_rms_error: space.fit().rms_error,
+            initial_shape: shape(&space.initial()),
+        });
+        let result = aero_optim::optimize(&entry.source, &problem, &options, |p| {
+            let best = (p.improved || p.phase == Phase::Initial).then(|| BestDesign {
+                evaluation: p.best.clone(),
+                shape: shape(&p.best.x),
+            });
+            proceed = proceed
+                && on_event(OptimizationEvent::Progress {
+                    phase: p.phase,
+                    evaluations: count(p.evaluations),
+                    step_size: p.step_size,
+                    history: p.new.to_vec(),
+                    best,
+                });
+            if proceed && !flag.load(Ordering::Relaxed) {
+                ControlFlow::Continue(())
+            } else {
+                ControlFlow::Break(())
+            }
+        });
+        lock(&self.jobs).remove(&request.job_id);
+        let cancelled = result.as_ref().is_ok_and(|r| r.stop == Stop::Cancelled);
+        on_event(OptimizationEvent::Finished { cancelled });
+        let result = result?;
+
+        let stored = StoredOptimization {
+            airfoil_id: entry.id,
+            airfoil_name: entry.name().to_string(),
+            problem,
+            options: request.setup.options,
+            initial: result.initial,
+            best: result.best,
+            initial_shape: Shape::from(&result.initial_airfoil),
+            best_shape: Shape::from(&result.airfoil),
+            fit_rms_error: result.fit_rms_error,
+            history: result.history,
+            stop: result.stop,
+            elapsed_s: started.elapsed().as_secs_f64(),
+        };
+        let mut session = lock(&self.session);
+        session.optimization = request.setup.clone();
+        session.last_optimization = Some(stored.clone());
+        Ok(stored)
+    }
+
+    /// Replaces the optimization setup.
+    pub fn update_optimization_setup(&self, setup: OptimizationSetup) {
+        lock(&self.session).optimization = setup;
+    }
+
+    /// Adds the best design of the last optimization to the library.
+    pub fn add_optimized_airfoil(&self) -> Result<AirfoilSummary, AppError> {
+        let mut session = lock(&self.session);
+        let id = session.add_optimized()?;
+        session.get(id).map(summary)
+    }
+
+    /// Requests the cancellation of a running sweep or optimization.
+    /// Returns false if no such job is running.
     pub fn cancel(&self, job_id: &str) -> bool {
         match lock(&self.jobs).get(job_id) {
             Some(flag) => {
@@ -1145,5 +1247,101 @@ mod tests {
 
         assert!(e.new_session().airfoils.is_empty());
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    fn optimization_request(airfoil_id: AirfoilId, evaluations: usize) -> OptimizeRequest {
+        let mut setup = OptimizationSetup::default();
+        setup.problem.points[0].target = aero_optim::Target::Cl(0.3);
+        setup.options.max_evaluations = evaluations;
+        setup.options.threads = 2;
+        OptimizeRequest {
+            job_id: "opt".into(),
+            airfoil_id,
+            setup,
+        }
+    }
+
+    #[test]
+    fn optimization_streams_stores_and_adds_its_result() {
+        let e = Engine::new();
+        let a = e.create_naca("0012", false).unwrap();
+        let request = optimization_request(a.id, 30);
+        let mut events = Vec::new();
+        let r = e
+            .optimize(&request, |event| {
+                events.push(event);
+                true
+            })
+            .unwrap();
+        assert!(matches!(
+            events.first(),
+            Some(OptimizationEvent::Started { dimension: 14, .. })
+        ));
+        assert!(matches!(
+            events.last(),
+            Some(OptimizationEvent::Finished { cancelled: false })
+        ));
+        let streamed: usize = events
+            .iter()
+            .map(|event| match event {
+                OptimizationEvent::Progress { history, .. } => history.len(),
+                _ => 0,
+            })
+            .sum();
+        assert_eq!(streamed, r.history.len());
+        assert!(r.best.objective <= r.initial.objective);
+        assert_eq!(r.problem.paneling, PanelingOptions::default());
+        let view = e.session_view();
+        assert_eq!(view.last_optimization.as_ref(), Some(&r));
+        assert_eq!(view.optimization, request.setup);
+
+        let added = e.add_optimized_airfoil().unwrap();
+        assert_eq!(added.name, format!("{} optimized", a.name));
+        assert!(matches!(added.origin, AirfoilOrigin::Optimized { .. }));
+        // The optimized airfoil analyzes like the best design.
+        let analysis = e
+            .analyze(
+                added.id,
+                &AnalysisRequest {
+                    mode: OperatingMode::Cl,
+                    cl: 0.3,
+                    ..at(0.0, 0.0, &crate::model::ViscousSettings::default())
+                },
+            )
+            .unwrap();
+        let cd = analysis.viscous.unwrap().cd;
+        let best = r.best.points[0].values.unwrap().cd;
+        assert!((cd / best - 1.0).abs() < 1e-3, "{cd} {best}");
+
+        // Saved and read back with the project.
+        let text = save_project(&lock(&e.session)).unwrap();
+        assert_eq!(load_project(&text).unwrap().last_optimization, Some(r));
+    }
+
+    #[test]
+    fn optimization_can_be_cancelled() {
+        let e = Engine::new();
+        let a = e.create_naca("2412", false).unwrap();
+        let mut finished = None;
+        let r = e
+            .optimize(&optimization_request(a.id, 500), |event| match event {
+                OptimizationEvent::Progress { .. } => false,
+                OptimizationEvent::Finished { cancelled } => {
+                    finished = Some(cancelled);
+                    true
+                }
+                _ => true,
+            })
+            .unwrap();
+        assert_eq!(r.stop, aero_optim::Stop::Cancelled);
+        assert_eq!(r.history.len(), 1);
+        assert_eq!(finished, Some(true));
+        assert!(!e.cancel("opt"), "the job is unregistered");
+        let mut bad = optimization_request(a.id, 500);
+        bad.setup.problem.points.clear();
+        assert_eq!(
+            e.optimize(&bad, |_| true).unwrap_err().kind,
+            ErrorKind::InvalidInput
+        );
     }
 }
