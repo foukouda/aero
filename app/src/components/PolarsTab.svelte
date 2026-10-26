@@ -2,12 +2,14 @@
   import type { PlotCurve } from "./Plot.svelte";
   import PlotPanel from "./PlotPanel.svelte";
   import ViscousControls from "./ViscousControls.svelte";
-  import type { AlphaSweep, PolarPoint, ViscousPolarPoint } from "../lib/bindings";
+  import type { AlphaSweep, ClSweep, PolarPoint, ViscousPolarPoint } from "../lib/bindings";
   import { app } from "../lib/state.svelte";
   import { compactExp, numbers } from "../lib/format";
 
   const s = $derived(app.settings);
   const sweep = $derived(s?.sweep);
+  const clSweep = $derived(s?.cl_sweep ?? { start: 0, end: 1.2, step: 0.1 });
+  const mode = $derived(s?.mode ?? "alpha");
   const running = $derived(app.sweep !== null);
 
   /** A point of either kind of polar, with the viscous columns optional. */
@@ -18,6 +20,7 @@
     cd?: number | null;
     xtr_top?: number | null;
     xtr_bottom?: number | null;
+    hinge_moment?: number | null;
   }
 
   interface Shown {
@@ -82,7 +85,15 @@
   }
 
   const clCurves = $derived(curvesOf((p) => p.cl));
-  const cmCurves = $derived(curvesOf((p) => p.cm));
+  const cmCurves = $derived.by(() => {
+    const cm = curvesOf((p) => p.cm);
+    // Flap hinge moments, when computed, on the same plot.
+    const hinge = curvesOf((p) => p.hinge_moment)
+      .filter((c) => c.y.some((v) => v !== null))
+      .map((c) => ({ ...c, label: `${c.label} Ch`, dash: [2, 3] }));
+    return [...cm, ...hinge];
+  });
+  const hasHinge = $derived(cmCurves.some((c) => c.label.endsWith(" Ch")));
   const dragCurves = $derived(curvesOf((p) => p.cl, (p) => p.cd, true));
   const transitionCurves = $derived.by(() => {
     const top = curvesOf((p) => p.xtr_top, undefined, true);
@@ -100,6 +111,10 @@
     app.updateSettings({ sweep: { ...$state.snapshot(sweep), ...patch } as AlphaSweep });
   }
 
+  function updateClSweep(patch: Partial<ClSweep>) {
+    app.updateSettings({ cl_sweep: { ...$state.snapshot(clSweep), ...patch } as ClSweep });
+  }
+
   function value(e: Event): number {
     return Number((e.currentTarget as HTMLInputElement).value);
   }
@@ -114,9 +129,19 @@
 <div class="polars">
   <section class="panel controls" data-tour="sweep">
     <div class="row">
-      <label>α start <input type="number" step="0.5" value={sweep?.start_deg} disabled={running} onchange={(e) => updateSweep({ start_deg: value(e) })} /></label>
-      <label>α end <input type="number" step="0.5" value={sweep?.end_deg} disabled={running} onchange={(e) => updateSweep({ end_deg: value(e) })} /></label>
-      <label>step <input type="number" min="0.01" step="0.25" value={sweep?.step_deg} disabled={running} onchange={(e) => updateSweep({ step_deg: value(e) })} /></label>
+      <div class="segmented" role="group" aria-label="Swept quantity">
+        <button class:active={mode === "alpha"} disabled={running} title="Sweep the angle of attack (XFOIL ASEQ)" onclick={() => app.updateSettings({ mode: "alpha" })}>α</button>
+        <button class:active={mode === "cl"} disabled={running} title="Sweep the lift coefficient (XFOIL CSEQ)" onclick={() => app.updateSettings({ mode: "cl" })}>Cl</button>
+      </div>
+      {#if mode === "alpha"}
+        <label>α start <input type="number" step="0.5" value={sweep?.start_deg} disabled={running} onchange={(e) => updateSweep({ start_deg: value(e) })} /></label>
+        <label>α end <input type="number" step="0.5" value={sweep?.end_deg} disabled={running} onchange={(e) => updateSweep({ end_deg: value(e) })} /></label>
+        <label>step <input type="number" min="0.01" step="0.25" value={sweep?.step_deg} disabled={running} onchange={(e) => updateSweep({ step_deg: value(e) })} /></label>
+      {:else}
+        <label>Cl start <input type="number" step="0.1" value={clSweep.start} disabled={running} onchange={(e) => updateClSweep({ start: value(e) })} /></label>
+        <label>Cl end <input type="number" step="0.1" value={clSweep.end} disabled={running} onchange={(e) => updateClSweep({ end: value(e) })} /></label>
+        <label>step <input type="number" min="0.005" step="0.05" value={clSweep.step} disabled={running} onchange={(e) => updateClSweep({ step: value(e) })} /></label>
+      {/if}
       <label>Mach <input type="number" min="0" max="0.99" step="0.05" value={mach} disabled={running} onchange={(e) => app.updateSettings({ mach: Math.max(0, Math.min(0.99, value(e))) })} /></label>
       <ViscousControls disabled={running} />
     </div>
@@ -135,7 +160,7 @@
         <span class="muted">
           Visible airfoils are analyzed; results are kept in the project.
           {#if app.viscous.enabled}
-            Viscous points start from the previous one (XFOIL ASEQ); unconverged points are left out.
+            Viscous points start from the previous one (XFOIL {mode === "cl" ? "CSEQ" : "ASEQ"}); unconverged points are left out.
           {/if}
         </span>
       {/if}
@@ -161,7 +186,7 @@
       emptyMessage="Run a viscous sweep to plot Cl(Cd)"
     />
     <PlotPanel
-      title="Moment coefficient (c/4)"
+      title={hasHinge ? "Moment coefficient (c/4) and flap hinge moment Ch (dotted)" : "Moment coefficient (c/4)"}
       fileName="cm_alpha"
       curves={cmCurves}
       xLabel="α (deg)"
@@ -207,6 +232,22 @@
   }
   label input {
     width: 70px;
+  }
+  .segmented {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .segmented button {
+    border: none;
+    border-radius: 0;
+    padding: 2px 10px;
+    background: transparent;
+  }
+  .segmented button.active {
+    background: var(--accent);
+    color: white;
   }
   .progress {
     width: 220px;

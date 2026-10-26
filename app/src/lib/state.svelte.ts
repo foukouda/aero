@@ -5,6 +5,7 @@ import { Channel } from "@tauri-apps/api/core";
 import * as nativeDialogs from "@tauri-apps/plugin-dialog";
 import { call, CommandError, commands, errorTitle } from "./api";
 import type {
+  AnalysisRequest,
   AnalysisView,
   GeometryView,
   Normalization,
@@ -48,6 +49,8 @@ export const DEFAULT_VISCOUS: ViscousSettings = {
   reynolds: 1e6,
   ncrit: [9, 9],
   xtr: [1, 1],
+  variation: "fixed",
+  amplification: "original",
 };
 
 /** Native file dialogs; replaceable in development builds for automated UI tests. */
@@ -131,7 +134,21 @@ class AppState {
   }
 
   get viscous(): ViscousSettings {
-    return this.session?.settings.viscous ?? DEFAULT_VISCOUS;
+    return { ...DEFAULT_VISCOUS, ...(this.session?.settings.viscous ?? {}) };
+  }
+
+  /** The single-point analysis request of the current settings. */
+  analysisRequest(): AnalysisRequest | null {
+    const s = this.settings;
+    if (!s) return null;
+    return {
+      mode: s.mode ?? "alpha",
+      alpha_deg: s.alpha_deg ?? 0,
+      cl: s.cl ?? 0.5,
+      mach: s.mach ?? 0,
+      viscous: $state.snapshot(this.viscous) as ViscousSettings,
+      flap_hinge: s.flap_hinge ? ($state.snapshot(s.flap_hinge) as [number, number]) : null,
+    };
   }
 
   get projectName(): string {
@@ -376,7 +393,8 @@ class AppState {
     this.session.settings = { ...this.session.settings, ...patch };
     this.dirty = true;
     void this.#saveSettings($state.snapshot(this.session.settings));
-    if ("alpha_deg" in patch || "mach" in patch || "allow_supercritical" in patch || "viscous" in patch) {
+    const analysisKeys = ["alpha_deg", "cl", "mode", "mach", "allow_supercritical", "viscous", "flap_hinge"];
+    if (analysisKeys.some((k) => k in patch)) {
       void this.analyzeVisible();
     }
   }
@@ -388,9 +406,9 @@ class AppState {
 
   // -------------------------------------------------------------- analysis
 
-  #analyze = latestRunner(async (request: { alpha: number; mach: number; viscous: ViscousSettings }) => {
+  #analyze = latestRunner(async (request: AnalysisRequest) => {
     for (const a of this.visible) {
-      const r = await commands.analyze(a.id, request.alpha, request.mach, request.viscous);
+      const r = await commands.analyze(a.id, request);
       if (r.status === "ok") {
         this.analyses[a.id] = r.data;
         delete this.analysisErrors[a.id];
@@ -401,15 +419,11 @@ class AppState {
     }
   });
 
-  /** Analyzes the visible airfoils at the current angle of attack. */
+  /** Analyzes the visible airfoils at the current operating point. */
   analyzeVisible() {
-    const s = this.settings;
-    if (!s) return Promise.resolve();
-    return this.#analyze({
-      alpha: s.alpha_deg ?? 0,
-      mach: s.mach ?? 0,
-      viscous: $state.snapshot(this.viscous) as ViscousSettings,
-    });
+    const request = this.analysisRequest();
+    if (!request) return Promise.resolve();
+    return this.#analyze(request);
   }
 
   // ----------------------------------------------------------------- sweep
@@ -466,7 +480,16 @@ class AppState {
     await this.guard(async () => {
       await call(
         commands.runSweep(
-          { job_id: jobId, airfoil_ids: ids, sweep: s.sweep, mach: s.mach, viscous },
+          {
+            job_id: jobId,
+            airfoil_ids: ids,
+            mode: s.mode ?? "alpha",
+            sweep: s.sweep,
+            cl_sweep: s.cl_sweep ?? { start: 0, end: 1.2, step: 0.1 },
+            mach: s.mach,
+            viscous,
+            flap_hinge: s.flap_hinge ?? null,
+          },
           channel,
         ),
       );
@@ -515,19 +538,19 @@ class AppState {
   }
 
   async exportCpCsv(id: number) {
-    const s = this.settings;
-    if (!s) return;
+    const request = this.analysisRequest();
+    if (!request) return;
     const path = await dialogs.save({ defaultPath: "cp.csv", filters: [{ name: "CSV", extensions: ["csv"] }] });
     if (!path) return;
     await this.guard(async () => {
-      await call(commands.exportCpCsv(id, s.alpha_deg, s.mach, $state.snapshot(this.viscous) as ViscousSettings, path));
+      await call(commands.exportCpCsv(id, request, path));
       this.notify("info", "Exported", baseName(path));
     });
   }
 
   async exportBoundaryLayerCsv(id: number) {
-    const s = this.settings;
-    if (!s) return;
+    const request = this.analysisRequest();
+    if (!request) return;
     const path = await dialogs.save({
       defaultPath: "boundary_layer.csv",
       filters: [{ name: "CSV", extensions: ["csv"] }],
@@ -535,7 +558,7 @@ class AppState {
     if (!path) return;
     await this.guard(async () => {
       await call(
-        commands.exportBoundaryLayerCsv(id, s.alpha_deg, s.mach, $state.snapshot(this.viscous) as ViscousSettings, path),
+        commands.exportBoundaryLayerCsv(id, request, path),
       );
       this.notify("info", "Exported", baseName(path));
     });

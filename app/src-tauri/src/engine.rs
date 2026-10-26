@@ -12,22 +12,27 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
-use aero_foil2d::inviscid::{InviscidOptions, InviscidSolver, OperatingPoint, Polar, SweepFailure};
-use aero_foil2d::viscous::{ViscousOptions, ViscousPolar, ViscousSolution, ViscousSolver};
+use aero_foil2d::inviscid::{
+    InviscidOptions, InviscidSolution, InviscidSolver, OperatingPoint, Polar, SweepFailure,
+    SweepProgress,
+};
+use aero_foil2d::viscous::{
+    ViscousOptions, ViscousPolar, ViscousSolution, ViscousSolver, ViscousSweepProgress,
+};
 use aero_geometry::{
     Airfoil, NacaOptions, Normalization, PanelingOptions, TrailingEdge, naca, parse_dat,
     to_selig_string,
 };
 
 use crate::dto::{
-    AirfoilSummary, AnalysisView, GeometryView, ImportResult, SessionView, SweepEvent,
-    SweepRequest, ViscousView,
+    AirfoilSummary, AnalysisRequest, AnalysisView, GeometryView, ImportResult, SessionView,
+    SweepEvent, SweepRequest, ViscousView,
 };
 use crate::error::{AppError, ErrorKind};
 use crate::export;
 use crate::model::{
-    AirfoilEntry, AirfoilId, AirfoilOrigin, PolarData, Session, Settings, StoredPolar,
-    ViscousSettings, load_project, save_project,
+    AirfoilEntry, AirfoilId, AirfoilOrigin, OperatingMode, PolarData, Session, Settings,
+    StoredPolar, load_project, save_project,
 };
 
 /// Largest accepted coordinate file, in bytes.
@@ -40,6 +45,7 @@ const PROGRESS_INTERVAL: Duration = Duration::from_millis(50);
 struct CachedSolver {
     revision: u64,
     allow_supercritical: bool,
+    flap_hinge: Option<[f64; 2]>,
     airfoil: Arc<Airfoil>,
     solver: Arc<InviscidSolver>,
     /// Viscous solver built on `solver` for the last options used.
@@ -129,6 +135,7 @@ fn viscous_view(id: AirfoilId, solver: &ViscousSolver, sol: &ViscousSolution) ->
         id,
         alpha_deg: sol.alpha_deg,
         mach: sol.mach,
+        cl_target: sol.cl_target,
         x: x.to_vec(),
         y: g.y().to_vec(),
         cp: sol.cp.clone(),
@@ -141,7 +148,9 @@ fn viscous_view(id: AirfoilId, solver: &ViscousSolver, sol: &ViscousSolution) ->
         cp_min_x: sol.cp_min_x,
         cp_star: sol.cp_star,
         supercritical: sol.supercritical,
+        hinge: sol.hinge,
         viscous: Some(ViscousView {
+            mach: sol.mach,
             reynolds: sol.reynolds,
             cd: sol.cd,
             cdf: sol.cdf,
@@ -286,18 +295,25 @@ impl Engine {
         ))
     }
 
-    /// Paneled airfoil and factorized solver, from the cache when possible.
-    fn solver(&self, id: AirfoilId) -> Result<(Arc<Airfoil>, Arc<InviscidSolver>), AppError> {
+    /// Paneled airfoil and factorized solver for a flap hinge, from the
+    /// cache when possible.
+    fn solver(
+        &self,
+        id: AirfoilId,
+        flap_hinge: Option<[f64; 2]>,
+    ) -> Result<(Arc<Airfoil>, Arc<InviscidSolver>), AppError> {
         let (entry, allow_supercritical) = self.entry(id)?;
         if let Some(c) = lock(&self.solvers).get(&id)
             && c.revision == entry.revision
             && c.allow_supercritical == allow_supercritical
+            && c.flap_hinge == flap_hinge
         {
             return Ok((c.airfoil.clone(), c.solver.clone()));
         }
         let airfoil = Arc::new(entry.paneled()?);
         let options = InviscidOptions {
             allow_supercritical,
+            flap_hinge,
             ..InviscidOptions::default()
         };
         let solver = Arc::new(InviscidSolver::new(&airfoil, &options)?);
@@ -306,6 +322,7 @@ impl Engine {
             CachedSolver {
                 revision: entry.revision,
                 allow_supercritical,
+                flap_hinge,
                 airfoil: airfoil.clone(),
                 solver: solver.clone(),
                 viscous: None,
@@ -320,9 +337,10 @@ impl Engine {
     fn viscous_solver(
         &self,
         id: AirfoilId,
+        flap_hinge: Option<[f64; 2]>,
         options: &ViscousOptions,
     ) -> Result<Arc<ViscousSolver>, AppError> {
-        let (_, inviscid) = self.solver(id)?;
+        let (_, inviscid) = self.solver(id, flap_hinge)?;
         if let Some(c) = lock(&self.solvers).get(&id)
             && Arc::ptr_eq(&c.solver, &inviscid)
             && let Some((cached_options, solver)) = &c.viscous
@@ -347,7 +365,8 @@ impl Engine {
     /// Geometry of an airfoil, with its current paneling.
     pub fn geometry(&self, id: AirfoilId) -> Result<GeometryView, AppError> {
         let (entry, _) = self.entry(id)?;
-        let (paneled, solver) = self.solver(id)?;
+        let hinge = lock(&self.session).settings.flap_hinge;
+        let (paneled, solver) = self.solver(id, hinge)?;
         let properties = entry.source.properties();
         let normalized = (properties.chord - 1.0).abs() < 1e-3
             && properties.leading_edge[0].abs() < 1e-3
@@ -383,29 +402,58 @@ impl Engine {
         self.geometry(id)
     }
 
-    /// Single angle-of-attack analysis, viscous when enabled.
+    /// Viscous solution of a request.
+    fn viscous_solution(
+        &self,
+        id: AirfoilId,
+        request: &AnalysisRequest,
+    ) -> Result<(Arc<ViscousSolver>, ViscousSolution), AppError> {
+        let options = request.viscous.options(request.mach);
+        let solver = self.viscous_solver(id, request.flap_hinge, &options)?;
+        let sol = match request.mode {
+            OperatingMode::Alpha => solver.solve(request.alpha_deg)?,
+            OperatingMode::Cl => solver.solve_cl(request.cl)?,
+        };
+        Ok((solver, sol))
+    }
+
+    /// Inviscid solution of a request.
+    fn inviscid_solution(
+        &self,
+        id: AirfoilId,
+        request: &AnalysisRequest,
+    ) -> Result<(Arc<InviscidSolver>, InviscidSolution), AppError> {
+        let (_, solver) = self.solver(id, request.flap_hinge)?;
+        let sol = match request.mode {
+            OperatingMode::Alpha => solver.solve(OperatingPoint {
+                alpha_deg: request.alpha_deg,
+                mach: request.mach,
+            })?,
+            OperatingMode::Cl => solver.solve_cl(request.cl, request.mach)?,
+        };
+        Ok((solver, sol))
+    }
+
+    /// Single-point analysis (prescribed α or CL), viscous when enabled.
     pub fn analyze(
         &self,
         id: AirfoilId,
-        alpha_deg: f64,
-        mach: f64,
-        viscous: &ViscousSettings,
+        request: &AnalysisRequest,
     ) -> Result<AnalysisView, AppError> {
-        if viscous.enabled {
-            let solver = self.viscous_solver(id, &viscous.options(mach))?;
-            let sol = solver.solve(alpha_deg)?;
+        if request.viscous.enabled {
+            let (solver, sol) = self.viscous_solution(id, request)?;
             return Ok(viscous_view(id, &solver, &sol));
         }
-        let (_, solver) = self.solver(id)?;
-        let sol = solver.solve(OperatingPoint { alpha_deg, mach })?;
+        let (solver, sol) = self.inviscid_solution(id, request)?;
         let x = solver.geometry().x();
         let le_index = (0..x.len())
             .min_by(|&a, &b| x[a].total_cmp(&x[b]))
             .unwrap_or(0);
         Ok(AnalysisView {
             id,
-            alpha_deg,
-            mach,
+            alpha_deg: sol.alpha_deg,
+            mach: sol.mach,
+            cl_target: (request.mode == OperatingMode::Cl).then_some(request.cl),
             x: x.to_vec(),
             y: solver.geometry().y().to_vec(),
             cp: sol.cp.clone(),
@@ -418,6 +466,7 @@ impl Engine {
             cp_min_x: sol.cp_min_x,
             cp_star: sol.cp_star,
             supercritical: sol.supercritical,
+            hinge: sol.hinge,
             viscous: None,
         })
     }
@@ -430,10 +479,13 @@ impl Engine {
         request: &SweepRequest,
         mut on_event: impl FnMut(SweepEvent) -> bool,
     ) -> Result<Vec<StoredPolar>, AppError> {
-        let alphas = request.sweep.alphas()?;
+        let count = match request.mode {
+            OperatingMode::Alpha => request.sweep.alphas()?.len(),
+            OperatingMode::Cl => request.cl_sweep.values()?.len(),
+        };
         let flag = Arc::new(AtomicBool::new(false));
         lock(&self.jobs).insert(request.job_id.clone(), flag.clone());
-        let result = self.run_sweep(request, alphas.len(), &flag, &mut on_event);
+        let result = self.run_sweep(request, count, &flag, &mut on_event);
         lock(&self.jobs).remove(&request.job_id);
         let cancelled = flag.load(Ordering::Relaxed);
         on_event(SweepEvent::Finished { cancelled });
@@ -457,58 +509,23 @@ impl Engine {
             if flag.load(Ordering::Relaxed) {
                 break;
             }
-            if request.viscous.enabled {
-                let polar =
-                    self.run_viscous_sweep(id, request, total, &mut done, flag, on_event)?;
-                let mut session = lock(&self.session);
-                session.store_polar(id, PolarData::Viscous(polar))?;
-                if let Some(stored) = session.polars.iter().find(|p| p.airfoil_id == id) {
-                    results.push(stored.clone());
-                }
-                continue;
-            }
-            let (_, solver) = self.solver(id)?;
-            let mut points = Vec::new();
-            let mut failures = Vec::new();
-            let mut last_flush = Instant::now();
-            let mut flush = |points: &mut Vec<_>, failures: &mut Vec<_>, done: u32| {
-                let event = SweepEvent::Progress {
-                    airfoil_id: id,
-                    points: std::mem::take(points),
-                    failures: std::mem::take(failures),
-                    done,
+            let polar = if request.viscous.enabled {
+                PolarData::Viscous(self.run_viscous_sweep(
+                    id,
+                    request,
+                    per_airfoil,
                     total,
-                };
-                if !on_event(event) {
-                    flag.store(true, Ordering::Relaxed);
-                }
+                    &mut done,
+                    flag,
+                    on_event,
+                )?)
+            } else {
+                PolarData::Inviscid(
+                    self.run_inviscid_sweep(id, request, total, &mut done, flag, on_event)?,
+                )
             };
-            let polar: Polar = solver.sweep_with(&request.sweep, request.mach, |progress| {
-                done += 1;
-                match progress.point {
-                    Some(point) => points.push(point),
-                    None => failures.push(SweepFailure {
-                        alpha_deg: progress.alpha_deg,
-                        cl: None,
-                        message: progress.error.clone().unwrap_or_default(),
-                    }),
-                }
-                let last = progress.index + 1 == progress.total;
-                if last || last_flush.elapsed() >= PROGRESS_INTERVAL {
-                    flush(&mut points, &mut failures, done);
-                    last_flush = Instant::now();
-                }
-                if flag.load(Ordering::Relaxed) {
-                    ControlFlow::Break(())
-                } else {
-                    ControlFlow::Continue(())
-                }
-            })?;
-            if !points.is_empty() || !failures.is_empty() {
-                flush(&mut points, &mut failures, done);
-            }
             let mut session = lock(&self.session);
-            session.store_polar(id, PolarData::Inviscid(polar))?;
+            session.store_polar(id, polar)?;
             if let Some(stored) = session.polars.iter().find(|p| p.airfoil_id == id) {
                 results.push(stored.clone());
             }
@@ -516,8 +533,8 @@ impl Engine {
         Ok(results)
     }
 
-    /// Viscous sweep of one airfoil (warm-started points, as XFOIL's ASEQ).
-    fn run_viscous_sweep(
+    /// Inviscid sweep of one airfoil.
+    fn run_inviscid_sweep(
         &self,
         id: AirfoilId,
         request: &SweepRequest,
@@ -525,8 +542,71 @@ impl Engine {
         done: &mut u32,
         flag: &AtomicBool,
         on_event: &mut impl FnMut(SweepEvent) -> bool,
+    ) -> Result<Polar, AppError> {
+        let (_, solver) = self.solver(id, request.flap_hinge)?;
+        let mut points = Vec::new();
+        let mut failures = Vec::new();
+        let mut last_flush = Instant::now();
+        let mut flush = |points: &mut Vec<_>, failures: &mut Vec<_>, done: u32| {
+            let event = SweepEvent::Progress {
+                airfoil_id: id,
+                points: std::mem::take(points),
+                failures: std::mem::take(failures),
+                done,
+                total,
+            };
+            if !on_event(event) {
+                flag.store(true, Ordering::Relaxed);
+            }
+        };
+        let cl_mode = request.mode == OperatingMode::Cl;
+        let on_progress = |progress: &SweepProgress| {
+            *done += 1;
+            match progress.point {
+                Some(point) => points.push(point),
+                None => failures.push(SweepFailure {
+                    alpha_deg: progress.alpha_deg,
+                    cl: None,
+                    message: progress.error.clone().unwrap_or_default(),
+                }),
+            }
+            let last = progress.index + 1 == progress.total;
+            if last || last_flush.elapsed() >= PROGRESS_INTERVAL {
+                flush(&mut points, &mut failures, *done);
+                last_flush = Instant::now();
+            }
+            if flag.load(Ordering::Relaxed) {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        };
+        let polar = if cl_mode {
+            solver.sweep_cl_with(&request.cl_sweep, request.mach, on_progress)?
+        } else {
+            solver.sweep_with(&request.sweep, request.mach, on_progress)?
+        };
+        if !points.is_empty() || !failures.is_empty() {
+            flush(&mut points, &mut failures, *done);
+        }
+        Ok(polar)
+    }
+
+    /// Viscous sweep of one airfoil (warm-started points, as XFOIL's ASEQ
+    /// and CSEQ).
+    #[allow(clippy::too_many_arguments)]
+    fn run_viscous_sweep(
+        &self,
+        id: AirfoilId,
+        request: &SweepRequest,
+        per_airfoil: usize,
+        total: u32,
+        done: &mut u32,
+        flag: &AtomicBool,
+        on_event: &mut impl FnMut(SweepEvent) -> bool,
     ) -> Result<ViscousPolar, AppError> {
-        let solver = self.viscous_solver(id, &request.viscous.options(request.mach))?;
+        let options = request.viscous.options(request.mach);
+        let solver = self.viscous_solver(id, request.flap_hinge, &options)?;
         let start = *done;
         let mut points = Vec::new();
         let mut failures = Vec::new();
@@ -543,7 +623,7 @@ impl Engine {
                 flag.store(true, Ordering::Relaxed);
             }
         };
-        let polar = solver.sweep_with(&request.sweep, |progress, _| {
+        let on_progress = |progress: &ViscousSweepProgress, _: Option<&ViscousSolution>| {
             *done += 1;
             match progress.point {
                 Some(point) => points.push(point),
@@ -563,10 +643,14 @@ impl Engine {
             } else {
                 ControlFlow::Continue(())
             }
-        })?;
+        };
+        let polar = match request.mode {
+            OperatingMode::Alpha => solver.sweep_with(&request.sweep, on_progress)?,
+            OperatingMode::Cl => solver.sweep_cl_with(&request.cl_sweep, on_progress)?,
+        };
         if polar.stopped {
             // The remaining points will not be computed.
-            let count = u32::try_from(request.sweep.alphas()?.len()).unwrap_or(u32::MAX);
+            let count = u32::try_from(per_airfoil).unwrap_or(u32::MAX);
             *done = start.saturating_add(count);
         }
         flush(&mut points, &mut failures, *done);
@@ -615,19 +699,15 @@ impl Engine {
     pub fn export_cp_csv(
         &self,
         id: AirfoilId,
-        alpha_deg: f64,
-        mach: f64,
-        viscous: &ViscousSettings,
+        request: &AnalysisRequest,
         path: &Path,
     ) -> Result<(), AppError> {
-        if viscous.enabled {
-            let solver = self.viscous_solver(id, &viscous.options(mach))?;
-            let sol = solver.solve(alpha_deg)?;
+        if request.viscous.enabled {
+            let (solver, sol) = self.viscous_solution(id, request)?;
             let g = solver.inviscid().geometry();
             return write_file(path, export::viscous_cp_csv(g.x(), g.y(), &sol).as_bytes());
         }
-        let (_, solver) = self.solver(id)?;
-        let sol = solver.solve(OperatingPoint { alpha_deg, mach })?;
+        let (solver, sol) = self.inviscid_solution(id, request)?;
         let csv = export::cp_csv(solver.geometry().x(), solver.geometry().y(), &sol);
         write_file(path, csv.as_bytes())
     }
@@ -636,13 +716,10 @@ impl Engine {
     pub fn export_boundary_layer_csv(
         &self,
         id: AirfoilId,
-        alpha_deg: f64,
-        mach: f64,
-        viscous: &ViscousSettings,
+        request: &AnalysisRequest,
         path: &Path,
     ) -> Result<(), AppError> {
-        let solver = self.viscous_solver(id, &viscous.options(mach))?;
-        let sol = solver.solve(alpha_deg)?;
+        let (_, sol) = self.viscous_solution(id, request)?;
         write_file(path, export::boundary_layer_csv(&sol).as_bytes())
     }
 
@@ -672,14 +749,30 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aero_foil2d::inviscid::AlphaSweep;
+    use crate::model::ViscousSettings;
+    use aero_foil2d::inviscid::{AlphaSweep, ClSweep};
+    use aero_foil2d::viscous::{AmplificationModel, MachReynoldsVariation};
 
     const INVISCID: ViscousSettings = ViscousSettings {
         enabled: false,
         reynolds: 1.0e6,
         ncrit: [9.0, 9.0],
         xtr: [1.0, 1.0],
+        variation: MachReynoldsVariation::Fixed,
+        amplification: AmplificationModel::Original,
     };
+
+    /// A prescribed-α request.
+    fn at(alpha_deg: f64, mach: f64, viscous: &ViscousSettings) -> AnalysisRequest {
+        AnalysisRequest {
+            mode: OperatingMode::Alpha,
+            alpha_deg,
+            cl: 0.0,
+            mach,
+            viscous: *viscous,
+            flap_hinge: None,
+        }
+    }
 
     fn sweep_request(ids: Vec<AirfoilId>, mach: f64) -> SweepRequest {
         SweepRequest {
@@ -690,8 +783,15 @@ mod tests {
                 end_deg: 10.0,
                 step_deg: 1.0,
             },
+            mode: OperatingMode::Alpha,
+            cl_sweep: ClSweep {
+                start: 0.0,
+                end: 1.0,
+                step: 0.1,
+            },
             mach,
             viscous: INVISCID,
+            flap_hinge: None,
         }
     }
 
@@ -754,9 +854,9 @@ mod tests {
     fn analysis_reuses_the_factorization() {
         let e = Engine::new();
         let a = e.create_naca("0012", false).unwrap();
-        let r1 = e.analyze(a.id, 4.0, 0.0, &INVISCID).unwrap();
+        let r1 = e.analyze(a.id, &at(4.0, 0.0, &INVISCID)).unwrap();
         let first = lock(&e.solvers).get(&a.id).map(|c| Arc::as_ptr(&c.solver));
-        let r2 = e.analyze(a.id, 5.0, 0.0, &INVISCID).unwrap();
+        let r2 = e.analyze(a.id, &at(5.0, 0.0, &INVISCID)).unwrap();
         let second = lock(&e.solvers).get(&a.id).map(|c| Arc::as_ptr(&c.solver));
         assert_eq!(first, second, "the solver must be cached");
         assert!(
@@ -769,14 +869,18 @@ mod tests {
         assert!(r1.x[r1.le_index as usize] < 1e-3);
 
         // Beyond the critical Mach number: a clear error by default.
-        let err = e.analyze(a.id, 10.0, 0.6, &INVISCID).unwrap_err();
+        let err = e.analyze(a.id, &at(10.0, 0.6, &INVISCID)).unwrap_err();
         assert_eq!(err.kind, ErrorKind::Mach);
         assert!(err.message.contains("critical Mach"));
         // ... and a flagged result when allowed (the cache is invalidated).
         let mut settings = e.session_view().settings;
         settings.allow_supercritical = true;
         e.update_settings(settings);
-        assert!(e.analyze(a.id, 10.0, 0.6, &INVISCID).unwrap().supercritical);
+        assert!(
+            e.analyze(a.id, &at(10.0, 0.6, &INVISCID))
+                .unwrap()
+                .supercritical
+        );
         assert!(r1.viscous.is_none());
     }
 
@@ -875,7 +979,7 @@ mod tests {
         let a = e.create_naca("0012", false).unwrap();
         let viscous = ViscousSettings::default();
         assert!(viscous.enabled);
-        let r = e.analyze(a.id, 4.0, 0.0, &viscous).unwrap();
+        let r = e.analyze(a.id, &at(4.0, 0.0, &viscous)).unwrap();
         let v = r.viscous.as_ref().unwrap();
         // XFOIL 6.996: CL 0.4278, CD 0.00728, transition 0.2537 / 0.9685.
         assert!((r.cl - 0.4278).abs() < 1e-4, "{}", r.cl);
@@ -892,13 +996,13 @@ mod tests {
                 .and_then(|c| c.viscous.as_ref().map(|(_, s)| Arc::as_ptr(s)))
         };
         let first = cached(&e);
-        e.analyze(a.id, 5.0, 0.0, &viscous).unwrap();
+        e.analyze(a.id, &at(5.0, 0.0, &viscous)).unwrap();
         assert_eq!(cached(&e), first);
         let low_re = ViscousSettings {
             reynolds: 2.0e5,
             ..viscous
         };
-        let r_low = e.analyze(a.id, 4.0, 0.0, &low_re).unwrap();
+        let r_low = e.analyze(a.id, &at(4.0, 0.0, &low_re)).unwrap();
         assert_ne!(cached(&e), first);
         assert!(r_low.viscous.unwrap().cd > v.cd);
 
@@ -930,13 +1034,13 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("aero-app-visc-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let bl = dir.join("bl.csv");
-        e.export_boundary_layer_csv(a.id, 4.0, 0.0, &viscous, &bl)
+        e.export_boundary_layer_csv(a.id, &at(4.0, 0.0, &viscous), &bl)
             .unwrap();
         let text = std::fs::read_to_string(&bl).unwrap();
         assert!(text.starts_with("surface,x,y,xi,ue,cp,dstar"));
         assert!(text.contains("\nwake,"));
         let cp = dir.join("cp.csv");
-        e.export_cp_csv(a.id, 4.0, 0.0, &viscous, &cp).unwrap();
+        e.export_cp_csv(a.id, &at(4.0, 0.0, &viscous), &cp).unwrap();
         assert!(
             std::fs::read_to_string(&cp)
                 .unwrap()
@@ -949,8 +1053,62 @@ mod tests {
             reynolds: -1.0,
             ..viscous
         };
-        let err = e.analyze(a.id, 4.0, 0.0, &bad).unwrap_err();
+        let err = e.analyze(a.id, &at(4.0, 0.0, &bad)).unwrap_err();
         assert_eq!(err.kind, ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn prescribed_lift_and_flap_hinge() {
+        let e = Engine::new();
+        let a = e.create_naca("2412", false).unwrap();
+        let hinge = Some([0.75, 0.0]);
+        for viscous in [INVISCID, ViscousSettings::default()] {
+            let request = AnalysisRequest {
+                mode: OperatingMode::Cl,
+                alpha_deg: 0.0,
+                cl: 0.6,
+                mach: 0.0,
+                viscous,
+                flap_hinge: hinge,
+            };
+            let r = e.analyze(a.id, &request).unwrap();
+            assert!((r.cl - 0.6).abs() < 1e-3, "{}", r.cl);
+            assert_eq!(r.cl_target, Some(0.6));
+            assert!(r.alpha_deg > 0.0 && r.alpha_deg < 6.0);
+            // Same hinge moment as the prescribed-α analysis at that angle.
+            let back = e
+                .analyze(
+                    a.id,
+                    &AnalysisRequest {
+                        mode: OperatingMode::Alpha,
+                        alpha_deg: r.alpha_deg,
+                        ..request
+                    },
+                )
+                .unwrap();
+            let (h1, h2) = (r.hinge.unwrap().moment, back.hinge.unwrap().moment);
+            assert!((h1 - h2).abs() < 1e-3, "{h1} {h2}");
+        }
+        // Prescribed-CL sweeps, inviscid and viscous.
+        for viscous in [INVISCID, ViscousSettings::default()] {
+            let request = SweepRequest {
+                mode: OperatingMode::Cl,
+                viscous,
+                flap_hinge: hinge,
+                ..sweep_request(vec![a.id], 0.0)
+            };
+            let polars = e.sweep(&request, |_| true).unwrap();
+            let cls: Vec<f64> = match &polars[0].polar {
+                PolarData::Inviscid(p) => p.points.iter().map(|q| q.cl).collect(),
+                PolarData::Viscous(p) => {
+                    assert!(p.prescribed_cl);
+                    assert!(p.points.iter().all(|q| q.hinge_moment.is_some()));
+                    p.points.iter().map(|q| q.cl).collect()
+                }
+            };
+            assert!(cls.len() >= 10, "{cls:?}");
+            assert!(cls.iter().zip(&cls[1..]).all(|(a, b)| b > a));
+        }
     }
 
     #[test]
@@ -967,7 +1125,8 @@ mod tests {
         assert_eq!(back.airfoil.n_points, a.n_points);
 
         let cp = dir.join("cp.csv");
-        e.export_cp_csv(a.id, 4.0, 0.0, &INVISCID, &cp).unwrap();
+        e.export_cp_csv(a.id, &at(4.0, 0.0, &INVISCID), &cp)
+            .unwrap();
         assert_eq!(std::fs::read_to_string(&cp).unwrap().lines().count(), 161);
         e.export_polars_csv(&[], &dir.join("polars.csv")).unwrap();
         e.write_file(&dir.join("plot.svg"), b"<svg/>").unwrap();

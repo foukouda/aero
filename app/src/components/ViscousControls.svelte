@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app } from "../lib/state.svelte";
   import { compactExp, parseNumber } from "../lib/format";
+  import type { AmplificationModel, MachReynoldsVariation } from "../lib/bindings";
 
   interface Props {
     /** Disables the inputs (while a sweep runs). */
@@ -90,6 +91,29 @@
           )}
       />
     {/each}
+  </label>
+  <label title="How the Mach and Reynolds numbers vary with the lift (XFOIL TYPE): 1 fixed chord and speed; 2 fixed wing loading (the values entered are at CL = 1); 3 fixed lift, varying chord">
+    M, Re
+    <select
+      value={v.variation}
+      disabled={off}
+      onchange={(e) => app.updateViscous({ variation: e.currentTarget.value as MachReynoldsVariation })}
+    >
+      <option value="fixed">fixed</option>
+      <option value="inverse_sqrt_cl">∝ 1/√Cl</option>
+      <option value="inverse_cl">Re ∝ 1/Cl</option>
+    </select>
+  </label>
+  <label title="Amplification rate of the transition criterion: XFOIL's original envelope or the modified one of its DAMP command">
+    Ampl.
+    <select
+      value={v.amplification}
+      disabled={off}
+      onchange={(e) => app.updateViscous({ amplification: e.currentTarget.value as AmplificationModel })}
+    >
+      <option value="original">original</option>
+      <option value="modified">modified</option>
+    </select>
   </label>
 </div>
 

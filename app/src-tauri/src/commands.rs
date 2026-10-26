@@ -9,12 +9,12 @@ use tauri::State;
 use tauri::ipc::Channel;
 
 use crate::dto::{
-    AirfoilSummary, AnalysisView, AppInfo, GeometryView, ImportResult, SessionView, SweepEvent,
-    SweepRequest,
+    AirfoilSummary, AnalysisRequest, AnalysisView, AppInfo, GeometryView, ImportResult,
+    SessionView, SweepEvent, SweepRequest,
 };
 use crate::engine::Engine;
 use crate::error::{AppError, ErrorKind};
-use crate::model::{AirfoilId, PROJECT_FORMAT_VERSION, Settings, StoredPolar, ViscousSettings};
+use crate::model::{AirfoilId, PROJECT_FORMAT_VERSION, Settings, StoredPolar};
 
 type Shared<'a> = State<'a, Arc<Engine>>;
 
@@ -139,18 +139,16 @@ pub async fn normalize_airfoil(
     blocking(move || engine.normalize(id, mode)).await
 }
 
-/// Analysis at one angle of attack, viscous when enabled.
+/// Single-point analysis (prescribed α or CL), viscous when enabled.
 #[tauri::command]
 #[specta::specta]
 pub async fn analyze(
     engine: Shared<'_>,
     id: AirfoilId,
-    alpha_deg: f64,
-    mach: f64,
-    viscous: ViscousSettings,
+    request: AnalysisRequest,
 ) -> Result<AnalysisView, AppError> {
     let engine = engine.inner().clone();
-    blocking(move || engine.analyze(id, alpha_deg, mach, &viscous)).await
+    blocking(move || engine.analyze(id, &request)).await
 }
 
 /// Stores the analysis settings.
@@ -205,14 +203,11 @@ pub async fn export_polars_csv(
 pub async fn export_cp_csv(
     engine: Shared<'_>,
     id: AirfoilId,
-    alpha_deg: f64,
-    mach: f64,
-    viscous: ViscousSettings,
+    request: AnalysisRequest,
     path: String,
 ) -> Result<(), AppError> {
     let engine = engine.inner().clone();
-    blocking(move || engine.export_cp_csv(id, alpha_deg, mach, &viscous, &PathBuf::from(path)))
-        .await
+    blocking(move || engine.export_cp_csv(id, &request, &PathBuf::from(path))).await
 }
 
 /// Writes the boundary layer of a viscous analysis as CSV.
@@ -221,16 +216,11 @@ pub async fn export_cp_csv(
 pub async fn export_boundary_layer_csv(
     engine: Shared<'_>,
     id: AirfoilId,
-    alpha_deg: f64,
-    mach: f64,
-    viscous: ViscousSettings,
+    request: AnalysisRequest,
     path: String,
 ) -> Result<(), AppError> {
     let engine = engine.inner().clone();
-    blocking(move || {
-        engine.export_boundary_layer_csv(id, alpha_deg, mach, &viscous, &PathBuf::from(path))
-    })
-    .await
+    blocking(move || engine.export_boundary_layer_csv(id, &request, &PathBuf::from(path))).await
 }
 
 /// Writes a file produced by the interface (PNG or SVG plot).

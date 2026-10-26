@@ -9,8 +9,12 @@
 
   const s = $derived(app.settings);
   const alpha = $derived(s?.alpha_deg ?? 0);
+  const clTarget = $derived(s?.cl ?? 0.5);
+  const mode = $derived(s?.mode ?? "alpha");
   const mach = $derived(s?.mach ?? 0);
   const viscous = $derived(app.viscous.enabled);
+  const hinge = $derived(s?.flap_hinge ?? null);
+  const hasHinge = $derived(hinge !== null);
 
   const curves = $derived.by(() => {
     const out: PlotCurve[] = [];
@@ -48,6 +52,17 @@
     if (Number.isFinite(value)) app.updateSettings({ alpha_deg: Math.max(-30, Math.min(30, value)) });
   }
 
+  function setCl(value: number) {
+    if (Number.isFinite(value)) app.updateSettings({ cl: Math.max(-2, Math.min(4, value)) });
+  }
+
+  function setHinge(side: 0 | 1, value: number) {
+    if (!hinge || !Number.isFinite(value)) return;
+    const h: [number, number] = [hinge[0] ?? 0.75, hinge[1] ?? 0];
+    h[side] = value;
+    app.updateSettings({ flap_hinge: h });
+  }
+
   function setMach(value: number) {
     if (Number.isFinite(value)) app.updateSettings({ mach: Math.max(0, Math.min(0.99, value)) });
   }
@@ -63,9 +78,9 @@
   }
 
   // Columns after the airfoil name.
-  const columns = $derived(viscous ? 9 : 6);
+  const columns = $derived((viscous ? 9 : 6) + (mode === "cl" ? 1 : 0) + (hasHinge ? 1 : 0));
   const title = $derived(
-    `Pressure coefficient, α = ${fixed(alpha, 1)}°` +
+    (mode === "cl" ? `Pressure coefficient, Cl = ${fixed(clTarget, 2)}` : `Pressure coefficient, α = ${fixed(alpha, 1)}°`) +
       (mach > 0 ? `, M = ${fixed(mach, 2)}` : "") +
       (viscous ? `, Re = ${compactExp(app.viscous.reynolds)} (inviscid dotted)` : ""),
   );
@@ -74,24 +89,56 @@
 <div class="analysis">
   <section class="panel controls">
     <div class="alpha" data-tour="alpha">
-      <label for="alpha">Angle of attack α</label>
-      <input
-        type="range"
-        min="-15"
-        max="20"
-        step="0.1"
-        value={alpha}
-        oninput={(e) => setAlpha(Number(e.currentTarget.value))}
-        aria-label="Angle of attack slider"
-      />
-      <input
-        id="alpha"
-        type="number"
-        step="0.1"
-        value={alpha}
-        onchange={(e) => setAlpha(Number(e.currentTarget.value))}
-      />
-      <span class="muted">°</span>
+      <div class="segmented" role="group" aria-label="Prescribed quantity">
+        <button
+          class:active={mode === "alpha"}
+          title="Prescribe the angle of attack (XFOIL ALFA)"
+          onclick={() => app.updateSettings({ mode: "alpha" })}>α</button
+        >
+        <button
+          class:active={mode === "cl"}
+          title="Prescribe the lift coefficient; the angle of attack is computed (XFOIL CL)"
+          onclick={() => app.updateSettings({ mode: "cl" })}>Cl</button
+        >
+      </div>
+      {#if mode === "alpha"}
+        <label for="alpha">Angle of attack α</label>
+        <input
+          type="range"
+          min="-15"
+          max="20"
+          step="0.1"
+          value={alpha}
+          oninput={(e) => setAlpha(Number(e.currentTarget.value))}
+          aria-label="Angle of attack slider"
+        />
+        <input
+          id="alpha"
+          type="number"
+          step="0.1"
+          value={alpha}
+          onchange={(e) => setAlpha(Number(e.currentTarget.value))}
+        />
+        <span class="muted">°</span>
+      {:else}
+        <label for="cl">Lift coefficient Cl</label>
+        <input
+          type="range"
+          min="-1"
+          max="2"
+          step="0.01"
+          value={clTarget}
+          oninput={(e) => setCl(Number(e.currentTarget.value))}
+          aria-label="Lift coefficient slider"
+        />
+        <input
+          id="cl"
+          type="number"
+          step="0.05"
+          value={clTarget}
+          onchange={(e) => setCl(Number(e.currentTarget.value))}
+        />
+      {/if}
     </div>
     <div class="mach" data-tour="mach">
       <label for="mach">Mach</label>
@@ -114,6 +161,20 @@
       </label>
     </div>
     <ViscousControls tour="viscous" />
+    <div class="hinge" data-tour="hinge">
+      <label class="check" title="Flap hinge moment about a hinge point (XFOIL FNEW, FMOM)">
+        <input
+          type="checkbox"
+          checked={hasHinge}
+          onchange={(e) => app.updateSettings({ flap_hinge: e.currentTarget.checked ? [0.75, 0] : null })}
+        />
+        Flap hinge
+      </label>
+      {#if hinge}
+        <label>x <input type="number" step="0.05" value={hinge[0]} onchange={(e) => setHinge(0, Number(e.currentTarget.value))} /></label>
+        <label>y <input type="number" step="0.01" value={hinge[1]} onchange={(e) => setHinge(1, Number(e.currentTarget.value))} /></label>
+      {/if}
+    </div>
   </section>
 
   <section class="panel coefficients" data-tour="coefficients">
@@ -121,6 +182,7 @@
       <thead>
         <tr>
           <th>Airfoil</th>
+          {#if mode === "cl"}<th title="Angle of attack found for the prescribed lift">α</th>{/if}
           <th>Cl</th>
           {#if viscous}
             <th>Cd</th>
@@ -136,6 +198,7 @@
           {/if}
           <th>Cp min</th>
           {#if !viscous}<th>at x</th>{/if}
+          {#if hasHinge}<th title="Flap hinge moment coefficient, positive raising the flap trailing edge">Ch</th>{/if}
           <th></th>
         </tr>
       </thead>
@@ -147,6 +210,7 @@
           <tr>
             <td><span class="swatch" style:background={a.color}></span>{a.name}</td>
             {#if r && (viscous ? v : !v)}
+              {#if mode === "cl"}<td>{fixed(r.alpha_deg, 3)}°</td>{/if}
               <td>{fixed(r.cl)}</td>
               {#if v}
                 <td>{fixed(v.cd, 5)}</td>
@@ -162,6 +226,7 @@
               {/if}
               <td>{fixed(r.cp_min, 3)}</td>
               {#if !v}<td>{fixed(r.cp_min_x, 3)}</td>{/if}
+              {#if hasHinge}<td>{fixed(r.hinge?.moment ?? null, 5)}</td>{/if}
               <td>
                 {#if v && !v.converged}
                   <span class="warn" title={`The Newton iteration did not converge in ${v.iterations} iterations (often beyond stall): the values are approximate`}
@@ -223,10 +288,36 @@
     flex-wrap: wrap;
   }
   .alpha,
-  .mach {
+  .mach,
+  .hinge {
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+  .hinge label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--muted);
+  }
+  .hinge input[type="number"] {
+    width: 60px;
+  }
+  .segmented {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .segmented button {
+    border: none;
+    border-radius: 0;
+    padding: 2px 10px;
+    background: transparent;
+  }
+  .segmented button.active {
+    background: var(--accent);
+    color: white;
   }
   .alpha input[type="range"] {
     width: 280px;

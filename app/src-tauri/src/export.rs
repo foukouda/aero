@@ -18,16 +18,18 @@ fn field(text: &str) -> String {
 /// columns; those that do not apply are left empty.
 pub fn polars_csv(polars: &[&StoredPolar]) -> String {
     let mut out = String::from(
-        "airfoil,analysis,mach,reynolds,ncrit_top,ncrit_bottom,trip_top,trip_bottom,alpha_deg,\
-         cl,cd,cdp,cdf,cm,cp_min,cp_min_x,xtr_top,xtr_bottom,supercritical\n",
+        "airfoil,analysis,mach,reynolds,ncrit_top,ncrit_bottom,trip_top,trip_bottom,alpha_deg,         cl,cd,cdp,cdf,cm,cp_min,cp_min_x,xtr_top,xtr_bottom,hinge_moment,supercritical
+",
     );
+    let opt = |v: Option<f64>| v.map(|v| v.to_string()).unwrap_or_default();
     for p in polars {
         let name = field(&p.airfoil_name);
         match &p.polar {
             PolarData::Inviscid(polar) => {
                 for q in &polar.points {
                     out.push_str(&format!(
-                        "{name},inviscid,{},,,,,,{},{},,{},,{},{},{},,,{}\n",
+                        "{name},inviscid,{},,,,,,{},{},,{},,{},{},{},,,{},{}
+",
                         polar.mach,
                         q.alpha_deg,
                         q.cl,
@@ -35,6 +37,7 @@ pub fn polars_csv(polars: &[&StoredPolar]) -> String {
                         q.cm,
                         q.cp_min,
                         q.cp_min_x,
+                        opt(q.hinge_moment),
                         q.supercritical
                     ));
                 }
@@ -43,9 +46,10 @@ pub fn polars_csv(polars: &[&StoredPolar]) -> String {
                 let o = &polar.options;
                 for q in &polar.points {
                     out.push_str(&format!(
-                        "{name},viscous,{},{},{},{},{},{},{},{},{},{},{},{},{},,{},{},\n",
-                        o.mach,
-                        o.reynolds,
+                        "{name},viscous,{},{},{},{},{},{},{},{},{},{},{},{},{},,{},{},{},
+",
+                        q.mach,
+                        q.reynolds,
                         o.ncrit[0],
                         o.ncrit[1],
                         o.xtr[0],
@@ -58,7 +62,8 @@ pub fn polars_csv(polars: &[&StoredPolar]) -> String {
                         q.cm,
                         q.cp_min,
                         q.xtr_top,
-                        q.xtr_bottom
+                        q.xtr_bottom,
+                        opt(q.hinge_moment)
                     ));
                 }
             }
@@ -141,6 +146,7 @@ mod tests {
                     cp_min: -0.5,
                     cp_min_x: 0.1,
                     supercritical: false,
+                    hinge_moment: None,
                 }],
                 failures: vec![],
                 cancelled: false,
@@ -183,11 +189,11 @@ mod tests {
         );
         assert_eq!(
             lines[1],
-            "\"foil, \"\"A\"\"\",inviscid,0.3,,,,,,2,0.25,,0,,-0.01,-0.5,0.1,,,false"
+            "\"foil, \"\"A\"\"\",inviscid,0.3,,,,,,2,0.25,,0,,-0.01,-0.5,0.1,,,,false"
         );
         assert_eq!(
             lines[2],
-            "B,viscous,0,1000000,9,9,1,1,4,0.43,0.0073,0.0012,0.0058,0.006,-1.4,,0.25,0.97,"
+            "B,viscous,0,1000000,9,9,1,1,4,0.43,0.0073,0.0012,0.0058,0.006,-1.4,,0.25,0.97,,"
         );
     }
 }

@@ -3,8 +3,10 @@
 //! This module does not depend on Tauri: it is plain data plus pure
 //! operations, so that it can be reused by a CLI later.
 
-use aero_foil2d::inviscid::{AlphaSweep, Polar};
-use aero_foil2d::viscous::{ViscousOptions, ViscousPolar};
+use aero_foil2d::inviscid::{AlphaSweep, ClSweep, Polar};
+use aero_foil2d::viscous::{
+    AmplificationModel, MachReynoldsVariation, ViscousOptions, ViscousPolar,
+};
 use aero_geometry::{Airfoil, Normalization, PanelingOptions, panel};
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -97,6 +99,13 @@ pub struct ViscousSettings {
     /// Trip locations x/c on the top and bottom surfaces (1 = free
     /// transition).
     pub xtr: [f64; 2],
+    /// Dependence of the Mach and Reynolds numbers on the lift (XFOIL
+    /// `TYPE`).
+    #[serde(default)]
+    pub variation: MachReynoldsVariation,
+    /// Amplification rate correlation (XFOIL `DAMP`).
+    #[serde(default)]
+    pub amplification: AmplificationModel,
 }
 
 impl Default for ViscousSettings {
@@ -106,6 +115,8 @@ impl Default for ViscousSettings {
             reynolds: 1.0e6,
             ncrit: [9.0, 9.0],
             xtr: [1.0, 1.0],
+            variation: MachReynoldsVariation::Fixed,
+            amplification: AmplificationModel::Original,
         }
     }
 }
@@ -118,8 +129,33 @@ impl ViscousSettings {
             mach,
             ncrit: self.ncrit,
             xtr: self.xtr,
+            variation: self.variation,
+            amplification: self.amplification,
             ..ViscousOptions::default()
         }
+    }
+}
+
+/// What single-point analyses and sweeps prescribe.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum OperatingMode {
+    /// The angle of attack (XFOIL `ALFA`, `ASEQ`).
+    #[default]
+    Alpha,
+    /// The lift coefficient (XFOIL `CL`, `CSEQ`).
+    Cl,
+}
+
+fn default_cl() -> f64 {
+    0.5
+}
+
+fn default_cl_sweep() -> ClSweep {
+    ClSweep {
+        start: 0.0,
+        end: 1.2,
+        step: 0.1,
     }
 }
 
@@ -139,6 +175,18 @@ pub struct Settings {
     /// Viscous analysis settings (absent from format 1 projects).
     #[serde(default)]
     pub viscous: ViscousSettings,
+    /// Prescribed angle of attack or lift coefficient.
+    #[serde(default)]
+    pub mode: OperatingMode,
+    /// Lift coefficient of the single-point analysis in prescribed-CL mode.
+    #[serde(default = "default_cl")]
+    pub cl: f64,
+    /// Lift-coefficient sweep in prescribed-CL mode.
+    #[serde(default = "default_cl_sweep")]
+    pub cl_sweep: ClSweep,
+    /// Flap hinge for the hinge moments (XFOIL `FNEW`).
+    #[serde(default)]
+    pub flap_hinge: Option<[f64; 2]>,
 }
 
 impl Default for Settings {
@@ -154,6 +202,10 @@ impl Default for Settings {
             allow_supercritical: false,
             show_nodes: false,
             viscous: ViscousSettings::default(),
+            mode: OperatingMode::Alpha,
+            cl: default_cl(),
+            cl_sweep: default_cl_sweep(),
+            flap_hinge: None,
         }
     }
 }

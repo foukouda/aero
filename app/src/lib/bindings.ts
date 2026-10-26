@@ -30,8 +30,8 @@ export const commands = {
 	setPaneling: (id: number, paneling: PanelingOptions) => typedError<GeometryView, AppError>(__TAURI_INVOKE("set_paneling", { id, paneling })),
 	/**  Normalizes an airfoil (unit chord, leading edge at the origin). */
 	normalizeAirfoil: (id: number, mode: Normalization) => typedError<GeometryView, AppError>(__TAURI_INVOKE("normalize_airfoil", { id, mode })),
-	/**  Analysis at one angle of attack, viscous when enabled. */
-	analyze: (id: number, alphaDeg: number | null, mach: number | null, viscous: ViscousSettings) => typedError<AnalysisView, AppError>(__TAURI_INVOKE("analyze", { id, alphaDeg, mach, viscous })),
+	/**  Single-point analysis (prescribed α or CL), viscous when enabled. */
+	analyze: (id: number, request: AnalysisRequest) => typedError<AnalysisView, AppError>(__TAURI_INVOKE("analyze", { id, request })),
 	/**  Stores the analysis settings. */
 	updateSettings: (settings: Settings) => __TAURI_INVOKE<void>("update_settings", { settings }),
 	/**  Runs an angle-of-attack sweep, streaming progress on `on_event`. */
@@ -43,9 +43,9 @@ export const commands = {
 	/**  Writes the polars of the given airfoils (all if empty) as CSV. */
 	exportPolarsCsv: (ids: number[], path: string) => typedError<null, AppError>(__TAURI_INVOKE("export_polars_csv", { ids, path })),
 	/**  Writes the pressure distribution of an analysis as CSV. */
-	exportCpCsv: (id: number, alphaDeg: number | null, mach: number | null, viscous: ViscousSettings, path: string) => typedError<null, AppError>(__TAURI_INVOKE("export_cp_csv", { id, alphaDeg, mach, viscous, path })),
+	exportCpCsv: (id: number, request: AnalysisRequest, path: string) => typedError<null, AppError>(__TAURI_INVOKE("export_cp_csv", { id, request, path })),
 	/**  Writes the boundary layer of a viscous analysis as CSV. */
-	exportBoundaryLayerCsv: (id: number, alphaDeg: number | null, mach: number | null, viscous: ViscousSettings, path: string) => typedError<null, AppError>(__TAURI_INVOKE("export_boundary_layer_csv", { id, alphaDeg, mach, viscous, path })),
+	exportBoundaryLayerCsv: (id: number, request: AnalysisRequest, path: string) => typedError<null, AppError>(__TAURI_INVOKE("export_boundary_layer_csv", { id, request, path })),
 	/**  Writes a file produced by the interface (PNG or SVG plot). */
 	writeFile: (path: string, contents: number[]) => typedError<null, AppError>(__TAURI_INVOKE("write_file", { path, contents })),
 	/**  Saves the session as a project file. */
@@ -105,14 +105,32 @@ export type AmplificationModel =
 /**  The modified correlation of XFOIL's `DAMP` command (`DAMPL2`). */
 "modified";
 
-/**  Result of a single angle-of-attack analysis. */
+/**  A single-point analysis request. */
+export type AnalysisRequest = {
+	/**  Prescribed angle of attack or lift coefficient. */
+	mode: OperatingMode,
+	/**  Angle of attack, degrees (prescribed α). */
+	alpha_deg: number | null,
+	/**  Lift coefficient (prescribed CL). */
+	cl: number | null,
+	/**  Mach number. */
+	mach: number | null,
+	/**  Viscous settings (an inviscid analysis when disabled). */
+	viscous: ViscousSettings,
+	/**  Flap hinge for the hinge moment. */
+	flap_hinge: [(number | null), (number | null)] | null,
+};
+
+/**  Result of a single-point analysis. */
 export type AnalysisView = {
 	/**  Airfoil. */
 	id: number,
 	/**  Angle of attack, degrees. */
 	alpha_deg: number | null,
-	/**  Mach number. */
+	/**  Mach number of the solution. */
 	mach: number | null,
+	/**  Prescribed lift coefficient, for a prescribed-CL analysis. */
+	cl_target: number | null,
 	/**  Panel node x coordinates. */
 	x: (number | null)[],
 	/**  Panel node y coordinates. */
@@ -140,6 +158,8 @@ export type AnalysisView = {
 	cp_star: number | null,
 	/**  True if the critical Mach number is exceeded. */
 	supercritical: boolean,
+	/**  Flap hinge moment, if a hinge is set. */
+	hinge: HingeMoment | null,
 	/**
 	 *  Viscous results, when the analysis is viscous (`cp`, `cl`, `cm`,
 	 *  `cdp` are then the viscous values).
@@ -201,6 +221,19 @@ export type BoundaryLayer = {
 	 *  stations (`None` while laminar).
 	 */
 	sqrt_ctau: (number | null)[],
+};
+
+/**
+ *  A sweep of prescribed lift coefficients, with the semantics of XFOIL's
+ *  `CSEQ`.
+ */
+export type ClSweep = {
+	/**  First lift coefficient. */
+	start: number | null,
+	/**  Last lift coefficient (included when it falls on the grid). */
+	end: number | null,
+	/**  Increment; its sign is adjusted to go from start to end. */
+	step: number | null,
 };
 
 /**  Layout of an airfoil coordinate file. */
@@ -293,6 +326,24 @@ export type GeometryView = {
 	normalized: boolean,
 };
 
+/**
+ *  Moment and force on the part of the airfoil aft of a flap hinge, per
+ *  unit span, divided by `½ρV²c²` (moment) and `½ρV²c` (forces), as XFOIL's
+ *  `FMOM` prints them.
+ */
+export type HingeMoment = {
+	/**
+	 *  Hinge moment coefficient (XFOIL `HMOM`), positive when it tends to
+	 *  raise the flap trailing edge (counterclockwise in airfoil
+	 *  coordinates).
+	 */
+	moment: number | null,
+	/**  x force on the flap (XFOIL `HFX`). */
+	fx: number | null,
+	/**  y force on the flap (XFOIL `HFY`). */
+	fy: number | null,
+};
+
 /**  Result of an import. */
 export type ImportResult = {
 	/**  The new library entry. */
@@ -335,6 +386,13 @@ export type Normalization =
  *  input chord line is not horizontal.
  */
 "ChordAligned";
+
+/**  What single-point analyses and sweeps prescribe. */
+export type OperatingMode = 
+/**  The angle of attack (XFOIL `ALFA`, `ASEQ`). */
+"alpha" | 
+/**  The lift coefficient (XFOIL `CL`, `CSEQ`). */
+"cl";
 
 /**  Paneling parameters, with the names and meaning of XFOIL's `PPAR` menu. */
 export type PanelingOptions = {
@@ -397,6 +455,8 @@ export type PolarPoint = {
 	cp_min_x: number | null,
 	/**  True if the critical Mach number is exceeded. */
 	supercritical: boolean,
+	/**  Flap hinge moment coefficient, if a hinge is set. */
+	hinge_moment?: number | null,
 };
 
 /**  Whole session as shown by the user interface. */
@@ -425,6 +485,14 @@ export type Settings = {
 	show_nodes: boolean,
 	/**  Viscous analysis settings (absent from format 1 projects). */
 	viscous?: ViscousSettings,
+	/**  Prescribed angle of attack or lift coefficient. */
+	mode?: OperatingMode,
+	/**  Lift coefficient of the single-point analysis in prescribed-CL mode. */
+	cl?: number | null,
+	/**  Lift-coefficient sweep in prescribed-CL mode. */
+	cl_sweep?: ClSweep,
+	/**  Flap hinge for the hinge moments (XFOIL `FNEW`). */
+	flap_hinge?: [(number | null), (number | null)] | null,
 };
 
 /**  Sweep result stored in the session. */
@@ -491,12 +559,18 @@ export type SweepRequest = {
 	job_id: string,
 	/**  Airfoils to analyze. */
 	airfoil_ids: number[],
-	/**  Angles of attack. */
+	/**  Prescribed angles of attack or lift coefficients. */
+	mode: OperatingMode,
+	/**  Angles of attack (prescribed α). */
 	sweep: AlphaSweep,
+	/**  Lift coefficients (prescribed CL). */
+	cl_sweep: ClSweep,
 	/**  Mach number. */
 	mach: number | null,
 	/**  Viscous settings (an inviscid sweep when disabled). */
 	viscous: ViscousSettings,
+	/**  Flap hinge for the hinge moments. */
+	flap_hinge: [(number | null), (number | null)] | null,
 };
 
 /**  Transition point of one surface. */
@@ -627,12 +701,21 @@ export type ViscousSettings = {
 	 *  transition).
 	 */
 	xtr: [(number | null), (number | null)],
+	/**
+	 *  Dependence of the Mach and Reynolds numbers on the lift (XFOIL
+	 *  `TYPE`).
+	 */
+	variation?: MachReynoldsVariation,
+	/**  Amplification rate correlation (XFOIL `DAMP`). */
+	amplification?: AmplificationModel,
 };
 
 /**  Results specific to a viscous analysis. */
 export type ViscousView = {
-	/**  Reynolds number. */
+	/**  Reynolds number of the solution. */
 	reynolds: number | null,
+	/**  Mach number of the solution. */
+	mach: number | null,
 	/**  Drag coefficient. */
 	cd: number | null,
 	/**  Skin-friction drag coefficient. */

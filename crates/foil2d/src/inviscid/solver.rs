@@ -200,6 +200,9 @@ pub struct PolarPoint {
     pub cp_min_x: f64,
     /// True if the critical Mach number is exceeded.
     pub supercritical: bool,
+    /// Flap hinge moment coefficient, if a hinge is set.
+    #[serde(default)]
+    pub hinge_moment: Option<f64>,
 }
 
 impl From<&InviscidSolution> for PolarPoint {
@@ -212,6 +215,7 @@ impl From<&InviscidSolution> for PolarPoint {
             cp_min: s.cp_min,
             cp_min_x: s.cp_min_x,
             supercritical: s.supercritical,
+            hinge_moment: s.hinge.map(|h| h.moment),
         }
     }
 }

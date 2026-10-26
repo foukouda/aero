@@ -1,13 +1,15 @@
 //! Data exchanged with the user interface. Every type here is exported to
 //! TypeScript by `tauri-specta`; none is written by hand on the frontend.
 
-use aero_foil2d::inviscid::{AlphaSweep, PolarPoint, SweepFailure};
+use aero_foil2d::inviscid::{AlphaSweep, ClSweep, HingeMoment, PolarPoint, SweepFailure};
 use aero_foil2d::viscous::{BoundaryLayer, Transition, ViscousPolarPoint};
 use aero_geometry::{DatFormat, GeometricProperties, PanelingOptions};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use crate::model::{AirfoilId, AirfoilOrigin, Settings, StoredPolar, ViscousSettings};
+use crate::model::{
+    AirfoilId, AirfoilOrigin, OperatingMode, Settings, StoredPolar, ViscousSettings,
+};
 
 /// Static information about the application.
 #[derive(Debug, Clone, Serialize, Type)]
@@ -89,15 +91,34 @@ pub struct GeometryView {
     pub normalized: bool,
 }
 
-/// Result of a single angle-of-attack analysis.
+/// A single-point analysis request.
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Type)]
+pub struct AnalysisRequest {
+    /// Prescribed angle of attack or lift coefficient.
+    pub mode: OperatingMode,
+    /// Angle of attack, degrees (prescribed α).
+    pub alpha_deg: f64,
+    /// Lift coefficient (prescribed CL).
+    pub cl: f64,
+    /// Mach number.
+    pub mach: f64,
+    /// Viscous settings (an inviscid analysis when disabled).
+    pub viscous: ViscousSettings,
+    /// Flap hinge for the hinge moment.
+    pub flap_hinge: Option<[f64; 2]>,
+}
+
+/// Result of a single-point analysis.
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
 pub struct AnalysisView {
     /// Airfoil.
     pub id: AirfoilId,
     /// Angle of attack, degrees.
     pub alpha_deg: f64,
-    /// Mach number.
+    /// Mach number of the solution.
     pub mach: f64,
+    /// Prescribed lift coefficient, for a prescribed-CL analysis.
+    pub cl_target: Option<f64>,
     /// Panel node x coordinates.
     pub x: Vec<f64>,
     /// Panel node y coordinates.
@@ -123,6 +144,8 @@ pub struct AnalysisView {
     pub cp_star: Option<f64>,
     /// True if the critical Mach number is exceeded.
     pub supercritical: bool,
+    /// Flap hinge moment, if a hinge is set.
+    pub hinge: Option<HingeMoment>,
     /// Viscous results, when the analysis is viscous (`cp`, `cl`, `cm`,
     /// `cdp` are then the viscous values).
     pub viscous: Option<ViscousView>,
@@ -131,8 +154,10 @@ pub struct AnalysisView {
 /// Results specific to a viscous analysis.
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
 pub struct ViscousView {
-    /// Reynolds number.
+    /// Reynolds number of the solution.
     pub reynolds: f64,
+    /// Mach number of the solution.
+    pub mach: f64,
     /// Drag coefficient.
     pub cd: f64,
     /// Skin-friction drag coefficient.
@@ -160,12 +185,18 @@ pub struct SweepRequest {
     pub job_id: String,
     /// Airfoils to analyze.
     pub airfoil_ids: Vec<AirfoilId>,
-    /// Angles of attack.
+    /// Prescribed angles of attack or lift coefficients.
+    pub mode: OperatingMode,
+    /// Angles of attack (prescribed α).
     pub sweep: AlphaSweep,
+    /// Lift coefficients (prescribed CL).
+    pub cl_sweep: ClSweep,
     /// Mach number.
     pub mach: f64,
     /// Viscous settings (an inviscid sweep when disabled).
     pub viscous: ViscousSettings,
+    /// Flap hinge for the hinge moments.
+    pub flap_hinge: Option<[f64; 2]>,
 }
 
 /// Progress of a sweep, streamed over a channel.

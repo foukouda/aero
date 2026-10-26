@@ -158,12 +158,12 @@ export const TOUR_STEPS: TourStep[] = [
     text: {
       en: {
         title: "8. Angle of attack",
-        body: "Drag the slider: the pressure distribution and the coefficients update as you move it. An inviscid point costs a few microseconds; a viscous point takes a few Newton iterations of the coupled boundary layer (a fraction of a second). You can also type a value.",
+        body: "Drag the slider: the pressure distribution and the coefficients update as you move it. An inviscid point costs a few microseconds; a viscous point takes a few Newton iterations of the coupled boundary layer (a fraction of a second). You can also type a value. Switch α / Cl to prescribe the lift coefficient instead: the solver then finds the angle of attack (XFOIL's CL command), handy to compare airfoils at the same lift.",
         action: "Set α = 5°",
       },
       fr: {
         title: "8. Angle d'attaque",
-        body: "Fais glisser le curseur : la répartition de pression et les coefficients suivent le mouvement. Un point non visqueux coûte quelques microsecondes ; un point visqueux demande quelques itérations de Newton de la couche limite couplée (une fraction de seconde). Tu peux aussi taper une valeur.",
+        body: "Fais glisser le curseur : la répartition de pression et les coefficients suivent le mouvement. Un point non visqueux coûte quelques microsecondes ; un point visqueux demande quelques itérations de Newton de la couche limite couplée (une fraction de seconde). Tu peux aussi taper une valeur. Bascule α / Cl pour imposer plutôt le coefficient de portance : le solveur trouve alors l'angle d'attaque (commande CL de XFOIL), pratique pour comparer des profils à portance égale.",
         action: "Mets α = 5°",
       },
     },
@@ -191,12 +191,12 @@ export const TOUR_STEPS: TourStep[] = [
     text: {
       en: {
         title: "10. Viscous analysis",
-        body: "With Viscous ticked, Aero solves the boundary layer coupled with the panel method, exactly like XFOIL's VISC mode: friction, drag, laminar-to-turbulent transition and stall. Re is the chord Reynolds number (type 1e6, 500k…). Ncrit sets the transition sensitivity (top / bottom): 9 for an average wind tunnel, 4–6 for a turbulent free stream, 11–12 for a very quiet one. A trip x/c below 1 forces transition there, like a turbulator strip.",
+        body: "With Viscous ticked, Aero solves the boundary layer coupled with the panel method, exactly like XFOIL's VISC mode: friction, drag, laminar-to-turbulent transition and stall. Re is the chord Reynolds number (type 1e6, 500k…). Ncrit sets the transition sensitivity (top / bottom): 9 for an average wind tunnel, 4–6 for a turbulent free stream, 11–12 for a very quiet one. A trip x/c below 1 forces transition there, like a turbulator strip. “M, Re” lets the Mach and Reynolds numbers vary with the lift as for an aircraft of fixed wing loading (XFOIL TYPE 2: the values entered are then those at Cl = 1), and “Ampl.” selects XFOIL's modified amplification rate (DAMP).",
         action: "Enable it with Re = 1e6",
       },
       fr: {
         title: "10. Analyse visqueuse",
-        body: "Avec Viscous coché, Aero résout la couche limite couplée à la méthode de panneaux, exactement comme le mode VISC de XFOIL : frottement, traînée, transition laminaire-turbulent et décrochage. Re est le nombre de Reynolds sur la corde (tape 1e6, 500k…). Ncrit règle la sensibilité de la transition (extrados / intrados) : 9 pour une soufflerie moyenne, 4–6 pour un écoulement turbulent, 11–12 pour un écoulement très calme. Un trip x/c inférieur à 1 force la transition à cet endroit, comme une bande de turbulateur.",
+        body: "Avec Viscous coché, Aero résout la couche limite couplée à la méthode de panneaux, exactement comme le mode VISC de XFOIL : frottement, traînée, transition laminaire-turbulent et décrochage. Re est le nombre de Reynolds sur la corde (tape 1e6, 500k…). Ncrit règle la sensibilité de la transition (extrados / intrados) : 9 pour une soufflerie moyenne, 4–6 pour un écoulement turbulent, 11–12 pour un écoulement très calme. Un trip x/c inférieur à 1 force la transition à cet endroit, comme une bande de turbulateur. « M, Re » fait varier les nombres de Mach et de Reynolds avec la portance, comme pour un avion à charge alaire fixe (TYPE 2 de XFOIL : les valeurs saisies sont alors celles à Cl = 1), et « Ampl. » choisit le taux d'amplification modifié de XFOIL (DAMP).",
         action: "Active-la avec Re = 1e6",
       },
     },
@@ -209,11 +209,11 @@ export const TOUR_STEPS: TourStep[] = [
     text: {
       en: {
         title: "11. Coefficients",
-        body: "Cl is the lift coefficient, Cd the drag coefficient and L/D the lift-to-drag ratio, Cm the pitching moment about the quarter chord. Xtr gives where the boundary layer becomes turbulent on each surface (ᵗ when forced by a trip); Cdp / Cdf split the drag into pressure and friction. “not converged” flags a point (often beyond stall) whose values are approximate. In inviscid mode only Cl, Cm and a near-zero Cdp are available. The CSV buttons export the Cp distribution and the boundary layer.",
+        body: "Cl is the lift coefficient, Cd the drag coefficient and L/D the lift-to-drag ratio, Cm the pitching moment about the quarter chord. Xtr gives where the boundary layer becomes turbulent on each surface (ᵗ when forced by a trip); Cdp / Cdf split the drag into pressure and friction. “not converged” flags a point (often beyond stall) whose values are approximate. In inviscid mode only Cl, Cm and a near-zero Cdp are available. The CSV buttons export the Cp distribution and the boundary layer. Tick “Flap hinge” and give the hinge point to get the hinge moment Ch of the flap aft of it (XFOIL FMOM).",
       },
       fr: {
         title: "11. Coefficients",
-        body: "Cl est le coefficient de portance, Cd celui de traînée et L/D la finesse, Cm le moment de tangage au quart de corde. Xtr indique où la couche limite devient turbulente sur chaque face (ᵗ si elle est forcée par un trip) ; Cdp / Cdf séparent la traînée de pression et de frottement. « not converged » signale un point (souvent au-delà du décrochage) dont les valeurs sont approximatives. En non visqueux, seuls Cl, Cm et un Cdp quasi nul sont disponibles. Les boutons CSV exportent la répartition de Cp et la couche limite.",
+        body: "Cl est le coefficient de portance, Cd celui de traînée et L/D la finesse, Cm le moment de tangage au quart de corde. Xtr indique où la couche limite devient turbulente sur chaque face (ᵗ si elle est forcée par un trip) ; Cdp / Cdf séparent la traînée de pression et de frottement. « not converged » signale un point (souvent au-delà du décrochage) dont les valeurs sont approximatives. En non visqueux, seuls Cl, Cm et un Cdp quasi nul sont disponibles. Les boutons CSV exportent la répartition de Cp et la couche limite. Coche « Flap hinge » et donne le point de charnière pour obtenir le moment de charnière Ch du volet situé en arrière (FMOM de XFOIL).",
       },
     },
   },
