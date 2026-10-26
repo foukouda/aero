@@ -13,21 +13,21 @@
 //! - one global Newton system for all boundary-layer variables and edge
 //!   velocities, solved by XFOIL's block-elimination solver.
 
-// Not reachable from the public API until the solver is in place.
-#[allow(dead_code)]
 mod blsys;
-#[allow(dead_code)]
 mod closure;
-#[allow(dead_code)]
+mod error;
 mod march;
-#[allow(dead_code)]
 mod newton;
-#[allow(dead_code)]
 mod panels;
-#[allow(dead_code)]
 mod session;
-#[allow(dead_code)]
+mod solver;
 mod viscal;
+
+pub use error::{Result, ViscousError};
+pub use solver::{
+    BoundaryLayer, Transition, ViscousOptions, ViscousPolar, ViscousPolarPoint, ViscousSession,
+    ViscousSolution, ViscousSolver, ViscousSweepProgress,
+};
 
 #[cfg(test)]
 mod tests;

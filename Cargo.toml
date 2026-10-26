@@ -34,3 +34,14 @@ unimplemented = "deny"
 
 [profile.bench]
 debug = true
+
+# The numerical crates are much slower unoptimized (the viscous validation
+# takes minutes): optimize them, and faer, in dev and test builds too.
+[profile.dev.package.aero-foil2d]
+opt-level = 2
+
+[profile.dev.package.aero-geometry]
+opt-level = 2
+
+[profile.dev.package.faer]
+opt-level = 2

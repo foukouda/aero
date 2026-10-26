@@ -35,8 +35,7 @@ pub(crate) struct WakeStart {
 impl Session<'_> {
     /// Edge Mach number squared for the incompressible edge speed `uei`.
     pub(crate) fn edge_msq(&self, uei: f64) -> f64 {
-        let f = &self.bl.flow;
-        uei * uei * f.hstinv / (f.gm1 * (1.0 - 0.5 * uei * uei * f.hstinv))
+        self.bl.flow.edge_msq(uei)
     }
 
     pub(crate) fn wake_start(&self) -> WakeStart {
