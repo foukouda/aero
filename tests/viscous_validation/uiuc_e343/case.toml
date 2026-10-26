@@ -1,0 +1,21 @@
+# Extended viscous validation case, built by ../build_cases.py.
+description = "uiuc_e343 of ../validation (random draw)"
+
+[airfoil]
+kind = "file"
+file = "airfoil.dat"
+
+[paneling]
+n_nodes = 160
+cvpar = 1.0
+cterat = 0.15
+ctrrat = 0.2
+
+[[viscous]]
+name = "run"
+reynolds = 300000.0
+mach = 0.0
+ncrit = 9.0
+xtr = [1.0, 1.0]
+polar = { start = -6.0, end = 14.0, step = 2.0 }
+points = [3.0, 10.0]

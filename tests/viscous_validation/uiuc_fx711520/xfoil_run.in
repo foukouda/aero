@@ -1,0 +1,39 @@
+PLOP
+G
+
+LOAD airfoil.dat
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+PSAV panels.dat
+OPER
+CINC
+VISC 100000.0
+MACH 0.0
+VPAR
+N 7.0
+XTR 1.0 1.0
+
+PACC
+vpolar_run.txt
+vdump_run.bin
+ASEQ -6.0 12.0 1.0
+PACC
+PACC
+vpoints_run.txt
+vpdump_run.bin
+INIT
+ALFA 2.0
+CPWR vcp_run_a+02.0.txt
+DUMP vbl_run_a+02.0.txt
+INIT
+ALFA 6.0
+CPWR vcp_run_a+06.0.txt
+DUMP vbl_run_a+06.0.txt
+PACC
+
+QUIT

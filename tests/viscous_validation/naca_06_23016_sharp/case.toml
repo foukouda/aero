@@ -1,0 +1,21 @@
+# Extended viscous validation case, built by ../build_cases.py.
+description = "NACA 23016 (closed TE, random draw)"
+
+[airfoil]
+kind = "naca_sharp"
+code = "23016"
+
+[paneling]
+n_nodes = 160
+cvpar = 1.0
+cterat = 0.15
+ctrrat = 0.2
+
+[[viscous]]
+name = "run"
+reynolds = 1000000.0
+mach = 0.0
+ncrit = 9.0
+xtr = [1.0, 1.0]
+polar = { start = -2.0, end = 14.0, step = 1.0 }
+points = [-3.0, 2.0]
