@@ -4,6 +4,8 @@
 
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+pub mod viscous;
+
 use std::path::{Path, PathBuf};
 
 use aero_foil2d::inviscid::{
