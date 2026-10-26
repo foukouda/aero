@@ -13,19 +13,45 @@
 
 mod common;
 
+use std::ops::ControlFlow;
+
 use common::cases_in;
 use common::viscous::{
     LogComparison, TOLERANCES, ViscousStats, check_viscous_case, compare_logs, viscous_dir,
+    viscous_solver,
 };
+
+/// Cases whose Newton iterations go through chaotic phases: which points
+/// converge depends on last-bit differences (perturbing our own Reynolds
+/// number by 1e-15 already changes it; see `tests/viscous/README.md`). They
+/// are accepted when the console logs are identical to XFOIL's up to a
+/// round-off divergence explained by our own sensitivity.
+const CHAOTIC: [&str; 1] = ["sd7037_cl"];
 
 #[test]
 fn viscous_cases_match_xfoil() {
     let cases = cases_in(&viscous_dir());
-    assert_eq!(cases.len(), 18);
+    assert_eq!(cases.len(), 22);
     let mut total = ViscousStats::default();
     let mut failures = Vec::new();
     for case in &cases {
         let (stats, f) = check_viscous_case(case);
+        if !f.is_empty() && CHAOTIC.contains(&case.name.as_str()) {
+            for run in case.viscous_runs() {
+                let log = compare_logs(case, &run);
+                assert!(
+                    matches!(log, LogComparison::RoundOff { .. }),
+                    "{} {}: {log:?}",
+                    case.name,
+                    run.name
+                );
+            }
+            println!(
+                "{:16} chaotic: the converged points differ after a round-off divergence",
+                case.name
+            );
+            continue;
+        }
         println!(
             "{:16} {:3} points  forces {:9.2e}  xtr {:9.2e}  BL {:9.2e}  [{}]",
             case.name,
@@ -53,6 +79,47 @@ fn viscous_cases_match_xfoil() {
         worst.iter().zip(TOLERANCES).all(|(w, t)| *w <= t),
         "{total:#?}"
     );
+}
+
+#[test]
+fn chaotic_cases_are_sensitive_to_round_off() {
+    // The proof that a case of `CHAOTIC` is chaotic: our own solver
+    // converges a different set of points when its Reynolds number is
+    // perturbed in the last bits.
+    let converged = |case: &common::Case, run: &common::viscous::ViscousRun, eps: f64| {
+        let mut perturbed = run.clone();
+        perturbed.options.reynolds *= 1.0 + eps;
+        let solver = viscous_solver(case, &perturbed);
+        let mut points = Vec::new();
+        run.run_polar(&mut solver.session(), |_, s| {
+            if let Some(s) = s.filter(|s| s.converged) {
+                points.push(s.cl);
+            }
+            ControlFlow::Continue(())
+        });
+        points.len()
+    };
+    for case in cases_in(&viscous_dir()) {
+        if !CHAOTIC.contains(&case.name.as_str()) {
+            continue;
+        }
+        for run in case.viscous_runs() {
+            let reference = converged(&case, &run, 0.0);
+            let perturbed: Vec<usize> = [1e-15, -1e-15, 1e-14, 1e-13]
+                .iter()
+                .map(|&eps| converged(&case, &run, eps))
+                .collect();
+            println!(
+                "{} {}: {reference} converged points, perturbed {perturbed:?}",
+                case.name, run.name
+            );
+            assert!(
+                perturbed.iter().any(|&n| n != reference),
+                "{} is not chaotic",
+                case.name
+            );
+        }
+    }
 }
 
 #[test]
