@@ -1,6 +1,7 @@
 //! Errors returned to the user interface.
 
 use aero_foil2d::inviscid::InviscidError;
+use aero_foil2d::viscous::ViscousError;
 use aero_geometry::GeometryError;
 use serde::Serialize;
 use specta::Type;
@@ -72,6 +73,16 @@ impl From<InviscidError> for AppError {
             InviscidError::InvalidAlpha(_) | InviscidError::InvalidSweep(_) => {
                 Self::new(ErrorKind::InvalidInput, e.to_string())
             }
+            _ => Self::new(ErrorKind::Solver, e.to_string()),
+        }
+    }
+}
+
+impl From<ViscousError> for AppError {
+    fn from(e: ViscousError) -> Self {
+        match e {
+            ViscousError::Inviscid(e) => e.into(),
+            ViscousError::InvalidOption(_) => Self::new(ErrorKind::InvalidInput, e.to_string()),
             _ => Self::new(ErrorKind::Solver, e.to_string()),
         }
     }

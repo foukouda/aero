@@ -40,6 +40,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::export_dat,
             commands::export_polars_csv,
             commands::export_cp_csv,
+            commands::export_boundary_layer_csv,
             commands::write_file,
             commands::save_project,
             commands::open_project,

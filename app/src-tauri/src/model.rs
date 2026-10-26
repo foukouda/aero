@@ -4,6 +4,7 @@
 //! operations, so that it can be reused by a CLI later.
 
 use aero_foil2d::inviscid::{AlphaSweep, Polar};
+use aero_foil2d::viscous::{ViscousOptions, ViscousPolar};
 use aero_geometry::{Airfoil, Normalization, PanelingOptions, panel};
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -14,7 +15,10 @@ use crate::error::{AppError, ErrorKind};
 pub type AirfoilId = u32;
 
 /// Version of the project file format written by this application.
-pub const PROJECT_FORMAT_VERSION: u32 = 1;
+///
+/// - 1: inviscid analyses only.
+/// - 2: viscous settings; stored polars are tagged `inviscid` or `viscous`.
+pub const PROJECT_FORMAT_VERSION: u32 = 2;
 
 /// Magic string identifying project files.
 pub const PROJECT_FORMAT: &str = "aero-project";
@@ -80,6 +84,45 @@ impl AirfoilEntry {
     }
 }
 
+/// Viscous analysis settings (XFOIL `VISC`, `VPAR`).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+pub struct ViscousSettings {
+    /// Viscous analysis (boundary layer, drag, transition) instead of the
+    /// inviscid panel method alone.
+    pub enabled: bool,
+    /// Chord Reynolds number.
+    pub reynolds: f64,
+    /// Critical amplification ratio Ncrit on the top and bottom surfaces.
+    pub ncrit: [f64; 2],
+    /// Trip locations x/c on the top and bottom surfaces (1 = free
+    /// transition).
+    pub xtr: [f64; 2],
+}
+
+impl Default for ViscousSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            reynolds: 1.0e6,
+            ncrit: [9.0, 9.0],
+            xtr: [1.0, 1.0],
+        }
+    }
+}
+
+impl ViscousSettings {
+    /// Solver options for a Mach number.
+    pub fn options(&self, mach: f64) -> ViscousOptions {
+        ViscousOptions {
+            reynolds: self.reynolds,
+            mach,
+            ncrit: self.ncrit,
+            xtr: self.xtr,
+            ..ViscousOptions::default()
+        }
+    }
+}
+
 /// Analysis settings of the session.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
 pub struct Settings {
@@ -93,6 +136,9 @@ pub struct Settings {
     pub allow_supercritical: bool,
     /// Show the panel nodes in the airfoil view.
     pub show_nodes: bool,
+    /// Viscous analysis settings (absent from format 1 projects).
+    #[serde(default)]
+    pub viscous: ViscousSettings,
 }
 
 impl Default for Settings {
@@ -107,8 +153,19 @@ impl Default for Settings {
             },
             allow_supercritical: false,
             show_nodes: false,
+            viscous: ViscousSettings::default(),
         }
     }
+}
+
+/// A computed polar.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PolarData {
+    /// Inviscid sweep.
+    Inviscid(Polar),
+    /// Viscous sweep.
+    Viscous(ViscousPolar),
 }
 
 /// Sweep result stored in the session.
@@ -119,7 +176,7 @@ pub struct StoredPolar {
     /// Name of the airfoil when the polar was computed.
     pub airfoil_name: String,
     /// The polar.
-    pub polar: Polar,
+    pub polar: PolarData,
 }
 
 /// The whole state of a working session.
@@ -243,7 +300,7 @@ impl Session {
     }
 
     /// Stores (or replaces) the polar of an airfoil.
-    pub fn store_polar(&mut self, airfoil_id: AirfoilId, polar: Polar) -> Result<(), AppError> {
+    pub fn store_polar(&mut self, airfoil_id: AirfoilId, polar: PolarData) -> Result<(), AppError> {
         let airfoil_name = self.get(airfoil_id)?.name().to_string();
         self.polars.retain(|p| p.airfoil_id != airfoil_id);
         self.polars.push(StoredPolar {
@@ -315,7 +372,24 @@ pub fn load_project(text: &str) -> Result<Session, AppError> {
             ),
         ));
     }
-    // Future format migrations go here, keyed on `version`.
+    // Format migrations, keyed on `version`.
+    let mut value = value;
+    if version < 2 {
+        // Format 1 stored inviscid polars only, untagged.
+        if let Some(polars) = value
+            .pointer_mut("/session/polars")
+            .and_then(serde_json::Value::as_array_mut)
+        {
+            for p in polars {
+                if let Some(polar) = p
+                    .get_mut("polar")
+                    .and_then(serde_json::Value::as_object_mut)
+                {
+                    polar.insert("kind".into(), "inviscid".into());
+                }
+            }
+        }
+    }
     let file: ProjectFile = serde_json::from_value(value)
         .map_err(|e| AppError::new(ErrorKind::Project, format!("invalid project content: {e}")))?;
     let mut session = file.session;
@@ -386,7 +460,8 @@ mod tests {
             failures: vec![],
             cancelled: false,
         };
-        s.store_polar(a, polar.clone()).unwrap();
+        s.store_polar(a, PolarData::Inviscid(polar.clone()))
+            .unwrap();
         assert_eq!(s.polars.len(), 1);
         let opts = PanelingOptions {
             n_nodes: 100,
@@ -402,7 +477,7 @@ mod tests {
         };
         assert!(s.set_paneling(a, bad).is_err());
         assert_eq!(s.get(a).unwrap().paneling.n_nodes, 100);
-        s.store_polar(a, polar).unwrap();
+        s.store_polar(a, PolarData::Inviscid(polar)).unwrap();
         s.normalize(a, Normalization::ChordAligned).unwrap();
         assert_eq!(s.get(a).unwrap().revision, 2);
         assert!(s.polars.is_empty());
@@ -414,14 +489,15 @@ mod tests {
         s.settings.mach = 0.3;
         s.store_polar(
             a,
-            Polar {
+            PolarData::Inviscid(Polar {
                 mach: 0.3,
                 points: vec![],
                 failures: vec![],
                 cancelled: false,
-            },
+            }),
         )
         .unwrap();
+        s.settings.viscous.reynolds = 3.0e5;
         let text = save_project(&s).unwrap();
         let back = load_project(&text).unwrap();
         assert_eq!(back, s);
@@ -431,7 +507,7 @@ mod tests {
     fn project_versions_are_checked() {
         let (s, _, _) = session_with_two();
         let text = save_project(&s).unwrap();
-        let newer = text.replace("\"format_version\": 1", "\"format_version\": 99");
+        let newer = text.replace("\"format_version\": 2", "\"format_version\": 99");
         let err = load_project(&newer).unwrap_err();
         assert!(err.message.contains("newer version"), "{}", err.message);
         assert!(load_project("{}").is_err());
@@ -460,5 +536,8 @@ mod tests {
         assert_eq!(s.airfoils[0].name(), "NACA 2412");
         assert_eq!(s.next_id, 1);
         assert_eq!(s.polars.len(), 1);
+        assert!(matches!(s.polars[0].polar, PolarData::Inviscid(_)));
+        // Settings that did not exist in format 1 get their defaults.
+        assert_eq!(s.settings.viscous, ViscousSettings::default());
     }
 }

@@ -3,7 +3,7 @@
 
 export type TourLang = "en" | "fr";
 export type TourTab = "geometry" | "analysis" | "polars";
-export type TourAction = "generate-naca" | "show-nodes" | "set-alpha" | "run-sweep";
+export type TourAction = "generate-naca" | "show-nodes" | "set-alpha" | "enable-viscous" | "run-sweep";
 
 export interface TourText {
   title: string;
@@ -30,11 +30,11 @@ export const TOUR_STEPS: TourStep[] = [
     text: {
       en: {
         title: "Welcome to Aero",
-        body: "Aero analyses 2D airfoils with the inviscid panel method of XFOIL, rewritten in Rust and validated against XFOIL 6.996. This short tour walks you through a complete analysis: create an airfoil, check its geometry, compute its pressure distribution and its polar. You can try everything while the tour is open.",
+        body: "Aero analyses 2D airfoils with XFOIL's methods — the panel method and the viscous boundary layer (transition, drag, stall) — rewritten in Rust and validated against XFOIL 6.996. This short tour walks you through a complete analysis: create an airfoil, check its geometry, compute its pressure distribution, boundary layer and polars. You can try everything while the tour is open.",
       },
       fr: {
         title: "Bienvenue dans Aero",
-        body: "Aero analyse des profils d'aile 2D avec la méthode de panneaux non visqueuse de XFOIL, réécrite en Rust et validée contre XFOIL 6.996. Cette visite te guide à travers une analyse complète : créer un profil, vérifier sa géométrie, calculer sa répartition de pression puis sa polaire. Tu peux tout essayer pendant que la visite est ouverte.",
+        body: "Aero analyse des profils d'aile 2D avec les méthodes de XFOIL — la méthode de panneaux et la couche limite visqueuse (transition, traînée, décrochage) — réécrites en Rust et validées contre XFOIL 6.996. Cette visite te guide à travers une analyse complète : créer un profil, vérifier sa géométrie, calculer sa répartition de pression, sa couche limite et ses polaires. Tu peux tout essayer pendant que la visite est ouverte.",
       },
     },
   },
@@ -158,12 +158,12 @@ export const TOUR_STEPS: TourStep[] = [
     text: {
       en: {
         title: "8. Angle of attack",
-        body: "Drag the slider: the pressure distribution and the coefficients update in real time (the matrix is factorized once per geometry, then each angle costs a few microseconds). You can also type a value.",
+        body: "Drag the slider: the pressure distribution and the coefficients update as you move it. An inviscid point costs a few microseconds; a viscous point takes a few Newton iterations of the coupled boundary layer (a fraction of a second). You can also type a value.",
         action: "Set α = 5°",
       },
       fr: {
         title: "8. Angle d'attaque",
-        body: "Fais glisser le curseur : la répartition de pression et les coefficients se mettent à jour en temps réel (la matrice n'est factorisée qu'une fois par géométrie, chaque angle coûte ensuite quelques microsecondes). Tu peux aussi taper une valeur.",
+        body: "Fais glisser le curseur : la répartition de pression et les coefficients suivent le mouvement. Un point non visqueux coûte quelques microsecondes ; un point visqueux demande quelques itérations de Newton de la couche limite couplée (une fraction de seconde). Tu peux aussi taper une valeur.",
         action: "Mets α = 5°",
       },
     },
@@ -184,18 +184,36 @@ export const TOUR_STEPS: TourStep[] = [
     },
   },
   {
+    id: "viscous",
+    target: "viscous",
+    tab: "analysis",
+    action: "enable-viscous",
+    text: {
+      en: {
+        title: "10. Viscous analysis",
+        body: "With Viscous ticked, Aero solves the boundary layer coupled with the panel method, exactly like XFOIL's VISC mode: friction, drag, laminar-to-turbulent transition and stall. Re is the chord Reynolds number (type 1e6, 500k…). Ncrit sets the transition sensitivity (top / bottom): 9 for an average wind tunnel, 4–6 for a turbulent free stream, 11–12 for a very quiet one. A trip x/c below 1 forces transition there, like a turbulator strip.",
+        action: "Enable it with Re = 1e6",
+      },
+      fr: {
+        title: "10. Analyse visqueuse",
+        body: "Avec Viscous coché, Aero résout la couche limite couplée à la méthode de panneaux, exactement comme le mode VISC de XFOIL : frottement, traînée, transition laminaire-turbulent et décrochage. Re est le nombre de Reynolds sur la corde (tape 1e6, 500k…). Ncrit règle la sensibilité de la transition (extrados / intrados) : 9 pour une soufflerie moyenne, 4–6 pour un écoulement turbulent, 11–12 pour un écoulement très calme. Un trip x/c inférieur à 1 force la transition à cet endroit, comme une bande de turbulateur.",
+        action: "Active-la avec Re = 1e6",
+      },
+    },
+  },
+  {
     id: "coefficients",
     target: "coefficients",
     tab: "analysis",
     needsAirfoil: true,
     text: {
       en: {
-        title: "10. Coefficients",
-        body: "Cl is the lift coefficient, Cm the pitching moment about the quarter chord, Cp min the lowest pressure coefficient and where it occurs. The analysis is inviscid: there is no friction, so the drag Cdp is close to zero (its small value measures the discretization error). CSV exports the pressure distribution.",
+        title: "11. Coefficients",
+        body: "Cl is the lift coefficient, Cd the drag coefficient and L/D the lift-to-drag ratio, Cm the pitching moment about the quarter chord. Xtr gives where the boundary layer becomes turbulent on each surface (ᵗ when forced by a trip); Cdp / Cdf split the drag into pressure and friction. “not converged” flags a point (often beyond stall) whose values are approximate. In inviscid mode only Cl, Cm and a near-zero Cdp are available. The CSV buttons export the Cp distribution and the boundary layer.",
       },
       fr: {
-        title: "10. Coefficients",
-        body: "Cl est le coefficient de portance, Cm le moment de tangage au quart de corde, Cp min le plus petit coefficient de pression et sa position. L'analyse est non visqueuse : il n'y a pas de frottement, donc la traînée Cdp est quasi nulle (sa petite valeur mesure l'erreur de discrétisation). CSV exporte la répartition de pression.",
+        title: "11. Coefficients",
+        body: "Cl est le coefficient de portance, Cd celui de traînée et L/D la finesse, Cm le moment de tangage au quart de corde. Xtr indique où la couche limite devient turbulente sur chaque face (ᵗ si elle est forcée par un trip) ; Cdp / Cdf séparent la traînée de pression et de frottement. « not converged » signale un point (souvent au-delà du décrochage) dont les valeurs sont approximatives. En non visqueux, seuls Cl, Cm et un Cdp quasi nul sont disponibles. Les boutons CSV exportent la répartition de Cp et la couche limite.",
       },
     },
   },
@@ -206,12 +224,28 @@ export const TOUR_STEPS: TourStep[] = [
     needsAirfoil: true,
     text: {
       en: {
-        title: "11. Pressure distribution",
-        body: "Cp along the chord, upper surface solid, lower surface dashed. By aerodynamic convention negative Cp (suction) is plotted upwards; the area between the curves is the lift. With a Mach number, the dotted line is the sonic Cp*. PNG and SVG export the chart.",
+        title: "12. Pressure distribution",
+        body: "Cp along the chord, upper surface solid, lower surface dashed. By aerodynamic convention negative Cp (suction) is plotted upwards; the area between the curves is the lift. In viscous mode the thin dotted lines are the inviscid Cp: the gap shows the effect of the boundary layer (a plateau marks a laminar separation bubble). With a Mach number, the grey line is the sonic Cp*. PNG and SVG export the chart.",
       },
       fr: {
-        title: "11. Répartition de pression",
-        body: "Cp le long de la corde, extrados en trait plein, intrados en pointillés. Par convention aérodynamique, le Cp négatif (dépression) est tracé vers le haut ; l'aire entre les courbes correspond à la portance. Avec un Mach, la ligne pointillée est le Cp* sonique. PNG et SVG exportent le graphique.",
+        title: "12. Répartition de pression",
+        body: "Cp le long de la corde, extrados en trait plein, intrados en tirets. Par convention aérodynamique, le Cp négatif (dépression) est tracé vers le haut ; l'aire entre les courbes correspond à la portance. En visqueux, les fines lignes pointillées sont le Cp non visqueux : l'écart montre l'effet de la couche limite (un plateau signale un bulbe de décollement laminaire). Avec un Mach, la ligne grise est le Cp* sonique. PNG et SVG exportent le graphique.",
+      },
+    },
+  },
+  {
+    id: "bl-plot",
+    target: "bl-plot",
+    tab: "analysis",
+    needsAirfoil: true,
+    text: {
+      en: {
+        title: "13. Boundary layer",
+        body: "Choose a quantity: displacement and momentum thicknesses δ* and θ, shape factor H (above about 3.5–4 the laminar layer separates), skin friction Cf (negative where the flow is separated), amplification N (transition where it reaches Ncrit) or edge velocity. Top surface solid, bottom dashed, wake dotted.",
+      },
+      fr: {
+        title: "13. Couche limite",
+        body: "Choisis une grandeur : épaisseurs de déplacement et de quantité de mouvement δ* et θ, facteur de forme H (au-delà de 3,5–4 environ, la couche laminaire décolle), frottement Cf (négatif là où l'écoulement est décollé), amplification N (la transition a lieu quand elle atteint Ncrit) ou vitesse extérieure. Extrados en trait plein, intrados en tirets, sillage en pointillés.",
       },
     },
   },
@@ -223,13 +257,13 @@ export const TOUR_STEPS: TourStep[] = [
     action: "run-sweep",
     text: {
       en: {
-        title: "12. Angle-of-attack sweep",
-        body: "Choose the first and last angles and the step, then Run sweep: every visible airfoil is analyzed. Progress is shown and a long sweep can be cancelled at any time.",
+        title: "14. Angle-of-attack sweep",
+        body: "Choose the first and last angles and the step, then Run sweep: every visible airfoil is analyzed, viscous or not according to the settings (the same as in the Analysis tab). As in XFOIL, each viscous point starts from the previous one, so start near zero lift and use small steps (0.5° to 1°) to follow the polar through stall. Progress is shown and a sweep can be cancelled at any time.",
         action: "Run the sweep for me",
       },
       fr: {
-        title: "12. Balayage en angle d'attaque",
-        body: "Choisis les angles de début et de fin et le pas, puis Run sweep : chaque profil visible est analysé. La progression s'affiche et un long balayage peut être annulé à tout moment.",
+        title: "14. Balayage en angle d'attaque",
+        body: "Choisis les angles de début et de fin et le pas, puis Run sweep : chaque profil visible est analysé, en visqueux ou non selon les réglages (les mêmes que dans l'onglet Analysis). Comme dans XFOIL, chaque point visqueux part du précédent : commence près de la portance nulle et utilise de petits pas (0,5° à 1°) pour suivre la polaire jusqu'au décrochage. La progression s'affiche et un balayage peut être annulé à tout moment.",
         action: "Lance le balayage pour moi",
       },
     },
@@ -241,12 +275,12 @@ export const TOUR_STEPS: TourStep[] = [
     needsAirfoil: true,
     text: {
       en: {
-        title: "13. Polars",
-        body: "Cl(α) and Cm(α) for every visible airfoil, overlaid for comparison. In inviscid flow the lift keeps growing linearly (about 2π per radian): there is no stall, which requires a viscous analysis. Export CSV saves all the points.",
+        title: "15. Polars",
+        body: "Cl(α), Cm(α) and, for viscous polars, the drag polar Cl(Cd) and the transition points, for every visible airfoil (inviscid polars are dashed). The lift curve bends over at stall, the drag polar shows the laminar “bucket” and the transition curves explain it. Points that do not converge are left out, as in XFOIL. Export CSV saves all the points.",
       },
       fr: {
-        title: "13. Polaires",
-        body: "Cl(α) et Cm(α) de chaque profil visible, superposés pour comparer. En non visqueux, la portance croît linéairement (environ 2π par radian) : il n'y a pas de décrochage, qui nécessite une analyse visqueuse. Export CSV enregistre tous les points.",
+        title: "15. Polaires",
+        body: "Cl(α), Cm(α) et, pour les polaires visqueuses, la polaire de traînée Cl(Cd) et les points de transition, pour chaque profil visible (les polaires non visqueuses sont en tirets). La courbe de portance s'infléchit au décrochage, la polaire de traînée montre le « baquet » laminaire et les courbes de transition l'expliquent. Les points non convergés sont écartés, comme dans XFOIL. Export CSV enregistre tous les points.",
       },
     },
   },
@@ -255,11 +289,11 @@ export const TOUR_STEPS: TourStep[] = [
     target: "project",
     text: {
       en: {
-        title: "14. Save your work",
+        title: "16. Save your work",
         body: "Save stores the airfoils, settings and results in a project file (Ctrl+S); Open restores it. The last button switches between light and dark themes.",
       },
       fr: {
-        title: "14. Enregistrer ton travail",
+        title: "16. Enregistrer ton travail",
         body: "Save enregistre les profils, les réglages et les résultats dans un fichier projet (Ctrl+S) ; Open le rouvre. Le dernier bouton bascule entre thème clair et sombre.",
       },
     },

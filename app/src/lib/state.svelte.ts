@@ -13,6 +13,8 @@ import type {
   SessionView,
   Settings,
   SweepEvent,
+  ViscousPolarPoint,
+  ViscousSettings,
 } from "./bindings";
 import { latestRunner } from "./latest";
 import { TOUR_STEPS, defaultTourLang, type TourAction, type TourLang } from "./tour";
@@ -31,10 +33,22 @@ export interface SweepProgress {
   jobId: string;
   done: number;
   total: number;
+  /** Viscous sweep. */
+  viscous: boolean;
   /** Points received so far, per airfoil (live plot). */
   live: Record<number, PolarPoint[]>;
+  /** Same for a viscous sweep. */
+  liveViscous: Record<number, ViscousPolarPoint[]>;
   failures: number;
 }
+
+/** Viscous settings of a new session (and of projects that predate them). */
+export const DEFAULT_VISCOUS: ViscousSettings = {
+  enabled: true,
+  reynolds: 1e6,
+  ncrit: [9, 9],
+  xtr: [1, 1],
+};
 
 /** Native file dialogs; replaceable in development builds for automated UI tests. */
 export const dialogs = {
@@ -114,6 +128,10 @@ class AppState {
 
   get settings(): Settings | null {
     return this.session?.settings ?? null;
+  }
+
+  get viscous(): ViscousSettings {
+    return this.session?.settings.viscous ?? DEFAULT_VISCOUS;
   }
 
   get projectName(): string {
@@ -201,6 +219,9 @@ class AppState {
         break;
       case "set-alpha":
         this.updateSettings({ alpha_deg: 5 });
+        break;
+      case "enable-viscous":
+        this.updateViscous({ enabled: true, reynolds: 1e6 });
         break;
       case "run-sweep":
         await this.runSweep();
@@ -355,16 +376,21 @@ class AppState {
     this.session.settings = { ...this.session.settings, ...patch };
     this.dirty = true;
     void this.#saveSettings($state.snapshot(this.session.settings));
-    if ("alpha_deg" in patch || "mach" in patch || "allow_supercritical" in patch) {
+    if ("alpha_deg" in patch || "mach" in patch || "allow_supercritical" in patch || "viscous" in patch) {
       void this.analyzeVisible();
     }
   }
 
+  /** Changes the viscous settings. */
+  updateViscous(patch: Partial<ViscousSettings>) {
+    this.updateSettings({ viscous: { ...$state.snapshot(this.viscous), ...patch } as ViscousSettings });
+  }
+
   // -------------------------------------------------------------- analysis
 
-  #analyze = latestRunner(async (request: { alpha: number; mach: number }) => {
+  #analyze = latestRunner(async (request: { alpha: number; mach: number; viscous: ViscousSettings }) => {
     for (const a of this.visible) {
-      const r = await commands.analyze(a.id, request.alpha, request.mach);
+      const r = await commands.analyze(a.id, request.alpha, request.mach, request.viscous);
       if (r.status === "ok") {
         this.analyses[a.id] = r.data;
         delete this.analysisErrors[a.id];
@@ -379,7 +405,11 @@ class AppState {
   analyzeVisible() {
     const s = this.settings;
     if (!s) return Promise.resolve();
-    return this.#analyze({ alpha: s.alpha_deg ?? 0, mach: s.mach ?? 0 });
+    return this.#analyze({
+      alpha: s.alpha_deg ?? 0,
+      mach: s.mach ?? 0,
+      viscous: $state.snapshot(this.viscous) as ViscousSettings,
+    });
   }
 
   // ----------------------------------------------------------------- sweep
@@ -393,7 +423,16 @@ class AppState {
       return;
     }
     const jobId = crypto.randomUUID();
-    const progress: SweepProgress = { jobId, done: 0, total: 0, live: {}, failures: 0 };
+    const viscous = $state.snapshot(this.viscous) as ViscousSettings;
+    const progress: SweepProgress = {
+      jobId,
+      done: 0,
+      total: 0,
+      viscous: viscous.enabled,
+      live: {},
+      liveViscous: {},
+      failures: 0,
+    };
     this.sweep = progress;
     const channel = new Channel<SweepEvent>();
     channel.onmessage = (event) => {
@@ -412,6 +451,14 @@ class AppState {
           }
           p.failures += event.failures.length;
           break;
+        case "viscous_progress":
+          p.done = event.done;
+          if (event.points.length) {
+            const current = p.liveViscous[event.airfoil_id] ?? [];
+            p.liveViscous[event.airfoil_id] = current.concat(event.points);
+          }
+          p.failures += event.failures.length;
+          break;
         case "finished":
           break;
       }
@@ -419,7 +466,7 @@ class AppState {
     await this.guard(async () => {
       await call(
         commands.runSweep(
-          { job_id: jobId, airfoil_ids: ids, sweep: s.sweep, mach: s.mach },
+          { job_id: jobId, airfoil_ids: ids, sweep: s.sweep, mach: s.mach, viscous },
           channel,
         ),
       );
@@ -428,7 +475,9 @@ class AppState {
         this.notify(
           "warning",
           "Some points failed",
-          `${failures} point(s) could not be computed (critical Mach number exceeded?).`,
+          viscous.enabled
+            ? `${failures} point(s) did not converge (usually beyond stall) and are not in the polar.`
+            : `${failures} point(s) could not be computed (critical Mach number exceeded?).`,
         );
       }
       this.dirty = true;
@@ -471,7 +520,23 @@ class AppState {
     const path = await dialogs.save({ defaultPath: "cp.csv", filters: [{ name: "CSV", extensions: ["csv"] }] });
     if (!path) return;
     await this.guard(async () => {
-      await call(commands.exportCpCsv(id, s.alpha_deg, s.mach, path));
+      await call(commands.exportCpCsv(id, s.alpha_deg, s.mach, $state.snapshot(this.viscous) as ViscousSettings, path));
+      this.notify("info", "Exported", baseName(path));
+    });
+  }
+
+  async exportBoundaryLayerCsv(id: number) {
+    const s = this.settings;
+    if (!s) return;
+    const path = await dialogs.save({
+      defaultPath: "boundary_layer.csv",
+      filters: [{ name: "CSV", extensions: ["csv"] }],
+    });
+    if (!path) return;
+    await this.guard(async () => {
+      await call(
+        commands.exportBoundaryLayerCsv(id, s.alpha_deg, s.mach, $state.snapshot(this.viscous) as ViscousSettings, path),
+      );
       this.notify("info", "Exported", baseName(path));
     });
   }

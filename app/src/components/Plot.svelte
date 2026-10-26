@@ -18,7 +18,7 @@
 <script lang="ts">
   import uPlot from "uplot";
   import { onDestroy, untrack } from "svelte";
-  import { align, equalAxes, extent } from "../lib/plot/scales";
+  import { align, equalAxes, extent, monotonicPieces } from "../lib/plot/scales";
   import { renderSvg } from "../lib/plot/svg";
 
   interface Props {
@@ -54,6 +54,16 @@
 
   const hasData = $derived(curves.some((c) => c.x.length > 0));
 
+  /** Curves cut into monotonic pieces (aligned data needs increasing x);
+   * only the first piece of a curve appears in the legend. */
+  const drawn = $derived(
+    curves.flatMap((c) =>
+      monotonicPieces(c.x, c.y).map(
+        (p, k): PlotCurve => ({ ...c, x: p.x, y: p.y, hideInLegend: c.hideInLegend || k > 0 }),
+      ),
+    ),
+  );
+
   function cssVar(name: string): string {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   }
@@ -68,7 +78,7 @@
   }
 
   function currentExtent() {
-    const e = extent(curves);
+    const e = extent(drawn);
     return Number.isFinite(e.xmin) ? e : { xmin: 0, xmax: 1, ymin: -0.1, ymax: 0.1 };
   }
 
@@ -101,7 +111,7 @@
       axes: [axis(xLabel), axis(yLabel)],
       series: [
         {},
-        ...curves.map(
+        ...drawn.map(
           (curve): uPlot.Series => ({
             label: curve.label,
             stroke: curve.color,
@@ -118,7 +128,7 @@
   }
 
   function data(): uPlot.AlignedData {
-    return align(curves) as unknown as uPlot.AlignedData;
+    return align(drawn) as unknown as uPlot.AlignedData;
   }
 
   function signature(): string {
@@ -129,7 +139,7 @@
       yLabel,
       equal,
       yInverted,
-      curves.map((c) => [c.label, c.color, c.dash, c.points, c.line, c.hideInLegend]),
+      drawn.map((c) => [c.label, c.color, c.dash, c.points, c.line, c.hideInLegend]),
     ]);
   }
 
@@ -253,7 +263,7 @@
       xRange: [sx.min ?? 0, sx.max ?? 1],
       yRange: [sy.min ?? 0, sy.max ?? 1],
       yInverted,
-      series: curves.map((c) => ({
+      series: drawn.map((c) => ({
         label: c.hideInLegend ? "" : c.label,
         color: c.color,
         dash: c.dash,

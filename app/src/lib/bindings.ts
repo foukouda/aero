@@ -30,8 +30,8 @@ export const commands = {
 	setPaneling: (id: number, paneling: PanelingOptions) => typedError<GeometryView, AppError>(__TAURI_INVOKE("set_paneling", { id, paneling })),
 	/**  Normalizes an airfoil (unit chord, leading edge at the origin). */
 	normalizeAirfoil: (id: number, mode: Normalization) => typedError<GeometryView, AppError>(__TAURI_INVOKE("normalize_airfoil", { id, mode })),
-	/**  Inviscid analysis at one angle of attack. */
-	analyze: (id: number, alphaDeg: number | null, mach: number | null) => typedError<AnalysisView, AppError>(__TAURI_INVOKE("analyze", { id, alphaDeg, mach })),
+	/**  Analysis at one angle of attack, viscous when enabled. */
+	analyze: (id: number, alphaDeg: number | null, mach: number | null, viscous: ViscousSettings) => typedError<AnalysisView, AppError>(__TAURI_INVOKE("analyze", { id, alphaDeg, mach, viscous })),
 	/**  Stores the analysis settings. */
 	updateSettings: (settings: Settings) => __TAURI_INVOKE<void>("update_settings", { settings }),
 	/**  Runs an angle-of-attack sweep, streaming progress on `on_event`. */
@@ -43,7 +43,9 @@ export const commands = {
 	/**  Writes the polars of the given airfoils (all if empty) as CSV. */
 	exportPolarsCsv: (ids: number[], path: string) => typedError<null, AppError>(__TAURI_INVOKE("export_polars_csv", { ids, path })),
 	/**  Writes the pressure distribution of an analysis as CSV. */
-	exportCpCsv: (id: number, alphaDeg: number | null, mach: number | null, path: string) => typedError<null, AppError>(__TAURI_INVOKE("export_cp_csv", { id, alphaDeg, mach, path })),
+	exportCpCsv: (id: number, alphaDeg: number | null, mach: number | null, viscous: ViscousSettings, path: string) => typedError<null, AppError>(__TAURI_INVOKE("export_cp_csv", { id, alphaDeg, mach, viscous, path })),
+	/**  Writes the boundary layer of a viscous analysis as CSV. */
+	exportBoundaryLayerCsv: (id: number, alphaDeg: number | null, mach: number | null, viscous: ViscousSettings, path: string) => typedError<null, AppError>(__TAURI_INVOKE("export_boundary_layer_csv", { id, alphaDeg, mach, viscous, path })),
 	/**  Writes a file produced by the interface (PNG or SVG plot). */
 	writeFile: (path: string, contents: number[]) => typedError<null, AppError>(__TAURI_INVOKE("write_file", { path, contents })),
 	/**  Saves the session as a project file. */
@@ -131,6 +133,11 @@ export type AnalysisView = {
 	cp_star: number | null,
 	/**  True if the critical Mach number is exceeded. */
 	supercritical: boolean,
+	/**
+	 *  Viscous results, when the analysis is viscous (`cp`, `cl`, `cm`,
+	 *  `cdp` are then the viscous values).
+	 */
+	viscous: ViscousView | null,
 };
 
 /**  An error with a message meant for the user. */
@@ -149,6 +156,44 @@ export type AppInfo = {
 	xfoil_reference: string,
 	/**  Project file format version written by this build. */
 	project_format_version: number,
+};
+
+/**
+ *  Boundary-layer quantities at the stations of one surface (from the
+ *  stagnation point to the trailing edge) or of the wake.
+ */
+export type BoundaryLayer = {
+	/**  Coordinates of the stations (panel nodes). */
+	x: (number | null)[],
+	/**  See [`Self::x`]. */
+	y: (number | null)[],
+	/**  Arc length from the stagnation point ξ. */
+	xi: (number | null)[],
+	/**  Edge velocity `Ue/V∞` (incompressible). */
+	ue: (number | null)[],
+	/**  Pressure coefficient. */
+	cp: (number | null)[],
+	/**
+	 *  Displacement thickness δ* (in the wake, of both layers plus the
+	 *  trailing-edge base thickness).
+	 */
+	dstar: (number | null)[],
+	/**  Momentum thickness θ. */
+	theta: (number | null)[],
+	/**  Skin friction coefficient `τw / (½ρ∞V∞²)` (zero in the wake). */
+	cf: (number | null)[],
+	/**  Shape parameter `H = δ*\/θ`. */
+	h: (number | null)[],
+	/**
+	 *  Amplification ratio N of the laminar stations (`None` once
+	 *  turbulent).
+	 */
+	amplification: (number | null)[],
+	/**
+	 *  Square root of the shear stress coefficient √Cτ of the turbulent
+	 *  stations (`None` while laminar).
+	 */
+	sqrt_ctau: (number | null)[],
 };
 
 /**  Layout of an airfoil coordinate file. */
@@ -299,6 +344,17 @@ export type Polar = {
 	cancelled: boolean,
 };
 
+/**  A computed polar. */
+export type PolarData = 
+/**  Inviscid sweep. */
+{
+	kind: "inviscid",
+} & Polar | 
+/**  Viscous sweep. */
+{
+	kind: "viscous",
+} & ViscousPolar;
+
 /**  Coefficients of one converged point of a polar. */
 export type PolarPoint = {
 	/**  Angle of attack, degrees. */
@@ -341,6 +397,8 @@ export type Settings = {
 	allow_supercritical: boolean,
 	/**  Show the panel nodes in the airfoil view. */
 	show_nodes: boolean,
+	/**  Viscous analysis settings (absent from format 1 projects). */
+	viscous?: ViscousSettings,
 };
 
 /**  Sweep result stored in the session. */
@@ -350,7 +408,7 @@ export type StoredPolar = {
 	/**  Name of the airfoil when the polar was computed. */
 	airfoil_name: string,
 	/**  The polar. */
-	polar: Polar,
+	polar: PolarData,
 };
 
 /**  Progress of a sweep, streamed over a channel. */
@@ -366,6 +424,18 @@ airfoil_id: number;
 /**  New points. */
 points: PolarPoint[]; 
 /**  New failed points (for instance beyond the critical Mach number). */
+failures: SweepFailure[]; 
+/**  Points done so far (all airfoils). */
+done: number; 
+/**  Total number of points. */
+total: number } | 
+/**  Batch of viscous points computed since the previous progress event. */
+{ type: "viscous_progress"; 
+/**  Airfoil. */
+airfoil_id: number; 
+/**  New converged points. */
+points: ViscousPolarPoint[]; 
+/**  New failed points (not converged, or refused). */
 failures: SweepFailure[]; 
 /**  Points done so far (all airfoils). */
 done: number; 
@@ -394,6 +464,138 @@ export type SweepRequest = {
 	sweep: AlphaSweep,
 	/**  Mach number. */
 	mach: number | null,
+	/**  Viscous settings (an inviscid sweep when disabled). */
+	viscous: ViscousSettings,
+};
+
+/**  Transition point of one surface. */
+export type Transition = {
+	/**  Chord-based x/c (XFOIL `XOCTR`). */
+	x: number | null,
+	/**  Chord-based y/c. */
+	y: number | null,
+	/**  Arc length from the stagnation point. */
+	xi: number | null,
+	/**  True if forced by the trip, false for free transition (N = Ncrit). */
+	forced: boolean,
+};
+
+/**
+ *  Options of a viscous analysis (XFOIL `OPER`: `VISC`, `MACH`, `VPAR`,
+ *  `ITER`).
+ */
+export type ViscousOptions = {
+	/**  Reynolds number based on the chord and the freestream speed. */
+	reynolds?: number | null,
+	/**  Freestream Mach number, `0 ≤ M < 1`. */
+	mach?: number | null,
+	/**
+	 *  Critical amplification ratio `Ncrit` of the eᴺ transition criterion
+	 *  on the top and bottom surfaces (XFOIL default 9: average wind
+	 *  tunnel).
+	 */
+	ncrit?: [(number | null), (number | null)],
+	/**
+	 *  Trip (forced transition) locations x/c on the top and bottom
+	 *  surfaces; 1 or more means free transition only.
+	 */
+	xtr?: [(number | null), (number | null)],
+	/**
+	 *  Newton iterations allowed for one operating point (XFOIL `ITER`,
+	 *  default 20). Points of a sweep get 5 more, as with XFOIL's `ASEQ`.
+	 */
+	max_iterations?: number,
+	/**
+	 *  Threshold below which `BLSOLV` drops off-diagonal mass-influence
+	 *  terms (XFOIL `VACC`, default 0.01).
+	 */
+	vaccel?: number | null,
+};
+
+/**  Result of a viscous angle-of-attack sweep. */
+export type ViscousPolar = {
+	/**  Options of the analysis. */
+	options: ViscousOptions,
+	/**  Converged points, in sweep order. */
+	points: ViscousPolarPoint[],
+	/**
+	 *  Points that did not converge or were refused (critical Mach number
+	 *  exceeded).
+	 */
+	failures: SweepFailure[],
+	/**
+	 *  True if the sweep stopped after 4 successive unconverged points, as
+	 *  XFOIL's `ASEQ` does.
+	 */
+	stopped: boolean,
+	/**  True if the sweep was cancelled by the caller. */
+	cancelled: boolean,
+};
+
+/**  One converged point of a viscous polar. */
+export type ViscousPolarPoint = {
+	/**  Angle of attack, degrees. */
+	alpha_deg: number | null,
+	/**  Lift coefficient. */
+	cl: number | null,
+	/**  Drag coefficient. */
+	cd: number | null,
+	/**  Pressure drag coefficient. */
+	cdp: number | null,
+	/**  Skin-friction drag coefficient. */
+	cdf: number | null,
+	/**  Moment coefficient. */
+	cm: number | null,
+	/**  Minimum pressure coefficient. */
+	cp_min: number | null,
+	/**  Transition x/c on the top surface. */
+	xtr_top: number | null,
+	/**  Transition x/c on the bottom surface. */
+	xtr_bottom: number | null,
+	/**  Newton iterations. */
+	iterations: number,
+};
+
+/**  Viscous analysis settings (XFOIL `VISC`, `VPAR`). */
+export type ViscousSettings = {
+	/**
+	 *  Viscous analysis (boundary layer, drag, transition) instead of the
+	 *  inviscid panel method alone.
+	 */
+	enabled: boolean,
+	/**  Chord Reynolds number. */
+	reynolds: number | null,
+	/**  Critical amplification ratio Ncrit on the top and bottom surfaces. */
+	ncrit: [(number | null), (number | null)],
+	/**
+	 *  Trip locations x/c on the top and bottom surfaces (1 = free
+	 *  transition).
+	 */
+	xtr: [(number | null), (number | null)],
+};
+
+/**  Results specific to a viscous analysis. */
+export type ViscousView = {
+	/**  Reynolds number. */
+	reynolds: number | null,
+	/**  Drag coefficient. */
+	cd: number | null,
+	/**  Skin-friction drag coefficient. */
+	cdf: number | null,
+	/**  True if the Newton iteration converged. */
+	converged: boolean,
+	/**  Newton iterations performed. */
+	iterations: number,
+	/**  Inviscid pressure coefficient at each node. */
+	cp_inviscid: (number | null)[],
+	/**  Transition on the top and bottom surfaces. */
+	transition: [Transition, Transition],
+	/**  Boundary layer of the top surface (stagnation point to trailing edge). */
+	top: BoundaryLayer,
+	/**  Boundary layer of the bottom surface. */
+	bottom: BoundaryLayer,
+	/**  Wake. */
+	wake: BoundaryLayer,
 };
 
 /* Tauri Specta runtime */

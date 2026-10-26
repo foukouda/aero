@@ -14,7 +14,7 @@ use crate::dto::{
 };
 use crate::engine::Engine;
 use crate::error::{AppError, ErrorKind};
-use crate::model::{AirfoilId, PROJECT_FORMAT_VERSION, Settings, StoredPolar};
+use crate::model::{AirfoilId, PROJECT_FORMAT_VERSION, Settings, StoredPolar, ViscousSettings};
 
 type Shared<'a> = State<'a, Arc<Engine>>;
 
@@ -139,7 +139,7 @@ pub async fn normalize_airfoil(
     blocking(move || engine.normalize(id, mode)).await
 }
 
-/// Inviscid analysis at one angle of attack.
+/// Analysis at one angle of attack, viscous when enabled.
 #[tauri::command]
 #[specta::specta]
 pub async fn analyze(
@@ -147,9 +147,10 @@ pub async fn analyze(
     id: AirfoilId,
     alpha_deg: f64,
     mach: f64,
+    viscous: ViscousSettings,
 ) -> Result<AnalysisView, AppError> {
     let engine = engine.inner().clone();
-    blocking(move || engine.analyze(id, alpha_deg, mach)).await
+    blocking(move || engine.analyze(id, alpha_deg, mach, &viscous)).await
 }
 
 /// Stores the analysis settings.
@@ -206,10 +207,30 @@ pub async fn export_cp_csv(
     id: AirfoilId,
     alpha_deg: f64,
     mach: f64,
+    viscous: ViscousSettings,
     path: String,
 ) -> Result<(), AppError> {
     let engine = engine.inner().clone();
-    blocking(move || engine.export_cp_csv(id, alpha_deg, mach, &PathBuf::from(path))).await
+    blocking(move || engine.export_cp_csv(id, alpha_deg, mach, &viscous, &PathBuf::from(path)))
+        .await
+}
+
+/// Writes the boundary layer of a viscous analysis as CSV.
+#[tauri::command]
+#[specta::specta]
+pub async fn export_boundary_layer_csv(
+    engine: Shared<'_>,
+    id: AirfoilId,
+    alpha_deg: f64,
+    mach: f64,
+    viscous: ViscousSettings,
+    path: String,
+) -> Result<(), AppError> {
+    let engine = engine.inner().clone();
+    blocking(move || {
+        engine.export_boundary_layer_csv(id, alpha_deg, mach, &viscous, &PathBuf::from(path))
+    })
+    .await
 }
 
 /// Writes a file produced by the interface (PNG or SVG plot).

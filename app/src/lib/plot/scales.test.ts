@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { align, equalAxes, extent, minIndex, niceTicks, splitSurfaces } from "./scales";
+import { align, equalAxes, extent, minIndex, niceTicks, splitSurfaces, monotonicPieces } from "./scales";
 
 describe("equalAxes", () => {
   it("gives the same units per pixel on both axes", () => {
@@ -72,5 +72,28 @@ describe("align", () => {
       { x: [-1, 2], y: [Number.NaN, -3] },
     ]);
     expect(e).toEqual({ xmin: 0, xmax: 2, ymin: -3, ymax: 5 });
+  });
+});
+
+describe("monotonicPieces", () => {
+  it("keeps a monotonic curve whole", () => {
+    expect(monotonicPieces([0, 1, 2], [5, 6, 7])).toEqual([{ x: [0, 1, 2], y: [5, 6, 7] }]);
+  });
+
+  it("splits a drag polar at its minimum drag, with increasing x pieces", () => {
+    // Cd decreases then increases as the angle grows.
+    const cd = [0.012, 0.008, 0.006, 0.007, 0.01];
+    const cl = [-0.4, -0.2, 0.1, 0.4, 0.8];
+    expect(monotonicPieces(cd, cl)).toEqual([
+      { x: [0.006, 0.008, 0.012], y: [0.1, -0.2, -0.4] },
+      { x: [0.006, 0.007, 0.01], y: [0.1, 0.4, 0.8] },
+    ]);
+  });
+
+  it("drops non-finite x and restarts on repeated x", () => {
+    expect(monotonicPieces([0, Number.NaN, 1, 1, 2], [1, 2, 3, 4, 5])).toEqual([
+      { x: [0, 1], y: [1, 3] },
+      { x: [1, 2], y: [4, 5] },
+    ]);
   });
 });

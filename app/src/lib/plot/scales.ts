@@ -126,3 +126,50 @@ export function extent(curves: Curve[]): { xmin: number; xmax: number; ymin: num
   }
   return { xmin, xmax, ymin, ymax };
 }
+
+/**
+ * Splits a curve into pieces with strictly monotonic x, each returned with
+ * increasing x, so that it can be drawn on aligned data (a drag polar
+ * Cl(Cd), a boundary layer around the leading edge). Consecutive pieces
+ * share their junction point; points with non-finite x are dropped and a
+ * repeated x starts a new piece.
+ */
+export function monotonicPieces(x: number[], y: (number | null)[]): Curve[] {
+  const px: number[] = [];
+  const py: (number | null)[] = [];
+  x.forEach((v, i) => {
+    if (Number.isFinite(v)) {
+      px.push(v);
+      py.push(y[i] ?? null);
+    }
+  });
+  const pieces: Curve[] = [];
+  const close = (start: number, end: number, dir: number) => {
+    const cx = px.slice(start, end + 1);
+    const cy = py.slice(start, end + 1);
+    if (dir < 0) {
+      cx.reverse();
+      cy.reverse();
+    }
+    pieces.push({ x: cx, y: cy });
+  };
+  if (px.length < 2) return [{ x: px, y: py }];
+  let start = 0;
+  let dir = 0;
+  for (let i = 1; i < px.length; i++) {
+    const d = Math.sign(px[i] - px[i - 1]);
+    if (d === 0) {
+      close(start, i - 1, dir);
+      start = i;
+      dir = 0;
+    } else if (dir === 0) {
+      dir = d;
+    } else if (d !== dir) {
+      close(start, i - 1, dir);
+      start = i - 1;
+      dir = d;
+    }
+  }
+  close(start, px.length - 1, dir);
+  return pieces;
+}

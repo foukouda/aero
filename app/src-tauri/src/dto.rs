@@ -2,11 +2,12 @@
 //! TypeScript by `tauri-specta`; none is written by hand on the frontend.
 
 use aero_foil2d::inviscid::{AlphaSweep, PolarPoint, SweepFailure};
+use aero_foil2d::viscous::{BoundaryLayer, Transition, ViscousPolarPoint};
 use aero_geometry::{DatFormat, GeometricProperties, PanelingOptions};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use crate::model::{AirfoilId, AirfoilOrigin, Settings, StoredPolar};
+use crate::model::{AirfoilId, AirfoilOrigin, Settings, StoredPolar, ViscousSettings};
 
 /// Static information about the application.
 #[derive(Debug, Clone, Serialize, Type)]
@@ -122,6 +123,34 @@ pub struct AnalysisView {
     pub cp_star: Option<f64>,
     /// True if the critical Mach number is exceeded.
     pub supercritical: bool,
+    /// Viscous results, when the analysis is viscous (`cp`, `cl`, `cm`,
+    /// `cdp` are then the viscous values).
+    pub viscous: Option<ViscousView>,
+}
+
+/// Results specific to a viscous analysis.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+pub struct ViscousView {
+    /// Reynolds number.
+    pub reynolds: f64,
+    /// Drag coefficient.
+    pub cd: f64,
+    /// Skin-friction drag coefficient.
+    pub cdf: f64,
+    /// True if the Newton iteration converged.
+    pub converged: bool,
+    /// Newton iterations performed.
+    pub iterations: u32,
+    /// Inviscid pressure coefficient at each node.
+    pub cp_inviscid: Vec<f64>,
+    /// Transition on the top and bottom surfaces.
+    pub transition: [Transition; 2],
+    /// Boundary layer of the top surface (stagnation point to trailing edge).
+    pub top: BoundaryLayer,
+    /// Boundary layer of the bottom surface.
+    pub bottom: BoundaryLayer,
+    /// Wake.
+    pub wake: BoundaryLayer,
 }
 
 /// A sweep request.
@@ -135,6 +164,8 @@ pub struct SweepRequest {
     pub sweep: AlphaSweep,
     /// Mach number.
     pub mach: f64,
+    /// Viscous settings (an inviscid sweep when disabled).
+    pub viscous: ViscousSettings,
 }
 
 /// Progress of a sweep, streamed over a channel.
@@ -153,6 +184,19 @@ pub enum SweepEvent {
         /// New points.
         points: Vec<PolarPoint>,
         /// New failed points (for instance beyond the critical Mach number).
+        failures: Vec<SweepFailure>,
+        /// Points done so far (all airfoils).
+        done: u32,
+        /// Total number of points.
+        total: u32,
+    },
+    /// Batch of viscous points computed since the previous progress event.
+    ViscousProgress {
+        /// Airfoil.
+        airfoil_id: AirfoilId,
+        /// New converged points.
+        points: Vec<ViscousPolarPoint>,
+        /// New failed points (not converged, or refused).
         failures: Vec<SweepFailure>,
         /// Points done so far (all airfoils).
         done: u32,
