@@ -503,7 +503,7 @@ impl Engine {
     }
 
     /// Adds the modified airfoil to the library (the original is kept),
-    /// named `name` or "<original> (<change>)", with the original's
+    /// named `name` or `"<original> (<change>)"`, with the original's
     /// paneling.
     pub fn apply_modification(
         &self,
@@ -607,7 +607,7 @@ impl Engine {
     }
 
     /// Adds the airfoil of the inverse design to the library, named `name`
-    /// or "<original> (<method>)", with the original's paneling.
+    /// or `"<original> (<method>)"`, with the original's paneling.
     pub fn design_apply(&self, name: Option<&str>) -> Result<AirfoilSummary, AppError> {
         let (id, airfoil, change) = self.with_design(|d| {
             let (a, p) = d.preview()?.ok_or_else(|| {
