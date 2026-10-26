@@ -305,9 +305,9 @@ and times the same computations as Aero on the same GitHub runner (AMD EPYC,
 | Viscous polars of 8 airfoils, 4 cores | 2.1 s | 1.7 s | 1.6 s |
 
 The same points fail to converge on both sides. In short: per computation,
-Aero is as fast as XFOIL compiled with full optimization and 10 to 35 %
-faster than XFOIL built with its own Makefile; inviscid polars are about
-three times faster (the factorized matrix is reused). The practical gains are
+Aero is as fast as XFOIL compiled with full optimization (0 to 15 % faster)
+and about a third faster than XFOIL built with its own Makefile; inviscid
+polars are about three times faster (the factorized matrix is reused). The practical gains are
 elsewhere: no process to start and no files to parse, results directly in
 memory, and the application sweeps many airfoils on all cores at once.
 
