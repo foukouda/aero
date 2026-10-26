@@ -1,0 +1,222 @@
+[
+  {
+    "id": "s1223",
+    "name": "Selig S1223",
+    "category": "slow_flight",
+    "designer": "Michael Selig and Giovanni Guglielmo, 1997",
+    "source": { "file": "s1223.dat" },
+    "description": {
+      "en": "A high-lift section designed for low Reynolds numbers (about 200 000): a maximum lift coefficient above 2 in the wind tunnel. For very slow flight and heavy loads; strongly cambered with a thin trailing edge, so harder to build.",
+      "fr": "Un profil hypersustentateur conçu pour les faibles nombres de Reynolds (environ 200 000) : coefficient de portance maximal supérieur à 2 en soufflerie. Pour voler très lentement ou porter lourd ; très cambré avec un bord de fuite mince, donc plus difficile à construire."
+    }
+  },
+  {
+    "id": "e423",
+    "name": "Eppler E423",
+    "category": "slow_flight",
+    "designer": "Richard Eppler",
+    "source": { "file": "e423.dat" },
+    "description": {
+      "en": "A strongly cambered high-lift section: slow flight and cargo models, at the cost of more drag at small lift.",
+      "fr": "Un profil hypersustentateur très cambré : vol lent et modèles de transport de charge, au prix d'une traînée plus forte à faible portance."
+    }
+  },
+  {
+    "id": "fx63137",
+    "name": "Wortmann FX 63-137",
+    "category": "slow_flight",
+    "designer": "Franz Xaver Wortmann",
+    "source": { "file": "fx63137.dat" },
+    "description": {
+      "en": "A high-lift section used on human-powered aircraft and slow models: much lift at low speed with moderate drag.",
+      "fr": "Un profil hypersustentateur utilisé sur des avions à propulsion humaine et des modèles lents : beaucoup de portance à basse vitesse pour une traînée modérée."
+    }
+  },
+  {
+    "id": "naca6409",
+    "name": "NACA 6409",
+    "category": "slow_flight",
+    "designer": "NACA",
+    "source": { "naca": "6409" },
+    "description": {
+      "en": "A thin, strongly cambered NACA section (6 % camber, 9 % thickness): slow free-flight and park-flyer models.",
+      "fr": "Un profil NACA mince et très cambré (cambrure 6 %, épaisseur 9 %) : modèles de vol libre et park flyers lents."
+    }
+  },
+  {
+    "id": "sd7037",
+    "name": "Selig–Donovan SD7037",
+    "category": "glider",
+    "designer": "Michael Selig and John Donovan",
+    "source": { "file": "sd7037.dat" },
+    "description": {
+      "en": "A popular all-round section for RC sailplanes: low drag over a wide range of lift, at low Reynolds numbers.",
+      "fr": "Un profil polyvalent très utilisé sur les planeurs radiocommandés : faible traînée sur une large plage de portance, aux faibles nombres de Reynolds."
+    }
+  },
+  {
+    "id": "sd7003",
+    "name": "Selig–Donovan SD7003",
+    "category": "glider",
+    "designer": "Michael Selig and John Donovan",
+    "source": { "file": "sd7003.dat" },
+    "description": {
+      "en": "A thin section for low Reynolds numbers, and a standard test case for laminar separation bubbles in research.",
+      "fr": "Un profil mince pour les faibles nombres de Reynolds, et un cas d'essai classique des bulbes de décollement laminaire en recherche."
+    }
+  },
+  {
+    "id": "mh32",
+    "name": "Hepperle MH 32",
+    "category": "glider",
+    "designer": "Martin Hepperle",
+    "source": { "file": "mh32.dat" },
+    "description": {
+      "en": "A thin section for sailplanes and fast gliders: low drag, good from slow thermal flight to fast runs.",
+      "fr": "Un profil mince pour planeurs et planeurs rapides : faible traînée, du vol lent en thermique aux passages rapides."
+    }
+  },
+  {
+    "id": "rg15",
+    "name": "Girsberger RG-15",
+    "category": "glider",
+    "designer": "Rolf Girsberger",
+    "source": { "file": "rg15.dat" },
+    "description": {
+      "en": "A thin section for fast RC gliders (F3B): very low drag at small lift coefficients.",
+      "fr": "Un profil mince pour planeurs radiocommandés rapides (F3B) : très faible traînée aux petits coefficients de portance."
+    }
+  },
+  {
+    "id": "ag35",
+    "name": "Drela AG35",
+    "category": "glider",
+    "designer": "Mark Drela",
+    "source": { "file": "ag35.dat" },
+    "description": {
+      "en": "From Mark Drela's AG series for hand-launched gliders: thin, for very low Reynolds numbers.",
+      "fr": "De la série AG de Mark Drela pour planeurs lancés à la main : mince, pour de très faibles nombres de Reynolds."
+    }
+  },
+  {
+    "id": "e387",
+    "name": "Eppler 387",
+    "category": "glider",
+    "designer": "Richard Eppler",
+    "source": { "file": "e387.dat" },
+    "description": {
+      "en": "Designed for model sailplanes, and one of the most measured airfoils at low Reynolds numbers (NASA Langley, UIUC wind tunnels).",
+      "fr": "Conçu pour les planeurs de modèle réduit, et l'un des profils les plus mesurés aux faibles nombres de Reynolds (souffleries de la NASA Langley et de l'UIUC)."
+    }
+  },
+  {
+    "id": "clarky",
+    "name": "Clark Y",
+    "category": "trainer",
+    "designer": "Virginius E. Clark, 1922",
+    "source": { "file": "clarky.dat" },
+    "description": {
+      "en": "The classic flat-bottomed section of the 1920s: easy to build on a flat board, gentle stall. The trainer's airfoil.",
+      "fr": "Le profil classique à dessous plat des années 1920 : facile à construire sur un chantier plat, décrochage doux. Le profil des avions d'école."
+    }
+  },
+  {
+    "id": "sd7062",
+    "name": "Selig–Donovan SD7062",
+    "category": "trainer",
+    "designer": "Michael Selig and John Donovan",
+    "source": { "file": "sd7062.dat" },
+    "description": {
+      "en": "A thick section for low Reynolds numbers: room for a strong spar, for sport models and trainers.",
+      "fr": "Un profil épais pour les faibles nombres de Reynolds : de la place pour un longeron solide, pour les modèles de sport et d'école."
+    }
+  },
+  {
+    "id": "naca2412",
+    "name": "NACA 2412",
+    "category": "trainer",
+    "designer": "NACA",
+    "source": { "naca": "2412" },
+    "description": {
+      "en": "The light-aircraft classic (the Cessna 172 wing): mild camber, 12 % thick.",
+      "fr": "Le classique de l'aviation légère (l'aile du Cessna 172) : cambrure modérée, 12 % d'épaisseur."
+    }
+  },
+  {
+    "id": "naca4412",
+    "name": "NACA 4412",
+    "category": "trainer",
+    "designer": "NACA",
+    "source": { "naca": "4412" },
+    "description": {
+      "en": "More cambered than the 2412, with an almost flat lower surface: more lift at low speed.",
+      "fr": "Plus cambré que le 2412, avec un dessous presque plat : plus de portance à basse vitesse."
+    }
+  },
+  {
+    "id": "naca0009",
+    "name": "NACA 0009",
+    "category": "aerobatic",
+    "designer": "NACA",
+    "source": { "naca": "0009" },
+    "description": {
+      "en": "A thin symmetric section: flies the same way upside down. Tails, rudders and light aerobatic models.",
+      "fr": "Un profil symétrique mince : vole de la même façon sur le dos. Empennages, gouvernes et modèles de voltige légers."
+    }
+  },
+  {
+    "id": "naca0012",
+    "name": "NACA 0012",
+    "category": "aerobatic",
+    "designer": "NACA",
+    "source": { "naca": "0012" },
+    "description": {
+      "en": "The reference symmetric section, 12 % thick: aerobatic wings, tails, helicopter blades.",
+      "fr": "Le profil symétrique de référence, 12 % d'épaisseur : ailes de voltige, empennages, pales d'hélicoptère."
+    }
+  },
+  {
+    "id": "naca0015",
+    "name": "NACA 0015",
+    "category": "aerobatic",
+    "designer": "NACA",
+    "source": { "naca": "0015" },
+    "description": {
+      "en": "A thick symmetric section: a softer stall and a stiffer wing for aerobatic models.",
+      "fr": "Un profil symétrique épais : un décrochage plus doux et une aile plus rigide pour les modèles de voltige."
+    }
+  },
+  {
+    "id": "mh45",
+    "name": "Hepperle MH 45",
+    "category": "flying_wing",
+    "designer": "Martin Hepperle",
+    "source": { "file": "mh45.dat" },
+    "description": {
+      "en": "A reflexed section for flying wings: a wing without a tail needs an airfoil that is stable on its own (small pitching moment).",
+      "fr": "Un profil autostable (à double courbure) pour ailes volantes : une aile sans empennage a besoin d'un profil stable à lui seul (faible moment de tangage)."
+    }
+  },
+  {
+    "id": "mh60",
+    "name": "Hepperle MH 60",
+    "category": "flying_wing",
+    "designer": "Martin Hepperle",
+    "source": { "file": "mh60.dat" },
+    "description": {
+      "en": "A reflexed section for flying wings and tailless models.",
+      "fr": "Un profil autostable pour ailes volantes et modèles sans empennage."
+    }
+  },
+  {
+    "id": "s5010",
+    "name": "Selig S5010",
+    "category": "flying_wing",
+    "designer": "Michael Selig",
+    "source": { "file": "s5010.dat" },
+    "description": {
+      "en": "A reflexed section designed for flying wings at low Reynolds numbers.",
+      "fr": "Un profil autostable conçu pour les ailes volantes aux faibles nombres de Reynolds."
+    }
+  }
+]

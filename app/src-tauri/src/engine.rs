@@ -27,6 +27,7 @@ use aero_geometry::{
 
 use aero_optim::{DesignSpace, Phase, Stop};
 
+use crate::catalogue::{self, CatalogueEntry, CatalogueSource};
 use crate::design::DesignSession;
 use crate::dto::{
     AirfoilSummary, AnalysisRequest, AnalysisView, BatchFailure, BatchImport, BatchResult,
@@ -411,12 +412,57 @@ impl Engine {
         for d in EXAMPLE_NACA {
             out.push(self.create_naca(d, false)?);
         }
-        for (text, file, name) in [
-            (include_str!("../data/clarky.dat"), "clarky.dat", "Clark Y"),
-            (include_str!("../data/e387.dat"), "e387.dat", "Eppler 387"),
-        ] {
+        for (file, name) in [("clarky.dat", "Clark Y"), ("e387.dat", "Eppler 387")] {
+            let text = catalogue::file_text(file).ok_or_else(|| {
+                AppError::new(
+                    ErrorKind::Internal,
+                    format!("catalogue file {file} is missing"),
+                )
+            })?;
             let id = self.import_text(text, file)?.airfoil.id;
             out.push(self.rename(id, name)?);
+        }
+        Ok(out)
+    }
+
+    /// The airfoil catalogue, sorted by use.
+    pub fn catalogue(&self) -> Result<Vec<CatalogueEntry>, AppError> {
+        catalogue::entries()
+    }
+
+    /// Adds airfoils of the catalogue to the library.
+    pub fn add_from_catalogue(&self, ids: &[String]) -> Result<BatchResult, AppError> {
+        let entries = catalogue::entries()?;
+        let mut out = BatchResult::default();
+        for id in ids {
+            let added = entries
+                .iter()
+                .find(|e| &e.id == id)
+                .ok_or_else(|| {
+                    AppError::new(
+                        ErrorKind::NotFound,
+                        format!("no airfoil {id} in the catalogue"),
+                    )
+                })
+                .and_then(|e| {
+                    let origin = match &e.source {
+                        CatalogueSource::Naca(designation) => AirfoilOrigin::Naca {
+                            designation: designation.clone(),
+                            closed_te: false,
+                        },
+                        CatalogueSource::File(file) => AirfoilOrigin::Imported {
+                            file_name: file.clone(),
+                        },
+                    };
+                    Ok(self.add(e.airfoil()?, origin))
+                });
+            match added {
+                Ok(a) => out.added.push(a),
+                Err(e) => out.failed.push(BatchFailure {
+                    item: id.clone(),
+                    message: e.message,
+                }),
+            }
         }
         Ok(out)
     }
@@ -1427,6 +1473,27 @@ mod tests {
         e.delete(b.id).unwrap();
         assert_eq!(e.session_view().airfoils.len(), 1);
         assert!(e.geometry(b.id).is_err());
+    }
+
+    #[test]
+    fn airfoils_from_the_catalogue() {
+        let e = Engine::new();
+        assert_eq!(e.catalogue().unwrap().len(), 20);
+        let ids = ["s1223", "naca0012", "nope"].map(String::from);
+        let r = e.add_from_catalogue(&ids).unwrap();
+        assert_eq!(r.added.len(), 2);
+        assert_eq!(r.added[0].name, "Selig S1223");
+        assert!(matches!(
+            &r.added[0].origin,
+            AirfoilOrigin::Imported { file_name } if file_name == "s1223.dat"
+        ));
+        assert_eq!(r.added[1].name, "NACA 0012");
+        assert_eq!(r.failed.len(), 1);
+        assert_eq!(r.failed[0].item, "nope");
+        // The examples read the same embedded files.
+        let examples = e.add_examples().unwrap();
+        assert_eq!(examples.len(), 8);
+        assert_eq!(examples[7].name, "Eppler 387");
     }
 
     #[test]

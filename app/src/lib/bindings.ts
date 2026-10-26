@@ -58,6 +58,10 @@ export const commands = {
 	importPaths: (paths: string[]) => typedError<BatchImport, AppError>(__TAURI_INVOKE("import_paths", { paths })),
 	/**  Adds a set of classic airfoils. */
 	addExamples: () => typedError<AirfoilSummary[], AppError>(__TAURI_INVOKE("add_examples")),
+	/**  The airfoil catalogue, sorted by use. */
+	getCatalogue: () => typedError<CatalogueEntry[], AppError>(__TAURI_INVOKE("get_catalogue")),
+	/**  Adds airfoils of the catalogue to the library. */
+	addFromCatalogue: (ids: string[]) => typedError<BatchResult, AppError>(__TAURI_INVOKE("add_from_catalogue", { ids })),
 	/**  Shows or hides several airfoils. */
 	setAirfoilsVisible: (ids: number[], visible: boolean) => typedError<null, AppError>(__TAURI_INVOKE("set_airfoils_visible", { ids, visible })),
 	/**  Deletes several airfoils. */
@@ -338,6 +342,42 @@ export type CamberThickness = {
 	/**  Its abscissa. */
 	max_camber_x: number | null,
 };
+
+/**  What an airfoil of the catalogue is good for. */
+export type CatalogueCategory = 
+/**  High lift for slow flight and heavy loads. */
+"slow_flight" | 
+/**  Low drag for sailplanes and gliders. */
+"glider" | 
+/**  Forgiving, easy-to-build sections for trainers and sport models. */
+"trainer" | 
+/**  Symmetric sections: aerobatics, tails. */
+"aerobatic" | 
+/**  Reflexed sections, stable without a tail. */
+"flying_wing";
+
+/**  An airfoil of the catalogue. */
+export type CatalogueEntry = {
+	/**  Stable identifier. */
+	id: string,
+	/**  Display name. */
+	name: string,
+	/**  Main use. */
+	category: CatalogueCategory,
+	/**  Designer and year, when known. */
+	designer: string,
+	/**  Origin of the coordinates. */
+	source: CatalogueSource,
+	/**  What it is good for, in a sentence or two. */
+	description: LocalizedText,
+};
+
+/**  Where the coordinates of a catalogue airfoil come from. */
+export type CatalogueSource = 
+/**  A coordinate file of `data/catalogue`. */
+({ file: string }) & { naca?: never } | 
+/**  A NACA designation, generated. */
+({ naca: string }) & { file?: never };
 
 /**
  *  A sweep of prescribed lift coefficients, with the semantics of XFOIL's
@@ -697,6 +737,14 @@ export type ImportResult = {
 	format: DatFormat,
 	/**  Non-fatal observations, as sentences. */
 	warnings: string[],
+};
+
+/**  A text in the languages of the interface. */
+export type LocalizedText = {
+	/**  English. */
+	en: string,
+	/**  French. */
+	fr: string,
 };
 
 /**

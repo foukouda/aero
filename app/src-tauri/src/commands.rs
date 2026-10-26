@@ -8,6 +8,7 @@ use aero_geometry::{CamberThickness, HingeY, Normalization, PanelingOptions};
 use tauri::State;
 use tauri::ipc::Channel;
 
+use crate::catalogue::CatalogueEntry;
 use crate::dto::{
     AirfoilSummary, AnalysisRequest, AnalysisView, AppInfo, BatchImport, BatchResult, DesignEdit,
     DesignMethod, DesignPreview, DesignView, GeometryView, ImportResult, ModificationPreview,
@@ -199,6 +200,20 @@ pub async fn import_paths(engine: Shared<'_>, paths: Vec<String>) -> Result<Batc
 #[specta::specta]
 pub fn add_examples(engine: Shared<'_>) -> Result<Vec<AirfoilSummary>, AppError> {
     engine.add_examples()
+}
+
+/// The airfoil catalogue, sorted by use.
+#[tauri::command]
+#[specta::specta]
+pub fn get_catalogue(engine: Shared<'_>) -> Result<Vec<CatalogueEntry>, AppError> {
+    engine.catalogue()
+}
+
+/// Adds airfoils of the catalogue to the library.
+#[tauri::command]
+#[specta::specta]
+pub fn add_from_catalogue(engine: Shared<'_>, ids: Vec<String>) -> Result<BatchResult, AppError> {
+    engine.add_from_catalogue(&ids)
 }
 
 /// Shows or hides several airfoils.

@@ -30,8 +30,13 @@ Each ported Rust function documents the XFOIL routine it derives from.
 Airfoil coordinates of the UIUC Airfoil Coordinates Database (Michael
 Selig, University of Illinois at Urbana-Champaign,
 https://m-selig.ae.illinois.edu/ads/coord_database.html) are used as test
-data (tests/) and as two example airfoils of the application (Clark Y,
-Eppler 387; app/src-tauri/data).
+data (tests/) and in the airfoil catalogue of the application
+(app/src-tauri/data/catalogue): AG35 (Mark Drela), Clark Y, E387 and E423
+(Richard Eppler), FX 63-137 (Franz Xaver Wortmann), MH 32, MH 45 and MH 60
+(Martin Hepperle), RG-15 (Rolf Girsberger), S1223 and S5010 (Michael
+Selig), SD7003, SD7037 and SD7062 (Michael Selig and John Donovan). The
+files are unchanged apart from line endings; the airfoils remain the work
+of their designers.
 
 The reference results in tests/ were computed with XFOIL 6.996, built from
 the official sources by the xfoil-reference workflow; XFOIL itself is not
