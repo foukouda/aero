@@ -59,6 +59,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "aero-mission"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "specta",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "aero-optim"
 version = "0.2.0"
 dependencies = [

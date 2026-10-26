@@ -1,0 +1,26 @@
+[package]
+name = "aero-mission"
+description = "From a flight to airfoil conditions: standard atmosphere, Reynolds number, required lift coefficient, simple wing estimates"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aero_mission"
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+specta = { workspace = true, optional = true }
+
+[features]
+# Derives `specta::Type` on the public data types (TypeScript bindings).
+specta = ["dep:specta"]
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

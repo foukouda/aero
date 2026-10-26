@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/geometry", "crates/foil2d", "crates/optim", "app/src-tauri"]
+members = ["crates/geometry", "crates/foil2d", "crates/optim", "crates/mission", "app/src-tauri"]
 
 [workspace.package]
 version = "0.2.0"
@@ -13,6 +13,7 @@ repository = "https://github.com/foukouda/aero"
 aero-geometry = { path = "crates/geometry" }
 aero-foil2d = { path = "crates/foil2d" }
 aero-optim = { path = "crates/optim" }
+aero-mission = { path = "crates/mission" }
 faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
