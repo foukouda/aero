@@ -171,7 +171,7 @@
         <span class="muted">
           Visible airfoils are analyzed; results are kept in the project.
           {#if app.viscous.enabled}
-            Viscous points start from the previous one (XFOIL {mode === "cl" ? "CSEQ" : "ASEQ"}); unconverged points are left out.
+            Viscous sweeps start at the value nearest 0 and march outward both ways, each point from the previous one (XFOIL {mode === "cl" ? "CSEQ" : "ASEQ"}); unconverged points are left out.
           {/if}
         </span>
       {/if}

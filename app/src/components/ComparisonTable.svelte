@@ -20,6 +20,7 @@
         name: a.name,
         color: a.color,
         viscous,
+        stopped: stored.polar.kind === "viscous" && stored.polar.stopped,
         summary: summarizePolar(stored.polar.points, atCl),
       });
     }
@@ -161,6 +162,13 @@
                 <span class="swatch" style:background={r.color}></span>
                 {r.name}
                 <small class="muted">{r.viscous ? "" : "inviscid"}</small>
+                {#if r.stopped}
+                  <span
+                    class="warn"
+                    title="A sequence of the sweep stopped after 4 points in a row did not converge (as XFOIL does): part of the range is missing, so some figures may be wrong. Try a narrower range or another Reynolds number."
+                    >⚠ incomplete</span
+                  >
+                {/if}
               </td>
               <td>{fixed(s.alpha0, 2)}</td>
               <td>{fixed(s.clMax, 3)} <small class="muted">{fixed(s.alphaClMax, 1)}°</small></td>
@@ -265,6 +273,11 @@
     font-size: 10px;
     color: var(--muted);
     cursor: pointer;
+  }
+  .warn {
+    color: #d97706;
+    font-size: 11px;
+    margin-left: 4px;
   }
   .empty,
   .note {

@@ -13,8 +13,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use aero_foil2d::inviscid::{
-    InviscidOptions, InviscidSolution, InviscidSolver, OperatingPoint, Polar, SweepFailure,
-    SweepProgress,
+    AlphaSweep, ClSweep, InviscidOptions, InviscidSolution, InviscidSolver, OperatingPoint, Polar,
+    SweepFailure, SweepProgress,
 };
 use aero_foil2d::viscous::{
     ViscousOptions, ViscousPolar, ViscousSolution, ViscousSolver, ViscousSweepProgress,
@@ -49,6 +49,26 @@ const MAX_BATCH_FILES: usize = 5000;
 
 /// NACA sections of [`Engine::add_examples`].
 const EXAMPLE_NACA: [&str; 6] = ["0012", "2412", "4412", "4415", "23012", "6409"];
+
+/// The sequences of a viscous sweep over `values` (in sweep order): from
+/// the value nearest zero to the end, then from the one before it back to
+/// the start. Starting near zero lift or incidence, where the boundary
+/// layer is attached, is the usual practice with XFOIL: a sequence that
+/// starts in separated flow often stops after a few unconverged points.
+fn outward_sequences(values: &[f64]) -> Vec<(f64, f64)> {
+    let Some((k, _)) = values
+        .iter()
+        .enumerate()
+        .min_by(|a, b| a.1.abs().total_cmp(&b.1.abs()))
+    else {
+        return Vec::new();
+    };
+    let mut out = vec![(values[k], values[values.len() - 1])];
+    if k > 0 {
+        out.push((values[k - 1], values[0]));
+    }
+    out
+}
 
 /// Splits a list of NACA designations such as `"0012, 2412 4415; NACA 23012"`.
 pub fn parse_designations(text: &str) -> Vec<String> {
@@ -788,8 +808,9 @@ impl Engine {
         Ok(polar)
     }
 
-    /// Viscous sweep of one airfoil (warm-started points, as XFOIL's ASEQ
-    /// and CSEQ).
+    /// Viscous sweep of one airfoil: XFOIL ASEQ or CSEQ sequences (each
+    /// point starts from the previous one), from the value nearest zero
+    /// outward in both directions ([`outward_sequences`]).
     #[allow(clippy::too_many_arguments)]
     fn run_viscous_sweep(
         &self,
@@ -838,10 +859,57 @@ impl Engine {
                 ControlFlow::Continue(())
             }
         };
-        let polar = match request.mode {
-            OperatingMode::Alpha => solver.sweep_with(&request.sweep, on_progress)?,
-            OperatingMode::Cl => solver.sweep_cl_with(&request.cl_sweep, on_progress)?,
+        let mut on_progress = on_progress;
+        let values = match request.mode {
+            OperatingMode::Alpha => request.sweep.alphas()?,
+            OperatingMode::Cl => request.cl_sweep.values()?,
         };
+        let mut polar: Option<ViscousPolar> = None;
+        for (from, to) in outward_sequences(&values) {
+            let part = match request.mode {
+                OperatingMode::Alpha => solver.sweep_with(
+                    &AlphaSweep {
+                        start_deg: from,
+                        end_deg: to,
+                        step_deg: request.sweep.step_deg,
+                    },
+                    &mut on_progress,
+                )?,
+                OperatingMode::Cl => solver.sweep_cl_with(
+                    &ClSweep {
+                        start: from,
+                        end: to,
+                        step: request.cl_sweep.step,
+                    },
+                    &mut on_progress,
+                )?,
+            };
+            match polar.as_mut() {
+                None => polar = Some(part),
+                Some(p) => {
+                    p.points.extend(part.points);
+                    p.failures.extend(part.failures);
+                    p.stopped |= part.stopped;
+                    p.cancelled |= part.cancelled;
+                }
+            }
+            if flag.load(Ordering::Relaxed) {
+                break;
+            }
+        }
+        let Some(mut polar) = polar else {
+            return Err(AppError::new(ErrorKind::InvalidInput, "empty sweep"));
+        };
+        // In sweep order (ascending or descending, as requested).
+        let ascending = values.first() <= values.last();
+        let key = |p: &aero_foil2d::viscous::ViscousPolarPoint| match request.mode {
+            OperatingMode::Alpha => p.alpha_deg,
+            OperatingMode::Cl => p.cl,
+        };
+        polar.points.sort_by(|a, b| {
+            let order = key(a).total_cmp(&key(b));
+            if ascending { order } else { order.reverse() }
+        });
         if polar.stopped {
             // The remaining points will not be computed.
             let count = u32::try_from(per_airfoil).unwrap_or(u32::MAX);
@@ -1676,5 +1744,62 @@ mod tests {
             assert_eq!(streamed, together.iter().map(points).sum::<usize>());
             assert_eq!(last_done, total);
         }
+    }
+
+    #[test]
+    fn viscous_sweeps_march_outward_from_zero() {
+        assert_eq!(
+            outward_sequences(&[-4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0]),
+            [(0.0, 2.0), (-1.0, -4.0)]
+        );
+        assert_eq!(outward_sequences(&[0.0, 1.0, 2.0]), [(0.0, 2.0)]);
+        assert_eq!(
+            outward_sequences(&[2.0, 1.0, -1.0]),
+            [(1.0, -1.0), (2.0, 2.0)]
+        );
+        assert!(outward_sequences(&[]).is_empty());
+
+        let e = Engine::new();
+        let examples = e.add_examples().unwrap();
+        let e387 = examples[7].id;
+        let viscous = crate::model::ViscousSettings::default();
+        // Starting at -4 deg, in separated flow, XFOIL's sequence on the
+        // Eppler 387 stops after 4 unconverged points; marching outward from
+        // 0 deg gives the whole polar.
+        let request = SweepRequest {
+            viscous,
+            sweep: AlphaSweep {
+                start_deg: -4.0,
+                end_deg: 14.0,
+                step_deg: 0.5,
+            },
+            ..sweep_request(vec![e387], 0.0)
+        };
+        let solver = e.viscous_solver(e387, None, &viscous.options(0.0)).unwrap();
+        assert!(solver.sweep(&request.sweep).unwrap().points.len() < 5);
+        let stored = e.sweep(&request, |_| true).unwrap();
+        let PolarData::Viscous(polar) = &stored[0].polar else {
+            panic!("viscous polar expected")
+        };
+        assert!(polar.points.len() > 30, "{}", polar.points.len());
+        let alphas: Vec<f64> = polar.points.iter().map(|p| p.alpha_deg).collect();
+        assert!(alphas.windows(2).all(|w| w[0] < w[1]), "{alphas:?}");
+        let cl_max = polar.points.iter().map(|p| p.cl).fold(f64::MIN, f64::max);
+        assert!(cl_max > 1.0, "{cl_max}");
+
+        // A sweep that starts at 0 is exactly XFOIL's ASEQ.
+        let from_zero = SweepRequest {
+            sweep: AlphaSweep {
+                start_deg: 0.0,
+                end_deg: 8.0,
+                step_deg: 1.0,
+            },
+            ..request
+        };
+        let stored = e.sweep(&from_zero, |_| true).unwrap();
+        let PolarData::Viscous(polar) = &stored[0].polar else {
+            panic!("viscous polar expected")
+        };
+        assert_eq!(polar.points, solver.sweep(&from_zero.sweep).unwrap().points);
     }
 }
