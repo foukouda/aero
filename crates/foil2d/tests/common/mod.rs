@@ -444,3 +444,26 @@ pub fn node_difference(a: &Airfoil, b: &Airfoil) -> Option<f64> {
 pub fn solver(airfoil: &Airfoil) -> InviscidSolver {
     InviscidSolver::new(airfoil, &xfoil_like_options()).unwrap()
 }
+
+/// Maps `f` over `items` on all cores, keeping the order.
+pub fn par_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    let threads = std::thread::available_parallelism().map_or(4, usize::from);
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let mut results: Vec<Option<R>> = (0..items.len()).map(|_| None).collect();
+    let slots = std::sync::Mutex::new(&mut results);
+    std::thread::scope(|scope| {
+        for _ in 0..threads.min(items.len()) {
+            scope.spawn(|| {
+                loop {
+                    let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if i >= items.len() {
+                        break;
+                    }
+                    let r = f(&items[i]);
+                    slots.lock().unwrap()[i] = Some(r);
+                }
+            });
+        }
+    });
+    results.into_iter().map(Option::unwrap).collect()
+}

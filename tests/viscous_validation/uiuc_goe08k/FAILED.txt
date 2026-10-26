@@ -1,0 +1,1 @@
+XFOIL failed on xfoil_run.in: Command '['/home/runner/work/_temp/Xfoil/bin/xfoil']' timed out after 899.999988539 seconds

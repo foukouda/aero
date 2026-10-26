@@ -1,0 +1,14 @@
+  
+       XFOIL         Version 7.00
+  
+ Calculated polar for: UIUC fx05191                                    
+  
+ 1 1 Reynolds number fixed          Mach number fixed         
+  
+ xtrf =   0.300 (top)        0.500 (bottom)  
+ Mach =   0.000     Re =     1.000 e 6     Ncrit =   5.000  5.000
+  
+   alpha    CL        CD       CDp       CM      Cpmin    Top_Xtr  Bot_Xtr   Top_Itr  Bot_Itr  
+  ------ -------- --------- --------- -------- --------  -------- --------  -------- --------  
+   0.000   0.4089   0.00994   0.00119  -0.1028  -0.8506    0.3000  46.5524   0.5000 126.8203
+   9.000   1.2027   0.02284   0.00665  -0.0863  -2.7439    0.0650  62.6772   0.5000 126.8203
