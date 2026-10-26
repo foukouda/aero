@@ -1,0 +1,22 @@
+PLOP
+G
+
+LOAD e387.dat
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+OPER
+ALFA 4.0
+
+MDES
+FILT
+EXEC
+
+PCOP
+SAVE inv_mdes_filt.dat
+
+QUIT

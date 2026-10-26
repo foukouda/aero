@@ -1,0 +1,22 @@
+PLOP
+G
+
+NACA 2412
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+OPER
+ALFA 3.0
+
+MDES
+TANG 5 0
+EXEC
+
+PCOP
+SAVE inv_mdes_tang.dat
+
+QUIT

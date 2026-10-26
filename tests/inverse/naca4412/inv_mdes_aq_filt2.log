@@ -1,0 +1,183 @@
+
+ ===================================================
+  XFOIL Version 7.00
+  Copyright (C) 2000   Mark Drela, Harold Youngren
+
+  This software comes with ABSOLUTELY NO WARRANTY,
+    subject to the GNU General Public License.
+
+  Caveat computor
+ ===================================================
+
+ File  xfoil.def  not found
+
+   QUIT    Exit program
+
+  .OPER    Direct operating point(s)
+  .MDES    Complex mapping design routine
+  .QDES    Surface speed design routine
+  .GDES    Geometry design routine
+
+   SAVE f  Write airfoil to labeled coordinate file
+   PSAV f  Write airfoil to plain coordinate file
+   ISAV f  Write airfoil to ISES coordinate file
+   MSAV f  Write airfoil to MSES coordinate file
+   REVE    Reverse written-airfoil node ordering
+   DELI i  Change written-airfoil file delimiters
+
+   LOAD f  Read buffer airfoil from coordinate file
+   NACA i  Set NACA 4,5-digit airfoil and buffer airfoil
+   INTE    Set buffer airfoil by interpolating two airfoils
+   NORM    Buffer airfoil normalization toggle
+   HALF    Halve the number of points in buffer airfoil
+   XYCM rr Change CM reference location, currently  0.25000 0.00000
+
+   BEND    Display structural properties of current airfoil
+
+   PCOP    Set current-airfoil panel nodes directly from buffer airfoil points
+   PANE    Set current-airfoil panel nodes ( 240 ) based on curvature
+  .PPAR    Show/change paneling
+
+  .PLOP    Plotting options
+
+   WDEF f  Write  current-settings file
+   RDEF f  Reread current-settings file
+   NAME s  Specify new airfoil name
+   NINC    Increment name version number
+
+   Z       Zoom    | (available in all menus)
+   U       Unzoom  | 
+
+ XFOIL   c>   ................................................
+
+  G raphics-enable flag:         T
+  C olor PostScript output?      T
+  I ndividual plot file output?  F
+  R otate landscape hardcopy?    F
+  A spect ratio of plot object    0.5500
+  S ize of plot object           10.00"
+  P age dimensions               11.00 x  8.50"
+  M argins from page edges        0.00",  0.00"
+  F ont size (relative)           0.0150
+  W indow/screen size fraction    0.8000
+  B lowup input method:         Cursor    
+  O rientation of plot:         Landscape 
+  L ine colors for top,bottom     8  3
+
+      Option, Value   (or <Return>)    c>   ................................................
+
+  G raphics-enable flag:         F
+  C olor PostScript output?      T
+  I ndividual plot file output?  F
+  R otate landscape hardcopy?    F
+  A spect ratio of plot object    0.5500
+  S ize of plot object           10.00"
+  P age dimensions               11.00 x  8.50"
+  M argins from page edges        0.00",  0.00"
+  F ont size (relative)           0.0150
+  W indow/screen size fraction    0.8000
+  B lowup input method:         Cursor    
+  O rientation of plot:         Landscape 
+  L ine colors for top,bottom     8  3
+
+      Option, Value   (or <Return>)    c>  
+ XFOIL   c>   Max thickness =     0.120034  at x =   0.3009
+ Max camber    =     0.039999  at x =   0.3980
+
+ Buffer airfoil set using 399 points
+
+ Blunt trailing edge.  Gap =  0.00252
+
+ Paneling parameters used...
+   Number of panel nodes       240
+   Panel bunching parameter    1.000
+   TE/LE panel density ratio   0.300
+   Refined-area/LE panel density ratio    0.200
+   Top    side refined area x/c limits  1.000 1.000
+   Bottom side refined area x/c limits  1.000 1.000
+
+ XFOIL   c>  
+    Present paneling parameters...
+  N  i   Number of panel nodes       240
+  P  r   Panel bunching parameter    1.000
+  T  r   TE/LE panel density ratio   0.300
+  R  r   Refined area/LE  panel density ratio   0.200
+  XT rr  Top    side refined area x/c limits    1.000 1.000
+  XB rr  Bottom side refined area x/c limits    1.000 1.000
+  Z oom
+  U nzoom
+  H ardcopy
+
+Change what ? (<cr> if nothing else)   c>  
+Change what ? (<cr> if nothing else)   c>  
+Change what ? (<cr> if nothing else)   c>  
+Change what ? (<cr> if nothing else)   c>  
+Change what ? (<cr> if nothing else)   c>  
+ Blunt trailing edge.  Gap =  0.00252
+
+ Maximum panel corner angle =  7.842   at  i,x,y  =  85   0.0006  -0.0043
+
+    Present paneling parameters...
+  N  i   Number of panel nodes       160
+  P  r   Panel bunching parameter    1.000
+  T  r   TE/LE panel density ratio   0.150
+  R  r   Refined area/LE  panel density ratio   0.200
+  XT rr  Top    side refined area x/c limits    1.000 1.000
+  XB rr  Bottom side refined area x/c limits    1.000 1.000
+  Z oom
+  U nzoom
+  H ardcopy
+
+Change what ? (<cr> if nothing else)   c>  
+ XFOIL   c>  
+.OPERi   c>   Calculating unit vorticity distributions ...
+
+.OPERi   c>  
+ XFOIL   c>  
+ Current TE gap  dx dy = 0.0000 0.0025    TE angle = 15.703 deg.
+
+ Initializing mapping coordinate ...
+           1      max(dw) =   1.8816649724286982E-002
+           2      max(dw) =   1.5124825200875769E-002
+           3      max(dw) =   5.3870723818352229E-003
+           4      max(dw) =   9.0143979210710601E-004
+           5      max(dw) =   3.9588432727732936E-004
+           6      max(dw) =   6.3017120191188880E-005
+           7      max(dw) =   3.4636281684652381E-005
+           8      max(dw) =   5.2439498477996338E-006
+           9      max(dw) =   3.5229624861798925E-006
+          10      max(dw) =   7.7249337515628014E-007
+          11      max(dw) =   4.1711592835280697E-007
+
+ Current Q operating condition:   alpha =   2.000     CL =   0.7500
+
+ Qspec initialized to current Q
+
+.MDES   c>  
+.MDES   c>  
+ Current :  alpha =   2.0000    CL =   0.749958    CM =  -0.114311
+ Qspec 1 :  alpha =   5.0000    CL =   1.109502    CM =  -0.118144
+
+.MDES   c>  
+ Current :  alpha =   2.0000    CL =   0.749958    CM =  -0.114311
+ Qspec 1 :  alpha =   5.0000    CL =   1.109647    CM =  -0.118128
+
+.MDES   c>             1   2.2014131210878530E-004
+           2   3.3049486610926589E-007
+ Max thickness =     0.120279  at x =   0.3028
+ Max camber    =     0.039932  at x =   0.4073
+  0.11948611417858504      -0.31269317630537996       0.66667493583066906     
+  -2.0000000000000000        1.0000000000000000      -0.50000000000000000       0.18333333333333335     
+
+
+ New buffer airfoil generated
+ Execute PANE at Top Level to set new current airfoil
+
+
+.MDES   c>  
+ XFOIL   c>  
+ Current airfoil nodes set from buffer airfoil nodes ( 257 )
+
+ XFOIL   c>  
+ XFOIL   c>  
+ XFOIL   c>  

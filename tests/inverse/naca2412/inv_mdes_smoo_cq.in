@@ -1,0 +1,23 @@
+PLOP
+G
+
+NACA 2412
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+OPER
+ALFA 3.0
+
+MDES
+CQ 0.6
+SMOO
+EXEC
+
+PCOP
+SAVE inv_mdes_smoo_cq.dat
+
+QUIT

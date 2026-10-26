@@ -1,0 +1,28 @@
+PLOP
+G
+
+NACA 2412
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+OPER
+ALFA 2.0
+
+QDES
+
+OPER
+ALFA 4.0
+
+QDES
+MARK
+100
+140
+EXEC 10
+
+SAVE inv_qdes_lower.dat
+
+QUIT

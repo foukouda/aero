@@ -1,0 +1,23 @@
+PLOP
+G
+
+NACS 0012
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+OPER
+ALFA 0.0
+
+MDES
+SYMM
+TGAP 0.005 0
+EXEC
+
+PCOP
+SAVE inv_mdes_symm_tgap.dat
+
+QUIT

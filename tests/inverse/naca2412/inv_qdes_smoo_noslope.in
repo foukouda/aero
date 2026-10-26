@@ -1,0 +1,25 @@
+PLOP
+G
+
+NACA 2412
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+OPER
+ALFA 3.0
+
+QDES
+SLOP
+MARK
+15
+50
+SMOO
+EXEC 5
+
+SAVE inv_qdes_smoo_noslope.dat
+
+QUIT

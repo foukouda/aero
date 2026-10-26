@@ -1,0 +1,29 @@
+PLOP
+G
+
+NACA 2412
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+OPER
+ALFA 2.0
+
+QDES
+
+OPER
+ALFA 5.0
+
+QDES
+CPXX
+MARK
+25
+55
+EXEC 10
+
+SAVE inv_qdes_cpxx.dat
+
+QUIT

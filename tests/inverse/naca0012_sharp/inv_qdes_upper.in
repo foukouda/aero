@@ -1,0 +1,28 @@
+PLOP
+G
+
+NACS 0012
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+OPER
+ALFA 0.0
+
+QDES
+
+OPER
+ALFA 2.0
+
+QDES
+MARK
+20
+60
+EXEC 10
+
+SAVE inv_qdes_upper.dat
+
+QUIT

@@ -1,0 +1,24 @@
+PLOP
+G
+
+NACA 4412
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+OPER
+ALFA 2.0
+
+MDES
+AQ 5
+FILT
+FILT
+EXEC
+
+PCOP
+SAVE inv_mdes_aq_filt2.dat
+
+QUIT

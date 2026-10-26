@@ -1,0 +1,28 @@
+PLOP
+G
+
+LOAD e387.dat
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+OPER
+ALFA 3.0
+
+QDES
+
+OPER
+ALFA 1.0
+
+QDES
+MARK
+60
+78
+EXEC 10
+
+SAVE inv_qdes_nose.dat
+
+QUIT
