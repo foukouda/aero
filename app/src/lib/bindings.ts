@@ -133,16 +133,18 @@ export const commands = {
 export type Aircraft = {
 	/**  The wing. */
 	wing: SurfaceParams,
-	/**  Horizontal tail; none for a flying wing. */
+	/**  Canard: a lifting surface ahead of the wing. */
+	canard: SurfaceParams | null,
+	/**  Horizontal tail. */
 	tail: SurfaceParams | null,
-	/**  Vertical fin (its span is its height). */
+	/**  Vertical fin (its sections' `y` is the height). */
 	fin: SurfaceParams | null,
 	/**  Fuselage; none for a pure flying wing. */
 	fuselage: Fuselage | null,
 	/**
 	 *  Centre of gravity, as a fraction of the wing's mean aerodynamic chord
 	 *  behind its leading edge (0.25 to 0.33 is usual with a tail, 0.15 to
-	 *  0.25 for a flying wing).
+	 *  0.25 for a flying wing; ahead of the wing with a canard).
 	 */
 	cg_mac_fraction: number | null,
 };
@@ -952,10 +954,17 @@ export type ImportResult = {
 export type Layout = {
 	/**  The wing. */
 	wing: Planform,
+	/**  The canard. */
+	canard: Planform | null,
 	/**  The horizontal tail. */
 	tail: Planform | null,
 	/**  The fin. */
 	fin: Planform | null,
+	/**
+	 *  Canard volume coefficient Sc·lc / (S·c̄), lc from the canard's
+	 *  quarter-MAC point forward to the wing's.
+	 */
+	canard_volume: number | null,
 	/**
 	 *  Horizontal tail volume coefficient Sh·lh / (S·c̄), lh between the
 	 *  quarter points of the MACs.
@@ -1244,6 +1253,8 @@ export type PanelingOptions = {
 export type PartKind = 
 /**  Main wing. */
 "wing" | 
+/**  Canard. */
+"canard" | 
 /**  Horizontal tail. */
 "tail" | 
 /**  Vertical fin. */
@@ -1482,6 +1493,37 @@ export type RecommendResult = {
 	cancelled: boolean,
 };
 
+/**
+ *  A section of a surface: an airfoil placed relative to the surface's root
+ *  leading edge.
+ */
+export type SectionParams = {
+	/**
+	 *  Distance from the plane of symmetry, m; for a fin, the height above
+	 *  its root.
+	 */
+	y: number | null,
+	/**  Chord, m. */
+	chord: number | null,
+	/**  Leading edge behind the root leading edge, m (sweep). */
+	x: number | null,
+	/**
+	 *  Leading edge above the root leading edge, m (dihedral; not used by
+	 *  a fin).
+	 */
+	z: number | null,
+	/**
+	 *  Twist relative to the surface's incidence, degrees, positive nose
+	 *  up; negative at the tips is washout, which delays their stall.
+	 */
+	twist_deg: number | null,
+	/**
+	 *  Airfoil (a key the caller resolves, such as `naca:2412` or
+	 *  `catalogue:sd7037`).
+	 */
+	airfoil: string,
+};
+
 /**  A converged point of a candidate's polar. */
 export type SectionPoint = {
 	/**  Angle of attack, degrees. */
@@ -1596,41 +1638,21 @@ export type StoredPolar = {
 };
 
 /**
- *  A straight-tapered lifting surface: a wing or horizontal tail, mirrored
- *  about the plane of symmetry, or a single vertical fin on that plane.
+ *  A lifting surface — wing, canard or horizontal tail, mirrored about the
+ *  plane of symmetry — or the vertical fin on that plane.
  */
 export type SurfaceParams = {
-	/**  Span, tip to tip, seen from above, m. For a fin: its height. */
-	span: number | null,
-	/**  Chord at the root (plane of symmetry), m. */
-	root_chord: number | null,
-	/**  Chord at the tip, m. */
-	tip_chord: number | null,
-	/**  Sweep of the leading edge, degrees, positive backwards. */
-	sweep_deg: number | null,
-	/**  Dihedral, degrees, positive tips up (not used by a fin). */
-	dihedral_deg: number | null,
-	/**
-	 *  Incidence of the root section relative to the fuselage axis,
-	 *  degrees, positive nose up (not used by a fin).
-	 */
-	incidence_deg: number | null,
-	/**
-	 *  Twist of the tip relative to the root, degrees; negative is washout
-	 *  (tips at a lower angle, which stall later).
-	 */
-	twist_deg: number | null,
 	/**  Root leading edge: distance behind the nose, m. */
 	x: number | null,
 	/**  Root leading edge: height above the fuselage axis, m. */
 	z: number | null,
 	/**
-	 *  Airfoil of the root section (a key the caller resolves, such as
-	 *  `naca:2412` or `catalogue:sd7037`).
+	 *  Incidence of the whole surface relative to the fuselage axis,
+	 *  degrees, positive nose up (not used by a fin).
 	 */
-	root_airfoil: string,
-	/**  Airfoil of the tip section. */
-	tip_airfoil: string,
+	incidence_deg: number | null,
+	/**  Sections from the root (y = 0) outwards. */
+	sections: SectionParams[],
 };
 
 /**  Progress of a sweep, streamed over a channel. */

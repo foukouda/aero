@@ -49,6 +49,23 @@ Pure data and geometry, SI units, tested by hand calculations.
 - Saved in the project (format 5; format 4 opens with a wing built from its
   span × chord).
 
+## P2b — free shapes and canards (requested on 2026-10-26)
+
+"Let me add canards, change the airfoil in the middle of the wing, and
+change the height, dihedral and rotation of each section — for the tail
+too — to make really the shape I want, kept simple."
+
+- Every lifting surface (wing, canard, horizontal tail) and the fin is a
+  list of sections, as in XFLR5 and AVL: position along the span, chord,
+  leading-edge offset (sweep), height (dihedral), twist and airfoil of each
+  section; the surface has a position and an incidence. Sections can be
+  added (splitting a panel) and removed; a span field scales the whole
+  surface. The straight-tapered description stays as the way presets and
+  new parts are made.
+- A canard: a mirrored lifting surface ahead of the wing, with its volume
+  coefficient Sc·lc / (S·c̄) shown next to the tail's.
+- Project format 6: format 5 surfaces (root and tip) become two sections.
+
 ## P3 — vortex lattice (AVL port, `aero-vlm` crate)
 
 - AVL's method: horseshoe vortices on the camber surfaces (chordwise and
@@ -108,6 +125,13 @@ the viewer, README, NOTICE (three.js, AVL references), release.
   mean geometric chord); "size the chords for me" keeps span and taper.
   Project format 5 (a frozen format-4 project opens with the trainer scaled
   to its wing).
+- P2b done on 2026-10-26: wing, canard, tail and fin as lists of sections
+  (position, chord, offset and sweep, height and dihedral, twist, airfoil
+  of each), sections inserted, removed or added at the tip, the span field
+  stretching the surface; a canard (placed behind the nose when there is
+  room ahead of the wing) with its volume coefficient. Project format 6 (a
+  frozen format-5 project opens with two sections per surface). 12 more
+  injected bugs caught.
 
 ## Order and checks
 

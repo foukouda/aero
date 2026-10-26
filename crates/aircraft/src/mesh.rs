@@ -15,6 +15,8 @@ use crate::planform::{Section, Surface, SurfaceKind, surfaces};
 pub enum PartKind {
     /// Main wing.
     Wing,
+    /// Canard.
+    Canard,
     /// Horizontal tail.
     Tail,
     /// Vertical fin.
@@ -27,6 +29,7 @@ impl From<SurfaceKind> for PartKind {
     fn from(k: SurfaceKind) -> Self {
         match k {
             SurfaceKind::Wing => Self::Wing,
+            SurfaceKind::Canard => Self::Canard,
             SurfaceKind::Tail => Self::Tail,
             SurfaceKind::Fin => Self::Fin,
         }
@@ -138,7 +141,7 @@ fn ring(kind: SurfaceKind, section: &Section, p: &Profile, mirror: bool) -> Vec<
     let sign = if mirror { -1.0 } else { 1.0 };
     uv.map(|(u, v)| match kind {
         SurfaceKind::Fin => [x0 + c * u, c * v, z0],
-        SurfaceKind::Wing | SurfaceKind::Tail => [
+        SurfaceKind::Wing | SurfaceKind::Canard | SurfaceKind::Tail => [
             x0 + c * (u * cos + v * sin),
             sign * y0,
             z0 + c * (v * cos - u * sin),
@@ -337,15 +340,17 @@ mod tests {
         (area, volume)
     }
 
+    /// The glider's wing without dihedral, incidence or twist, NACA 2412 at
+    /// the root and 0012 at the tip.
     fn flat_wing() -> SurfaceParams {
-        SurfaceParams {
-            dihedral_deg: 0.0,
-            incidence_deg: 0.0,
-            twist_deg: 0.0,
-            root_airfoil: "naca:2412".into(),
-            tip_airfoil: "naca:0012".into(),
-            ..Preset::Glider.aircraft().wing
+        let mut w = Preset::Glider.aircraft().wing;
+        w.incidence_deg = 0.0;
+        for (s, airfoil) in w.sections.iter_mut().zip(["naca:2412", "naca:0012"]) {
+            s.z = 0.0;
+            s.twist_deg = 0.0;
+            s.airfoil = airfoil.into();
         }
+        w
     }
 
     #[test]
@@ -478,13 +483,59 @@ mod tests {
         let m = 24;
         let n = 2 * m + 1;
         let (te, le) = (v[n], v[n + m]);
-        let c = a.wing.root_chord;
         assert!((le[2] - a.wing.z).abs() < 1e-6);
+        let c = a.wing.sections[0].chord;
         assert!(
             (te[2] - (a.wing.z - c * 5f64.to_radians().sin())).abs() < 2e-3 * c,
             "{te:?}"
         );
         assert!((te[0] - (a.wing.x + c * 5f64.to_radians().cos())).abs() < 2e-3 * c);
+    }
+
+    #[test]
+    fn each_section_keeps_its_airfoil_and_a_canard_is_meshed() {
+        // A thick root, a thin middle section raised by 5 cm, a thick tip.
+        let section = |y: f64, z: f64, naca: &str| crate::params::SectionParams {
+            y,
+            chord: 0.2,
+            x: 0.0,
+            z,
+            twist_deg: 0.0,
+            airfoil: format!("naca:{naca}"),
+        };
+        let mut a = Preset::Trainer.aircraft();
+        a.wing = SurfaceParams {
+            x: 0.25,
+            z: 0.0,
+            incidence_deg: 0.0,
+            sections: vec![
+                section(0.0, 0.0, "0018"),
+                section(0.3, 0.05, "0006"),
+                section(0.6, 0.05, "0018"),
+            ],
+        };
+        a.canard = Some(a.tail.as_ref().unwrap().scaled(0.8));
+        let parts = mesh(&a, &airfoils, &MeshOptions::default()).unwrap();
+        assert!(parts.iter().any(|p| p.kind == PartKind::Canard));
+        let v = vertices(parts.iter().find(|p| p.kind == PartKind::Wing).unwrap());
+        let thickness_at = |y: f64| {
+            let z: Vec<f64> = v
+                .iter()
+                .filter(|p| (p[1] - y).abs() < 1e-6)
+                .map(|p| p[2])
+                .collect();
+            let (lo, hi) = z
+                .iter()
+                .fold((f64::MAX, f64::MIN), |(lo, hi), &z| (lo.min(z), hi.max(z)));
+            (hi - lo, 0.5 * (hi + lo))
+        };
+        let (root, _) = thickness_at(0.0);
+        let (middle, middle_z) = thickness_at(0.3);
+        let (tip, _) = thickness_at(0.6);
+        assert!((root - 0.18 * 0.2).abs() < 2e-3 * 0.2, "{root}");
+        assert!((middle - 0.06 * 0.2).abs() < 2e-3 * 0.2, "{middle}");
+        assert!((tip - root).abs() < 1e-6);
+        assert!((middle_z - 0.05).abs() < 1e-6);
     }
 
     #[test]

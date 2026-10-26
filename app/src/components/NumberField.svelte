@@ -16,11 +16,26 @@
     digits?: number;
     /** Accept zero and negative values. */
     signed?: boolean;
+    /** Label above the input (narrow columns). */
+    stacked?: boolean;
+    disabled?: boolean;
     onchange: (value: number) => void;
   }
 
-  let { label, value, unit = "", scale = 1, step = 1, min, max, digits = 2, signed = false, onchange }: Props =
-    $props();
+  let {
+    label,
+    value,
+    unit = "",
+    scale = 1,
+    step = 1,
+    min,
+    max,
+    digits = 2,
+    signed = false,
+    stacked = false,
+    disabled = false,
+    onchange,
+  }: Props = $props();
 
   const shown = $derived(
     value === null || value === undefined ? "" : Number((value * scale).toFixed(digits)),
@@ -35,10 +50,10 @@
   }
 </script>
 
-<label class="row">
+<label class="row" class:stacked>
   <span class="label">{#if typeof label === "string"}{label}{:else}{@render label()}{/if}</span>
   <span class="field">
-    <input type="number" {step} {min} {max} value={shown} oninput={input} />
+    <input type="number" {step} {min} {max} {disabled} value={shown} oninput={input} />
     <span class="unit">{unit}</span>
   </span>
 </label>
@@ -66,5 +81,25 @@
   .unit {
     color: var(--muted);
     min-width: 26px;
+  }
+  .stacked {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+  }
+  .stacked .label {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .stacked input {
+    width: 100%;
+    min-width: 0;
+  }
+  .stacked .field {
+    flex: 1;
+  }
+  .stacked .unit {
+    min-width: 18px;
+    font-size: 11px;
   }
 </style>

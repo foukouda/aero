@@ -14,6 +14,8 @@ use crate::params::{Aircraft, SurfaceParams};
 pub enum SurfaceKind {
     /// Main wing.
     Wing,
+    /// Canard, ahead of the wing.
+    Canard,
     /// Horizontal tail.
     Tail,
     /// Vertical fin.
@@ -21,10 +23,20 @@ pub enum SurfaceKind {
 }
 
 impl SurfaceKind {
-    /// Wings and tails are mirrored about the plane of symmetry; the fin
-    /// lies in it.
+    /// Wings, canards and tails are mirrored about the plane of symmetry;
+    /// the fin lies in it.
     pub fn mirrored(self) -> bool {
         self != Self::Fin
+    }
+
+    /// Name in messages.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Wing => "wing",
+            Self::Canard => "canard",
+            Self::Tail => "tail",
+            Self::Fin => "fin",
+        }
     }
 }
 
@@ -55,48 +67,30 @@ pub struct Surface {
 }
 
 impl Surface {
-    /// The two sections of a straight-tapered surface. Wing and tail
-    /// sections stand in planes parallel to the plane of symmetry; the
-    /// fin's sections are horizontal.
+    /// The sections of a surface in space: wing, canard and tail sections
+    /// stand in planes parallel to the plane of symmetry, the fin's are
+    /// horizontal (its sections' `y` is their height).
     pub fn from_params(kind: SurfaceKind, p: &SurfaceParams) -> Result<Self> {
-        p.validate(match kind {
-            SurfaceKind::Wing => "wing",
-            SurfaceKind::Tail => "tail",
-            SurfaceKind::Fin => "fin",
-        })?;
-        let sweep = p.sweep_deg.to_radians().tan();
-        let tip = match kind {
-            SurfaceKind::Fin => [p.x + p.span * sweep, 0.0, p.z + p.span],
-            SurfaceKind::Wing | SurfaceKind::Tail => {
-                let half = 0.5 * p.span;
-                [
-                    p.x + half * sweep,
-                    half,
-                    p.z + half * p.dihedral_deg.to_radians().tan(),
-                ]
-            }
-        };
-        let (root_twist, tip_twist) = match kind {
-            SurfaceKind::Fin => (0.0, 0.0),
-            _ => (p.incidence_deg, p.incidence_deg + p.twist_deg),
-        };
-        Ok(Self {
-            kind,
-            sections: vec![
-                Section {
-                    le: [p.x, 0.0, p.z],
-                    chord: p.root_chord,
-                    twist_deg: root_twist,
-                    airfoil: p.root_airfoil.clone(),
+        p.validate(kind.name())?;
+        let sections = p
+            .sections
+            .iter()
+            .map(|s| match kind {
+                SurfaceKind::Fin => Section {
+                    le: [p.x + s.x, 0.0, p.z + s.y],
+                    chord: s.chord,
+                    twist_deg: 0.0,
+                    airfoil: s.airfoil.clone(),
                 },
-                Section {
-                    le: tip,
-                    chord: p.tip_chord,
-                    twist_deg: tip_twist,
-                    airfoil: p.tip_airfoil.clone(),
+                _ => Section {
+                    le: [p.x + s.x, s.y, p.z + s.z],
+                    chord: s.chord,
+                    twist_deg: p.incidence_deg + s.twist_deg,
+                    airfoil: s.airfoil.clone(),
                 },
-            ],
-        })
+            })
+            .collect();
+        Ok(Self { kind, sections })
     }
 
     /// Spanwise coordinate of a section: y for wings and tails, z for a fin.
@@ -171,6 +165,9 @@ pub struct Planform {
 pub fn surfaces(aircraft: &Aircraft) -> Result<Vec<Surface>> {
     aircraft.validate()?;
     let mut out = vec![Surface::from_params(SurfaceKind::Wing, &aircraft.wing)?];
+    if let Some(c) = &aircraft.canard {
+        out.push(Surface::from_params(SurfaceKind::Canard, c)?);
+    }
     if let Some(t) = &aircraft.tail {
         out.push(Surface::from_params(SurfaceKind::Tail, t)?);
     }
@@ -186,10 +183,15 @@ pub fn surfaces(aircraft: &Aircraft) -> Result<Vec<Surface>> {
 pub struct Layout {
     /// The wing.
     pub wing: Planform,
+    /// The canard.
+    pub canard: Option<Planform>,
     /// The horizontal tail.
     pub tail: Option<Planform>,
     /// The fin.
     pub fin: Option<Planform>,
+    /// Canard volume coefficient Sc·lc / (S·c̄), lc from the canard's
+    /// quarter-MAC point forward to the wing's.
+    pub canard_volume: Option<f64>,
     /// Horizontal tail volume coefficient Sh·lh / (S·c̄), lh between the
     /// quarter points of the MACs.
     pub tail_volume: Option<f64>,
@@ -211,8 +213,11 @@ pub fn layout(aircraft: &Aircraft) -> Result<Layout> {
             .map(Surface::planform)
     };
     let wing = find(SurfaceKind::Wing).unwrap_or_else(|| Surface::planform(&surfaces[0]));
+    let canard = find(SurfaceKind::Canard);
     let tail = find(SurfaceKind::Tail);
     let fin = find(SurfaceKind::Fin);
+    let canard_volume =
+        canard.map(|c| c.area * (wing.quarter_mac_x - c.quarter_mac_x) / (wing.area * wing.mac));
     let tail_volume =
         tail.map(|t| t.area * (t.quarter_mac_x - wing.quarter_mac_x) / (wing.area * wing.mac));
     let fin_volume =
@@ -224,8 +229,10 @@ pub fn layout(aircraft: &Aircraft) -> Result<Layout> {
         .fold(0.0_f64, f64::max);
     Ok(Layout {
         wing,
+        canard,
         tail,
         fin,
+        canard_volume,
         tail_volume,
         fin_volume,
         cg_x: wing.mac_x + aircraft.cg_mac_fraction * wing.mac,
@@ -236,11 +243,27 @@ pub fn layout(aircraft: &Aircraft) -> Result<Layout> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::params::Preset;
+    use crate::params::{Preset, SectionParams, TaperedParams};
+
+    fn tapered(span: f64, root: f64, tip: f64, sweep: f64, dihedral: f64, x: f64) -> TaperedParams {
+        TaperedParams {
+            span,
+            root_chord: root,
+            tip_chord: tip,
+            sweep_deg: sweep,
+            dihedral_deg: dihedral,
+            incidence_deg: 2.0,
+            twist_deg: -1.0,
+            x,
+            z: 0.02,
+            root_airfoil: "naca:2412".into(),
+            tip_airfoil: "naca:0012".into(),
+        }
+    }
 
     /// Textbook formulas of a straight-tapered wing.
-    fn trapezoid(p: &SurfaceParams) -> (f64, f64, f64, f64) {
-        let (cr, l, b) = (p.root_chord, p.taper(), p.span);
+    fn trapezoid(p: &TaperedParams) -> (f64, f64, f64, f64) {
+        let (cr, l, b) = (p.root_chord, p.tip_chord / p.root_chord, p.span);
         let area = b * cr * (1.0 + l) / 2.0;
         let mac = 2.0 / 3.0 * cr * (1.0 + l + l * l) / (1.0 + l);
         let y = b / 6.0 * (1.0 + 2.0 * l) / (1.0 + l);
@@ -250,44 +273,67 @@ mod tests {
 
     #[test]
     fn matches_the_trapezoid_formulas() {
-        for preset in Preset::ALL {
-            let a = preset.aircraft();
-            let pf = Surface::from_params(SurfaceKind::Wing, &a.wing)
+        for t in [
+            tapered(1.2, 0.22, 0.18, 0.0, 3.0, 0.25),
+            tapered(1.5, 0.19, 0.12, 2.0, 5.0, 0.22),
+            tapered(1.0, 0.28, 0.14, 25.0, 0.0, 0.0),
+            tapered(11.0, 1.63, 1.32, 0.0, 1.7, 2.2),
+        ] {
+            let pf = Surface::from_params(SurfaceKind::Wing, &t.surface(true))
                 .unwrap()
                 .planform();
-            let (area, mac, y, x) = trapezoid(&a.wing);
-            assert!((pf.area - area).abs() < 1e-12 * area, "{preset:?}");
-            assert!((pf.mac - mac).abs() < 1e-12 * mac, "{preset:?}");
-            assert!((pf.mac_span - y).abs() < 1e-12, "{preset:?}");
-            assert!((pf.mac_x - x).abs() < 1e-12, "{preset:?}");
-            assert!((pf.span - a.wing.span).abs() < 1e-12);
-            assert!((pf.aspect_ratio - a.wing.span.powi(2) / area).abs() < 1e-9);
+            let (area, mac, y, x) = trapezoid(&t);
+            assert!((pf.area - area).abs() < 1e-12 * area);
+            assert!((pf.mac - mac).abs() < 1e-12 * mac);
+            assert!((pf.mac_span - y).abs() < 1e-12);
+            assert!((pf.mac_x - x).abs() < 1e-12);
+            assert!((pf.span - t.span).abs() < 1e-12);
+            assert!((pf.aspect_ratio - t.span.powi(2) / area).abs() < 1e-9);
         }
     }
 
     #[test]
-    fn rectangular_wing() {
-        let mut a = Preset::Trainer.aircraft();
-        a.wing.tip_chord = a.wing.root_chord;
-        a.wing.sweep_deg = 10.0;
-        let pf = Surface::from_params(SurfaceKind::Wing, &a.wing)
+    fn a_kinked_wing_adds_its_panels() {
+        // A rectangular centre panel and a tapered outer panel: the area and
+        // the MAC integrals add up panel by panel.
+        let section = |y: f64, chord: f64, x: f64| SectionParams {
+            y,
+            chord,
+            x,
+            z: 0.0,
+            twist_deg: 0.0,
+            airfoil: "naca:2412".into(),
+        };
+        let wing = SurfaceParams {
+            x: 0.3,
+            z: 0.0,
+            incidence_deg: 0.0,
+            sections: vec![
+                section(0.0, 0.2, 0.0),
+                section(0.3, 0.2, 0.0),
+                section(0.6, 0.1, 0.05),
+            ],
+        };
+        let pf = Surface::from_params(SurfaceKind::Wing, &wing)
             .unwrap()
             .planform();
-        assert!((pf.mac - 0.22).abs() < 1e-15);
-        assert!((pf.mac_span - 0.3).abs() < 1e-12);
-        assert!((pf.area - 1.2 * 0.22).abs() < 1e-15);
-        assert!((pf.mac_x - (0.25 + 0.3 * 10f64.to_radians().tan())).abs() < 1e-12);
+        let half = 0.3 * 0.2 + 0.3 * 0.15;
+        assert!((pf.area - 2.0 * half).abs() < 1e-15);
+        let c2 = 0.3 * 0.04 + 0.3 * (0.04 + 0.02 + 0.01) / 3.0;
+        assert!((pf.mac - c2 / half).abs() < 1e-12);
+        assert!((pf.span - 1.2).abs() < 1e-15);
     }
 
     #[test]
-    fn sections_follow_sweep_dihedral_and_twist() {
+    fn sections_follow_the_surface() {
         let a = Preset::Glider.aircraft();
         let s = Surface::from_params(SurfaceKind::Wing, &a.wing).unwrap();
         let tip = &s.sections[1];
         assert!((tip.le[1] - 0.75).abs() < 1e-15);
         assert!((tip.le[0] - (0.22 + 0.75 * 2f64.to_radians().tan())).abs() < 1e-12);
         assert!((tip.le[2] - (0.02 + 0.75 * 5f64.to_radians().tan())).abs() < 1e-12);
-        assert_eq!(tip.twist_deg, 1.0);
+        // Incidence 2°, tip twist −1°.
+        assert_eq!((s.sections[0].twist_deg, tip.twist_deg), (2.0, 1.0));
         let fin = Surface::from_params(SurfaceKind::Fin, a.fin.as_ref().unwrap()).unwrap();
         assert_eq!(fin.sections[1].le[1], 0.0);
         assert!((fin.sections[1].le[2] - 0.17).abs() < 1e-12);
@@ -307,6 +353,7 @@ mod tests {
             let vv = l.fin_volume.unwrap();
             assert!((0.35..=0.8).contains(&vh), "{preset:?} Vh {vh}");
             assert!((0.02..=0.06).contains(&vv), "{preset:?} Vv {vv}");
+            assert!(l.canard.is_none() && l.canard_volume.is_none());
         }
         let fw = layout(&Preset::FlyingWing.aircraft()).unwrap();
         assert!(fw.tail.is_none() && fw.tail_volume.is_none());
@@ -315,29 +362,30 @@ mod tests {
     #[test]
     fn hand_calculation_of_a_layout() {
         // Rectangular wing 1 m × 0.2 m at x = 0.3; rectangular tail
-        // 0.4 m × 0.1 m at x = 1.0: lh = (1.0 + 0.025) − (0.3 + 0.05).
+        // 0.4 m × 0.1 m at x = 1.0: lh = (1.0 + 0.025) − (0.3 + 0.05);
+        // rectangular canard 0.4 m × 0.05 m at x = 0.0: lc = 0.35 − 0.0125.
+        let rect = |span: f64, chord: f64, x: f64| {
+            TaperedParams {
+                span,
+                root_chord: chord,
+                tip_chord: chord,
+                sweep_deg: 0.0,
+                dihedral_deg: 0.0,
+                x,
+                ..tapered(1.0, 0.2, 0.2, 0.0, 0.0, 0.0)
+            }
+            .surface(true)
+        };
         let mut a = Preset::Trainer.aircraft();
-        a.wing = SurfaceParams {
-            span: 1.0,
-            root_chord: 0.2,
-            tip_chord: 0.2,
-            sweep_deg: 0.0,
-            dihedral_deg: 0.0,
-            x: 0.3,
-            ..a.wing
-        };
-        let tail = a.tail.as_mut().unwrap();
-        *tail = SurfaceParams {
-            span: 0.4,
-            root_chord: 0.1,
-            tip_chord: 0.1,
-            x: 1.0,
-            ..tail.clone()
-        };
+        a.wing = rect(1.0, 0.2, 0.3);
+        a.tail = Some(rect(0.4, 0.1, 1.0));
+        a.canard = Some(rect(0.4, 0.05, 0.0));
         a.cg_mac_fraction = 0.25;
         let l = layout(&a).unwrap();
         let lh = 1.025 - 0.35;
         assert!((l.tail_volume.unwrap() - 0.04 * lh / (0.2 * 0.2)).abs() < 1e-12);
+        let lc = 0.35 - 0.0125;
+        assert!((l.canard_volume.unwrap() - 0.02 * lc / (0.2 * 0.2)).abs() < 1e-12);
         assert!((l.cg_x - 0.35).abs() < 1e-12);
         assert!(l.length >= 1.1);
     }

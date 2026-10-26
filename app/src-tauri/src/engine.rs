@@ -1733,16 +1733,17 @@ mod tests {
             })
             .unwrap();
         assert!((sized.conditions.required_cl - 0.5).abs() < 1e-9);
-        assert_eq!(sized.aircraft.wing.span, 1.2);
-        assert!((sized.aircraft.wing.taper() - setup.aircraft.wing.taper()).abs() < 1e-12);
-        assert!(sized.aircraft.wing.root_chord > setup.aircraft.wing.root_chord);
+        let (before, after) = (&setup.aircraft.wing.sections, &sized.aircraft.wing.sections);
+        assert_eq!(after[1].y, before[1].y);
+        let k = after[0].chord / before[0].chord;
+        assert!(k > 1.0 && (after[1].chord / before[1].chord - k).abs() < 1e-12);
 
         // Airfoils of the library, and unknown ones.
         let id = e.create_naca("4412", false).unwrap().id;
         let mut s = setup.clone();
-        s.aircraft.wing.root_airfoil = format!("library:{id}");
+        s.aircraft.wing.sections[0].airfoil = format!("library:{id}");
         assert!(e.mission_view(&s).is_ok());
-        s.aircraft.wing.tip_airfoil = "library:999".into();
+        s.aircraft.wing.sections[1].airfoil = "library:999".into();
         let err = e.mission_view(&s).unwrap_err();
         assert!(err.message.contains("library:999"), "{}", err.message);
         assert!(e.airfoil_by_key("naca:0012").is_some());

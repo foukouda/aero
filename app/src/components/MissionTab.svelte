@@ -5,8 +5,10 @@
   import Term from "./Term.svelte";
   import NumberField from "./NumberField.svelte";
   import AircraftViewer from "./AircraftViewer.svelte";
+  import SurfaceEditor from "./SurfaceEditor.svelte";
   import MissionResults from "./MissionResults.svelte";
   import type { MissionSetup, PartKind, SurfaceParams } from "../lib/bindings";
+  import { defaultSurface } from "../lib/aircraft";
   import { app } from "../lib/state.svelte";
   import type { MessageKey } from "../lib/i18n";
   import {
@@ -26,7 +28,7 @@
     type Level,
   } from "../lib/mission";
 
-  type Part = "wing" | "tail" | "fin";
+  type Part = "wing" | "canard" | "tail" | "fin";
 
   const setup = $derived(app.mission);
   const view = $derived(app.missionView);
@@ -50,43 +52,25 @@
     app.updateMission(s);
   }
 
-  /** Changes a field of the wing, tail or fin. */
-  function surface(part: Part, change: (p: SurfaceParams) => void) {
+  /** Replaces a surface. */
+  function setSurface(part: Part, surface: SurfaceParams) {
     update((s) => {
-      const p = part === "wing" ? s.aircraft.wing : s.aircraft[part];
-      if (p) change(p);
+      if (part === "wing") s.aircraft.wing = surface;
+      else s.aircraft[part] = surface;
     });
   }
 
   /** Adds a part proportional to the wing, or removes it. */
-  function toggle(part: "tail" | "fin" | "fuselage", on: boolean) {
+  function toggle(part: "canard" | "tail" | "fin" | "fuselage", on: boolean) {
     update((s) => {
       if (!on) {
         s.aircraft[part] = null;
-        return;
-      }
-      const w = s.aircraft.wing;
-      const span = w.span ?? 1;
-      const chord = w.root_chord ?? 0.2;
-      const x = w.x ?? 0;
-      if (part === "fuselage") {
+      } else if (part === "fuselage") {
+        const span = 2 * (s.aircraft.wing.sections[s.aircraft.wing.sections.length - 1]?.y ?? 0.5);
         s.aircraft.fuselage = { length: 0.8 * span, diameter: 0.08 * span };
-        return;
+      } else {
+        s.aircraft[part] = defaultSurface(part, s.aircraft.wing);
       }
-      const tail = part === "tail";
-      s.aircraft[part] = {
-        span: tail ? 0.35 * span : 0.14 * span,
-        root_chord: 0.6 * chord,
-        tip_chord: 0.45 * chord,
-        sweep_deg: tail ? 0 : 30,
-        dihedral_deg: 0,
-        incidence_deg: 0,
-        twist_deg: 0,
-        x: x + 0.55 * span,
-        z: 0,
-        root_airfoil: "naca:0009",
-        tip_airfoil: "naca:0009",
-      };
     });
   }
 
@@ -97,23 +81,6 @@
 
   function round(v: number, digits: number): number {
     return Number(v.toFixed(digits));
-  }
-
-  /** Airfoil choices: the catalogue and the library, plus the current key
-   * when it is neither (such as the presets' `naca:0009`). */
-  function airfoilChoices(current: string) {
-    const catalogue = app.catalogue.map((e) => ({ key: `catalogue:${e.id}`, name: e.name }));
-    const library = app.airfoils.map((a) => ({ key: `library:${a.id}`, name: a.name }));
-    const known = [...catalogue, ...library].some((o) => o.key === current);
-    const extra = known ? [] : [{ key: current, name: current.replace(/^naca:/, "NACA ") }];
-    return { catalogue, library, extra };
-  }
-
-  function setAirfoil(part: Part, key: string) {
-    surface(part, (p) => {
-      p.root_airfoil = key;
-      p.tip_airfoil = key;
-    });
   }
 
   function select(kind: PartKind) {
@@ -142,114 +109,12 @@
   const machReading = $derived(c?.mach != null ? readMach(c.mach) : null);
   const loading = $derived(c ? wingLoadingGdm2(c) : Number.NaN);
   const tailReading = $derived(view ? readTailVolume(view.layout.tail_volume) : null);
-  const finReading = $derived(view ? readFinVolume(view.layout.fin_volume, view.aircraft.tail === null) : null);
+  const finReading = $derived(
+    view ? readFinVolume(view.layout.fin_volume, view.aircraft.tail === null && view.aircraft.canard === null) : null,
+  );
   const seaLevelDensity = 1.225;
 </script>
 
-{#snippet surfaceFields(part: Part, p: SurfaceParams)}
-  {@const fin = part === "fin"}
-  {@const choices = airfoilChoices(p.root_airfoil)}
-  <NumberField
-    label={app.t(fin ? "field.height" : "field.span")}
-    value={p.span}
-    unit="m"
-    step={0.05}
-    digits={3}
-    onchange={(v) => surface(part, (q) => (q.span = v))}
-  />
-  {#if !(part === "wing" && setup?.sizing_cl !== null)}
-    <NumberField
-      label={app.t("field.rootChord")}
-      value={p.root_chord}
-      unit="cm"
-      scale={100}
-      digits={1}
-      onchange={(v) => surface(part, (q) => (q.root_chord = v))}
-    />
-    <NumberField
-      label={app.t("field.tipChord")}
-      value={p.tip_chord}
-      unit="cm"
-      scale={100}
-      digits={1}
-      onchange={(v) => surface(part, (q) => (q.tip_chord = v))}
-    />
-  {/if}
-  <NumberField
-    label={app.t("field.sweep")}
-    value={p.sweep_deg}
-    unit="°"
-    signed
-    min={-60}
-    max={60}
-    digits={1}
-    onchange={(v) => surface(part, (q) => (q.sweep_deg = v))}
-  />
-  {#if !fin}
-    <NumberField
-      label={app.t("field.dihedral")}
-      value={p.dihedral_deg}
-      unit="°"
-      signed
-      min={-30}
-      max={30}
-      digits={1}
-      onchange={(v) => surface(part, (q) => (q.dihedral_deg = v))}
-    />
-    <NumberField
-      label={app.t("field.incidence")}
-      value={p.incidence_deg}
-      unit="°"
-      signed
-      min={-15}
-      max={15}
-      digits={1}
-      onchange={(v) => surface(part, (q) => (q.incidence_deg = v))}
-    />
-    <NumberField
-      label={app.t("field.twist")}
-      value={p.twist_deg}
-      unit="°"
-      signed
-      min={-15}
-      max={15}
-      digits={1}
-      onchange={(v) => surface(part, (q) => (q.twist_deg = v))}
-    />
-  {/if}
-  <NumberField
-    label={app.t("field.x")}
-    value={p.x}
-    unit="m"
-    signed
-    step={0.01}
-    digits={3}
-    onchange={(v) => surface(part, (q) => (q.x = v))}
-  />
-  <NumberField
-    label={app.t("field.z")}
-    value={p.z}
-    unit="cm"
-    scale={100}
-    signed
-    digits={1}
-    onchange={(v) => surface(part, (q) => (q.z = v))}
-  />
-  <label class="row">
-    <span>{app.t("field.airfoil")}</span>
-    <select value={p.root_airfoil} onchange={(e) => setAirfoil(part, (e.currentTarget as HTMLSelectElement).value)}>
-      {#each choices.extra as o (o.key)}<option value={o.key}>{o.name}</option>{/each}
-      <optgroup label={app.t("airfoil.catalogue")}>
-        {#each choices.catalogue as o (o.key)}<option value={o.key}>{o.name}</option>{/each}
-      </optgroup>
-      {#if choices.library.length}
-        <optgroup label={app.t("airfoil.library")}>
-          {#each choices.library as o (o.key)}<option value={o.key}>{o.name}</option>{/each}
-        </optgroup>
-      {/if}
-    </select>
-  </label>
-{/snippet}
 
 {#if setup}
   {@const aircraft = setup.aircraft}
@@ -358,14 +223,34 @@
           {#if view}
             <p class="sized">
               {app.t("mission.sizedWing", {
-                root: length(view.aircraft.wing.root_chord, lang),
-                tip: length(view.aircraft.wing.tip_chord, lang),
+                root: length(view.aircraft.wing.sections[0]?.chord, lang),
+                tip: length(view.aircraft.wing.sections[view.aircraft.wing.sections.length - 1]?.chord, lang),
                 area: `${sig(view.layout.wing.area, lang, 3)} m²`,
               })}
             </p>
           {/if}
         {/if}
-        {@render surfaceFields("wing", aircraft.wing)}
+        <SurfaceEditor
+          kind="wing"
+          surface={setup.sizing_cl !== null && view ? view.aircraft.wing : aircraft.wing}
+          chordsLocked={setup.sizing_cl !== null}
+          onchange={(w) => setSurface("wing", w)}
+        />
+      </details>
+
+      <details id="part-canard" class="part" open={openPart === "canard"} ontoggle={opened("canard")}>
+        <summary>{app.t("part.canard")}</summary>
+        <label class="check">
+          <input
+            type="checkbox"
+            checked={aircraft.canard !== null}
+            onchange={(e) => toggle("canard", (e.currentTarget as HTMLInputElement).checked)}
+          />
+          {app.t("part.canard.toggle")}
+        </label>
+        {#if aircraft.canard}
+          <SurfaceEditor kind="canard" surface={aircraft.canard} onchange={(c) => setSurface("canard", c)} />
+        {/if}
       </details>
 
       <details id="part-tail" class="part" open={openPart === "tail"} ontoggle={opened("tail")}>
@@ -378,7 +263,9 @@
           />
           {app.t("part.tail.toggle")}
         </label>
-        {#if aircraft.tail}{@render surfaceFields("tail", aircraft.tail)}{/if}
+        {#if aircraft.tail}
+          <SurfaceEditor kind="tail" surface={aircraft.tail} onchange={(t) => setSurface("tail", t)} />
+        {/if}
       </details>
 
       <details id="part-fin" class="part" open={openPart === "fin"} ontoggle={opened("fin")}>
@@ -391,7 +278,9 @@
           />
           {app.t("part.fin.toggle")}
         </label>
-        {#if aircraft.fin}{@render surfaceFields("fin", aircraft.fin)}{/if}
+        {#if aircraft.fin}
+          <SurfaceEditor kind="fin" surface={aircraft.fin} onchange={(f) => setSurface("fin", f)} />
+        {/if}
       </details>
 
       <details id="part-fuselage" class="part" open={openPart === "fuselage"} ontoggle={opened("fuselage")}>
@@ -583,7 +472,12 @@
               {@const worst = [tailReading, finReading].some((r) => r.level === "warning") ? "warning" : "ok"}
               <article class="panel card {worst}">
                 <header><Term id="tail-volume">{app.t("card.tails")}</Term></header>
-                <p>{app.t(tailReading.text, { value: num(view.layout.tail_volume, lang, 2) })}</p>
+                {#if view.layout.canard_volume !== null}
+                  <p>{app.t("canard.text", { value: num(view.layout.canard_volume, lang, 2) })}</p>
+                {/if}
+                {#if view.layout.tail_volume !== null || view.layout.canard_volume === null}
+                  <p>{app.t(tailReading.text, { value: num(view.layout.tail_volume, lang, 2) })}</p>
+                {/if}
                 <p>{app.t(finReading.text, { value: num(view.layout.fin_volume, lang, 3) })}</p>
               </article>
             {/if}

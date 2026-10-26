@@ -32,5 +32,8 @@ pub mod planform;
 
 pub use error::{AircraftError, Result};
 pub use mesh::{MeshOptions, MeshPart, PartKind, mesh};
-pub use params::{Aircraft, Fuselage, Preset, SurfaceParams};
+pub use params::{
+    Aircraft, Fuselage, MAX_PANEL_ANGLE, MAX_SECTIONS, Preset, SectionParams, SurfaceParams,
+    TaperedParams,
+};
 pub use planform::{Layout, Planform, Section, Surface, SurfaceKind, layout, surfaces};

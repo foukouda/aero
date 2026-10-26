@@ -173,13 +173,11 @@ pub fn mission_view(
 ) -> Result<MissionView, AppError> {
     let mut aircraft = setup.aircraft.clone();
     if let Some(cl) = setup.sizing_cl {
-        // Same span and taper, chords scaled to the area flying at `cl`.
-        let target = setup
-            .flight
-            .size_wing(cl, &WingConstraint::Span(aircraft.wing.span))?;
+        // Same span and shape, chords scaled to the area flying at `cl`.
+        let span = layout(&aircraft)?.wing.span;
+        let target = setup.flight.size_wing(cl, &WingConstraint::Span(span))?;
         let k = target.span * target.chord / layout(&aircraft)?.wing.area;
-        aircraft.wing.root_chord *= k;
-        aircraft.wing.tip_chord *= k;
+        aircraft.wing = aircraft.wing.with_chords_scaled(k);
     }
     let layout = layout(&aircraft)?;
     let wing = Wing {

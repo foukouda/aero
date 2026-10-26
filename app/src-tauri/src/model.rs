@@ -3,7 +3,7 @@
 //! This module does not depend on Tauri: it is plain data plus pure
 //! operations, so that it can be reused by a CLI later.
 
-use aero_aircraft::{Aircraft, Preset};
+use aero_aircraft::{Aircraft, Preset, TaperedParams};
 use aero_foil2d::inviscid::{AlphaSweep, ClSweep, Polar};
 use aero_foil2d::viscous::{
     AmplificationModel, MachReynoldsVariation, ViscousOptions, ViscousPolar,
@@ -29,7 +29,8 @@ pub type AirfoilId = u32;
 /// - 3: shape optimization setup and last result.
 /// - 4: the flight of the "My aircraft" tab.
 /// - 5: the aircraft of that tab replaces its rectangular wing.
-pub const PROJECT_FORMAT_VERSION: u32 = 5;
+/// - 6: the aircraft's surfaces are lists of sections; canard.
+pub const PROJECT_FORMAT_VERSION: u32 = 6;
 
 /// Magic string identifying project files.
 pub const PROJECT_FORMAT: &str = "aero-project";
@@ -677,13 +678,40 @@ pub fn load_project(text: &str) -> Result<Session, AppError> {
             };
             if let (Some(span), Some(chord)) = (dimension("span"), dimension("chord")) {
                 let mut aircraft = Preset::Trainer.aircraft().scaled(span / 1.2);
-                aircraft.wing.root_chord = chord;
-                aircraft.wing.tip_chord = chord;
+                for s in &mut aircraft.wing.sections {
+                    s.chord = chord;
+                }
                 let aircraft = serde_json::to_value(aircraft).map_err(|e| {
                     AppError::new(ErrorKind::Project, format!("cannot convert the wing: {e}"))
                 })?;
                 mission.insert("aircraft".into(), aircraft);
             }
+        }
+    } else if version < 6 {
+        // Format 5 described each surface by its root and tip: two sections.
+        if let Some(aircraft) = value
+            .pointer_mut("/session/mission/aircraft")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            for (part, mirrored) in [("wing", true), ("tail", true), ("fin", false)] {
+                let Some(old) = aircraft.get(part).filter(|v| !v.is_null()) else {
+                    continue;
+                };
+                let tapered: TaperedParams = serde_json::from_value(old.clone()).map_err(|e| {
+                    AppError::new(
+                        ErrorKind::Project,
+                        format!("invalid {part} in the project: {e}"),
+                    )
+                })?;
+                let sections = serde_json::to_value(tapered.surface(mirrored)).map_err(|e| {
+                    AppError::new(
+                        ErrorKind::Project,
+                        format!("cannot convert the {part}: {e}"),
+                    )
+                })?;
+                aircraft.insert(part.into(), sections);
+            }
+            aircraft.insert("canard".into(), serde_json::Value::Null);
         }
     }
     if version < 2 {
@@ -894,12 +922,36 @@ mod tests {
         assert_eq!(s.mission.flight.speed, 12.0);
         assert_eq!(s.mission.goal, Goal::SlowFlight);
         let wing = &s.mission.aircraft.wing;
-        assert_eq!(
-            (wing.span, wing.root_chord, wing.tip_chord),
-            (1.5, 0.25, 0.25)
-        );
+        assert_eq!(wing.half_span(), 0.75);
+        assert!(wing.sections.iter().all(|s| s.chord == 0.25));
         let tail = s.mission.aircraft.tail.as_ref().unwrap();
-        assert!((tail.span - 0.42 * 1.25).abs() < 1e-12);
+        assert!((tail.half_span() - 0.21 * 1.25).abs() < 1e-12);
+        assert!(s.mission.aircraft.canard.is_none());
+    }
+
+    #[test]
+    fn version_5_fixture_still_loads() {
+        // Frozen file of format version 5: root and tip of each surface
+        // become two sections, with their airfoils, sweep and twist.
+        let text = include_str!("../tests/fixtures/project_v5.json");
+        let s = load_project(text).unwrap();
+        let a = &s.mission.aircraft;
+        assert!(a.canard.is_none());
+        let wing = &a.wing;
+        assert_eq!((wing.x, wing.z, wing.incidence_deg), (0.24, 0.02, 2.0));
+        let [root, tip] = [&wing.sections[0], &wing.sections[1]];
+        assert_eq!(
+            (root.y, root.chord, root.airfoil.as_str()),
+            (0.0, 0.21, "library:0")
+        );
+        assert_eq!((tip.y, tip.chord, tip.twist_deg), (0.8, 0.13, -1.5));
+        assert_eq!(tip.airfoil, "catalogue:sd7037");
+        assert!((tip.x - 0.8 * 3f64.to_radians().tan()).abs() < 1e-12);
+        assert!((tip.z - 0.8 * 4f64.to_radians().tan()).abs() < 1e-12);
+        let fin = a.fin.as_ref().unwrap();
+        assert_eq!(fin.sections[1].y, 0.16);
+        assert_eq!(a.cg_mac_fraction, 0.31);
+        a.validate().unwrap();
     }
 
     #[test]

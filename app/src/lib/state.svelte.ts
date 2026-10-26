@@ -12,6 +12,7 @@ import type {
   Conditions,
   MissionSetup,
   MissionView,
+  SurfaceParams,
   RecommendEvent,
   RecommendResult,
   AnalysisView,
@@ -45,6 +46,7 @@ import { latestRunner } from "./latest";
 import { TOUR_STEPS, defaultTourLang, type TourAction, type TourLang } from "./tour";
 import { translate, type MessageKey } from "./i18n";
 import { applyPreset, sig, type Preset } from "./mission";
+import { setAllAirfoils } from "./aircraft";
 
 export type Tab = "mission" | "geometry" | "analysis" | "polars" | "optimize" | "design";
 export type Theme = "light" | "dark";
@@ -145,9 +147,9 @@ function initialTourLang(): TourLang {
   return defaultTourLang(navigator.language);
 }
 
-/** The wing chords of a computed aircraft. */
-function chords(view: MissionView): { root_chord: number | null; tip_chord: number | null } {
-  return { root_chord: view.aircraft.wing.root_chord, tip_chord: view.aircraft.wing.tip_chord };
+/** The chords of a wing's sections, to compare two wings. */
+function chords(wing: SurfaceParams): string {
+  return wing.sections.map((s) => s.chord).join(" ");
 }
 
 function baseName(path: string): string {
@@ -1065,15 +1067,14 @@ class AppState {
       this.missionView = view;
       this.missionError = null;
       const current = this.session?.mission;
-      if (
-        current &&
-        setup.sizing_cl !== null &&
-        (view.aircraft.wing.root_chord !== current.aircraft.wing.root_chord ||
-          view.aircraft.wing.tip_chord !== current.aircraft.wing.tip_chord)
-      ) {
+      if (current && setup.sizing_cl !== null && chords(view.aircraft.wing) !== chords(current.aircraft.wing)) {
+        // Only the chords come from the sized wing: sections edited since
+        // the request keep their other values.
+        const sized = view.aircraft.wing.sections;
+        const sections = current.aircraft.wing.sections.map((s, i) => ({ ...s, chord: sized[i]?.chord ?? s.chord }));
         this.session!.mission = {
           ...current,
-          aircraft: { ...current.aircraft, wing: { ...current.aircraft.wing, ...chords(view) } },
+          aircraft: { ...current.aircraft, wing: { ...current.aircraft.wing, sections } },
         };
         void this.#saveMission($state.snapshot(this.session!.mission) as MissionSetup);
       }
@@ -1091,14 +1092,13 @@ class AppState {
     this.updateMission(applyPreset($state.snapshot(setup) as MissionSetup, preset, aircraft));
   }
 
-  /** Puts a recommended airfoil on the wing (root and tip). */
+  /** Puts a recommended airfoil on every section of the wing. */
   putOnWing(c: CandidateResult) {
     const setup = this.mission;
     if (!setup) return;
     const key = c.source.kind === "library" ? `library:${c.source.id}` : `catalogue:${c.source.id}`;
     const s = $state.snapshot(setup) as MissionSetup;
-    s.aircraft.wing.root_airfoil = key;
-    s.aircraft.wing.tip_airfoil = key;
+    s.aircraft.wing = setAllAirfoils(s.aircraft.wing, key);
     this.updateMission(s);
     this.notify("info", this.t("toast.wing.title"), this.t("toast.wing", { name: c.name }));
   }

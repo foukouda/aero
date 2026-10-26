@@ -42,6 +42,7 @@
 
   const COLORS: Record<PartKind, number> = {
     wing: 0xc9d4e2,
+    canard: 0xc9d4e2,
     tail: 0xb6c3d3,
     fin: 0xb6c3d3,
     fuselage: 0x98a6b8,
