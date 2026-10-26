@@ -21,7 +21,7 @@ use common::viscous::{
 #[test]
 fn viscous_cases_match_xfoil() {
     let cases = cases_in(&viscous_dir());
-    assert_eq!(cases.len(), 16);
+    assert_eq!(cases.len(), 17);
     let mut total = ViscousStats::default();
     let mut failures = Vec::new();
     for case in &cases {

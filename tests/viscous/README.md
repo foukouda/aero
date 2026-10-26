@@ -20,6 +20,18 @@ for the provenance).
 | `clarky` | Clark Y (UIUC) | 5e5 | 0 | 9 | — | 160 |
 | `e387` | Eppler 387 (UIUC) | 2e5 | 0 | 9 | — | 160 |
 
+Cases of the other operating modes (160 nodes, Ncrit 9, free transition):
+
+| Case | Airfoil | Mode | Conditions |
+|---|---|---|---|
+| `naca2412_cl` | NACA 2412 | prescribed CL (`CSEQ`, `CL`) | Re 1e6 |
+| `e387_cl` | Eppler 387 | prescribed CL | Re 2e5 (laminar bubbles) |
+| `naca4415_cl` | NACA 4415 | prescribed CL | Re 1e6; CL = 0.8 is a limit cycle: the bottom transition jumps between x/c = 0.99 and the trailing edge at every iteration, and the point does not converge |
+| `naca4415_type2` | NACA 4415 | angles and prescribed CL, `TYPE 2` | M √CL = 0.2, Re √CL = 1e6 |
+| `naca23012_type3` | NACA 23012 | prescribed CL, `TYPE 3` | Re CL = 1e6 |
+| `naca0012_damp2` | NACA 0012 | angles, `DAMP` (modified amplification rate) | Re 1e6 |
+| `naca2412_flap` | NACA 2412 | angles, flap hinge at (0.75, 0): `FNEW`, `FMOM`, `HINC` | inviscid and Re 1e6 |
+
 ## XFOIL sessions
 
 Each `[[viscous]]` run of a manifest is computed in its own XFOIL session
@@ -34,6 +46,11 @@ Each `[[viscous]]` run of a manifest is computed in its own XFOIL session
    same sequence;
 3. the single points: `INIT` (reset of the boundary layer) then `ALFA`
    (20 iterations) for each angle, followed by `CPWR` and `DUMP`.
+
+In prescribed-CL mode (`mode = "cl"`), `CSEQ` and `CL` replace `ASEQ` and
+`ALFA`; `type` sets `TYPE` (Mach and Reynolds numbers varying with CL),
+`damp2` enables `DAMP`, and a case-level `hinge` adds `FNEW`, `FMOM` and
+`HINC` (hinge moments written in the polars).
 
 Unconverged points are not added to the polar files by XFOIL.
 
