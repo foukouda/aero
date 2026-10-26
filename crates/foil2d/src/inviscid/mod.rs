@@ -33,8 +33,8 @@ pub use error::{InviscidError, Result};
 pub use panel::{PanelGeometry, TrailingEdgePanel};
 pub(crate) use psilin::psilin;
 pub use psilin::{FieldPoint, Influence};
-pub(crate) use solver::te_bisector;
 pub use solver::{
     AlphaSweep, InviscidOptions, InviscidSolution, InviscidSolver, OperatingPoint, Polar,
     PolarPoint, SweepFailure, SweepProgress, sonic_cp,
 };
+pub(crate) use solver::{clcalc, te_bisector};

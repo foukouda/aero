@@ -19,4 +19,15 @@ mod blsys;
 #[allow(dead_code)]
 mod closure;
 #[allow(dead_code)]
+mod march;
+#[allow(dead_code)]
+mod newton;
+#[allow(dead_code)]
 mod panels;
+#[allow(dead_code)]
+mod session;
+#[allow(dead_code)]
+mod viscal;
+
+#[cfg(test)]
+mod tests;

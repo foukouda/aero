@@ -438,14 +438,18 @@ fn coefficients(ss: f64, x: &[f64], xs: &[f64], s: &[f64]) -> (usize, f64, f64, 
     (i, ds, t, cx1, cx2)
 }
 
-/// XFOIL `SEVAL`.
-pub(crate) fn seval(ss: f64, x: &[f64], xs: &[f64], s: &[f64]) -> f64 {
+/// XFOIL `SEVAL`: value at `ss` of the spline with knots `s`, values `x`
+/// and derivatives `xs` (the three slices have the same length, at least 2,
+/// and `s` is non-decreasing). Outside the knot range the end cubic is
+/// extrapolated.
+pub fn seval(ss: f64, x: &[f64], xs: &[f64], s: &[f64]) -> f64 {
     let (i, _, t, cx1, cx2) = coefficients(ss, x, xs, s);
     t * x[i] + (1.0 - t) * x[i - 1] + (t - t * t) * ((1.0 - t) * cx1 - t * cx2)
 }
 
-/// XFOIL `DEVAL`.
-pub(crate) fn deval(ss: f64, x: &[f64], xs: &[f64], s: &[f64]) -> f64 {
+/// XFOIL `DEVAL`: first derivative at `ss` of the spline described as in
+/// [`seval`].
+pub fn deval(ss: f64, x: &[f64], xs: &[f64], s: &[f64]) -> f64 {
     let (i, ds, t, cx1, cx2) = coefficients(ss, x, xs, s);
     let d = x[i] - x[i - 1] + (1.0 - 4.0 * t + 3.0 * t * t) * cx1 + t * (3.0 * t - 2.0) * cx2;
     d / ds
