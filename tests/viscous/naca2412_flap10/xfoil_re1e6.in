@@ -1,0 +1,39 @@
+PLOP
+G
+
+NACA 2412
+GDES
+FLAP 0.75 999 10
+0.5
+EXEC
+
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+OPER
+CINC
+VISC 1000000.0
+MACH 0.0
+VPAR
+N 9.0
+XTR 1.0 1.0
+
+PACC
+vpolar_re1e6.txt
+vdump_re1e6.bin
+ASEQ -2.0 8.0 1.0
+PACC
+PACC
+vpoints_re1e6.txt
+vpdump_re1e6.bin
+INIT
+ALFA 3.0
+CPWR vcp_re1e6_a+03.0.txt
+DUMP vbl_re1e6_a+03.0.txt
+PACC
+
+QUIT

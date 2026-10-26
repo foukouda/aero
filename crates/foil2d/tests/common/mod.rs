@@ -138,8 +138,20 @@ impl Case {
             .map(|f| self.dir.join(f))
     }
 
-    /// Airfoil generated or imported by our code, before paneling.
+    /// Airfoil generated or imported by our code, with the case's `gdes`
+    /// edits applied, before paneling.
     pub fn buffer_airfoil(&self) -> Airfoil {
+        let base = self.unmodified_airfoil();
+        match self.manifest.get("gdes").and_then(|v| v.as_array()) {
+            Some(commands) => {
+                let lines: Vec<&str> = commands.iter().map(|v| v.as_str().unwrap()).collect();
+                aero_geometry::apply_gdes(&base, &lines).unwrap()
+            }
+            None => base,
+        }
+    }
+
+    fn unmodified_airfoil(&self) -> Airfoil {
         let airfoil = self.airfoil_table();
         let kind = airfoil["kind"].as_str().unwrap();
         match kind {

@@ -1,0 +1,13 @@
+PLOP
+G
+
+NACA 2412
+GDES
+TSET 0.14 0.03
+FLAP 0.7 999 5
+0.5
+EXEC
+
+SAVE edit_chain.dat
+
+QUIT

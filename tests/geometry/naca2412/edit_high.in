@@ -1,0 +1,11 @@
+PLOP
+G
+
+NACA 2412
+GDES
+HIGH 0.4 0.3
+EXEC
+
+SAVE edit_high.dat
+
+QUIT

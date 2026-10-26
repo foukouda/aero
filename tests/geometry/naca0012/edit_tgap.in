@@ -1,0 +1,11 @@
+PLOP
+G
+
+NACA 0012
+GDES
+TGAP 0.01 0.8 0
+EXEC
+
+SAVE edit_tgap.dat
+
+QUIT

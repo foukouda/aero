@@ -1,0 +1,11 @@
+PLOP
+G
+
+NACA 4415
+GDES
+TSET 0.13 0.05
+EXEC
+
+SAVE edit_tset.dat
+
+QUIT

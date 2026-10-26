@@ -1,0 +1,123 @@
+
+ ===================================================
+  XFOIL Version 7.00
+  Copyright (C) 2000   Mark Drela, Harold Youngren
+
+  This software comes with ABSOLUTELY NO WARRANTY,
+    subject to the GNU General Public License.
+
+  Caveat computor
+ ===================================================
+
+ File  xfoil.def  not found
+
+   QUIT    Exit program
+
+  .OPER    Direct operating point(s)
+  .MDES    Complex mapping design routine
+  .QDES    Surface speed design routine
+  .GDES    Geometry design routine
+
+   SAVE f  Write airfoil to labeled coordinate file
+   PSAV f  Write airfoil to plain coordinate file
+   ISAV f  Write airfoil to ISES coordinate file
+   MSAV f  Write airfoil to MSES coordinate file
+   REVE    Reverse written-airfoil node ordering
+   DELI i  Change written-airfoil file delimiters
+
+   LOAD f  Read buffer airfoil from coordinate file
+   NACA i  Set NACA 4,5-digit airfoil and buffer airfoil
+   INTE    Set buffer airfoil by interpolating two airfoils
+   NORM    Buffer airfoil normalization toggle
+   HALF    Halve the number of points in buffer airfoil
+   XYCM rr Change CM reference location, currently  0.25000 0.00000
+
+   BEND    Display structural properties of current airfoil
+
+   PCOP    Set current-airfoil panel nodes directly from buffer airfoil points
+   PANE    Set current-airfoil panel nodes ( 240 ) based on curvature
+  .PPAR    Show/change paneling
+
+  .PLOP    Plotting options
+
+   WDEF f  Write  current-settings file
+   RDEF f  Reread current-settings file
+   NAME s  Specify new airfoil name
+   NINC    Increment name version number
+
+   Z       Zoom    | (available in all menus)
+   U       Unzoom  | 
+
+ XFOIL   c>   ................................................
+
+  G raphics-enable flag:         T
+  C olor PostScript output?      T
+  I ndividual plot file output?  F
+  R otate landscape hardcopy?    F
+  A spect ratio of plot object    0.5500
+  S ize of plot object           10.00"
+  P age dimensions               11.00 x  8.50"
+  M argins from page edges        0.00",  0.00"
+  F ont size (relative)           0.0150
+  W indow/screen size fraction    0.8000
+  B lowup input method:         Cursor    
+  O rientation of plot:         Landscape 
+  L ine colors for top,bottom     8  3
+
+      Option, Value   (or <Return>)    c>   ................................................
+
+  G raphics-enable flag:         F
+  C olor PostScript output?      T
+  I ndividual plot file output?  F
+  R otate landscape hardcopy?    F
+  A spect ratio of plot object    0.5500
+  S ize of plot object           10.00"
+  P age dimensions               11.00 x  8.50"
+  M argins from page edges        0.00",  0.00"
+  F ont size (relative)           0.0150
+  W indow/screen size fraction    0.8000
+  B lowup input method:         Cursor    
+  O rientation of plot:         Landscape 
+  L ine colors for top,bottom     8  3
+
+      Option, Value   (or <Return>)    c>  
+ XFOIL   c>  
+ Labeled airfoil file.  Name:  UIUC e387                                       
+
+ Number of input coordinate points:  61
+ Counterclockwise ordering
+ Max thickness =     0.090706  at x =   0.3108
+ Max camber    =     0.037836  at x =   0.4007
+
+  LE  x,y  =   0.00019   0.00026  |   Chord =   0.99981
+  TE  x,y  =   1.00000   0.00000  |
+
+ Current airfoil nodes set from buffer airfoil nodes (  61 )
+
+ WARNING: Poor input coordinate distribution
+          Excessive panel angle   52.5  at i =  33
+          Repaneling with PANE and/or PPAR suggested
+           (doing GDES,CADD before repaneling _may_
+            improve excessively coarse LE spacing
+
+ * Number of nodes is less than default  ( 240 )
+ * Repanel with PANE command, or proceed as is
+
+ XFOIL   c>  
+ You are working with the buffer airfoil
+
+.GDES   c>   Enabling camber,thickness plotting
+
+ Max thickness =   0.0907  at x =   0.312
+ Max camber    =   0.0377  at x =   0.405
+
+ Max thickness =     0.090694  at x =   0.3550
+ Max camber    =     0.037867  at x =   0.4008
+
+.GDES   c>  
+ Current airfoil nodes set from buffer airfoil nodes (  61 )
+
+.GDES   c>  
+ XFOIL   c>  
+ XFOIL   c>  
+ XFOIL   c>  

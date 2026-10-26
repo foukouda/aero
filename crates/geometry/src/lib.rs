@@ -14,6 +14,7 @@
 //! | [`transform`] | `xgeom.f`: `NORM` |
 //! | [`paneling`] | `xfoil.f`: `PANGEN` |
 //! | [`properties`] | `xgeom.f`: `GEOPAR`, `TCCALC`, `SOPPS`; `xutils.f`: `ATANC` |
+//! | [`modify`] | `xgdes.f`: `FLAP`, `TGAP`, `LERAD`, `SSS`, `INSIDE`, `GETXYF`; `xtcam.f`: `TCSCAL`, `TCSET`, `THKCAM`, `HIPNT`, `GETCAM`, `GETMAX`; `xgeom.f`: `LERSCL`, `XLFIND`, `SCHECK`, `INTER`; `xfoil.f`: `INTE`; `spline.f`: `SPLINA`; `sort.f`: `SORTOL` |
 //!
 //! # Example
 //!
@@ -33,6 +34,7 @@ pub mod cst;
 mod error;
 pub mod io;
 pub mod leading_edge;
+pub mod modify;
 pub mod naca;
 pub mod paneling;
 pub mod properties;
@@ -47,6 +49,10 @@ pub use io::{
     to_selig_string,
 };
 pub use leading_edge::{LeadingEdge, LeadingEdgeMethod};
+pub use modify::{
+    CamberThickness, HingeY, apply_gdes, camber_thickness, deflect_flap, hinge_point, interpolate,
+    move_high_points, scale_le_radius, scale_thickness_camber, set_te_gap, set_thickness_camber,
+};
 pub use naca::{NacaOptions, TrailingEdge, naca};
 pub use paneling::{Paneling, PanelingOptions, panel, panel_with_report};
 pub use properties::GeometricProperties;

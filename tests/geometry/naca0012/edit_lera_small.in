@@ -1,0 +1,11 @@
+PLOP
+G
+
+NACA 0012
+GDES
+LERA 0.5 0.1
+EXEC
+
+SAVE edit_lera_small.dat
+
+QUIT

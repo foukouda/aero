@@ -1,0 +1,12 @@
+PLOP
+G
+
+NACA 2412
+GDES
+FLAP 0.8 999 20
+0.8
+EXEC
+
+SAVE edit_flap_high_hinge.dat
+
+QUIT

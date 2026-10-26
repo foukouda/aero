@@ -1,0 +1,15 @@
+PLOP
+G
+
+LOAD clarky.dat
+INTE
+F
+clarky.dat
+F
+e387.dat
+1.2
+interpolated
+PCOP
+SAVE edit_inte_extra.dat
+
+QUIT

@@ -1,0 +1,12 @@
+PLOP
+G
+
+LOAD clarky.dat
+GDES
+FLAP 0.72 999 12
+0.5
+EXEC
+
+SAVE edit_flap.dat
+
+QUIT

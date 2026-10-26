@@ -1,0 +1,11 @@
+PLOP
+G
+
+LOAD e387.dat
+GDES
+TGAP 0.005 0.5 -0.5
+EXEC
+
+SAVE edit_tgap.dat
+
+QUIT

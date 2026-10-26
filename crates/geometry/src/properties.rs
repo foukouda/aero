@@ -58,16 +58,17 @@ pub(crate) fn atanc(y: f64, x: f64, thold: f64) -> f64 {
     thold + dtcorr
 }
 
-/// Chord-line frame of a contour.
-struct ChordFrame {
-    sle: f64,
-    le: [f64; 2],
-    dir: [f64; 2],
-    chord: f64,
+/// Chord-line frame of a contour: from the point at arc length `sle` to the
+/// trailing-edge midpoint.
+pub(crate) struct ChordFrame {
+    pub(crate) sle: f64,
+    pub(crate) le: [f64; 2],
+    pub(crate) dir: [f64; 2],
+    pub(crate) chord: f64,
 }
 
 impl ChordFrame {
-    fn new(curve: &SplineCurve, sle: f64) -> Self {
+    pub(crate) fn new(curve: &SplineCurve, sle: f64) -> Self {
         let x = curve.x_nodes();
         let y = curve.y_nodes();
         let n = x.len() - 1;
@@ -84,7 +85,7 @@ impl ChordFrame {
     }
 
     /// `(xbar, ybar)` of a point in chord-line axes (not divided by the chord).
-    fn local(&self, p: [f64; 2]) -> (f64, f64) {
+    pub(crate) fn local(&self, p: [f64; 2]) -> (f64, f64) {
         let dx = p[0] - self.le[0];
         let dy = p[1] - self.le[1];
         (
@@ -96,7 +97,7 @@ impl ChordFrame {
 
 /// XFOIL `SOPPS`: arc length of the point on the other surface with the same
 /// chordwise abscissa as the point at `si`.
-fn sopps(curve: &SplineCurve, frame: &ChordFrame, si: f64) -> f64 {
+pub(crate) fn sopps(curve: &SplineCurve, frame: &ChordFrame, si: f64) -> f64 {
     let s = curve.arc_lengths();
     let n = s.len() - 1;
     let slen = s[n] - s[0];

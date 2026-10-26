@@ -1,0 +1,11 @@
+PLOP
+G
+
+NACA 0012
+GDES
+TGAP 0.02 0.3 0.5
+EXEC
+
+SAVE edit_tgap_split.dat
+
+QUIT

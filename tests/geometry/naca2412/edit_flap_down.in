@@ -1,0 +1,12 @@
+PLOP
+G
+
+NACA 2412
+GDES
+FLAP 0.75 999 10
+0.5
+EXEC
+
+SAVE edit_flap_down.dat
+
+QUIT

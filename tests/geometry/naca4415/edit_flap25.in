@@ -1,0 +1,12 @@
+PLOP
+G
+
+NACA 4415
+GDES
+FLAP 0.8 999 25
+0.3
+EXEC
+
+SAVE edit_flap25.dat
+
+QUIT

@@ -1,0 +1,11 @@
+PLOP
+G
+
+NACA 2412
+GDES
+TFAC 1.2 0.8
+EXEC
+
+SAVE edit_tfac.dat
+
+QUIT
