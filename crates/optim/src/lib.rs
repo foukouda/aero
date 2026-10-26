@@ -7,11 +7,13 @@
 //!   the initial airfoil;
 //! - [`problem`]: operating points, objective and constraints;
 //! - [`evaluate`]: geometry and viscous analysis of a design (the XFOIL
-//!   port of `aero-foil2d`), ranked by feasibility then objective.
+//!   port of `aero-foil2d`), ranked by feasibility then objective;
+//! - [`optimizers`]: CMA-ES and Nelder–Mead.
 
 pub mod design;
 mod error;
 pub mod evaluate;
+pub mod optimizers;
 pub mod problem;
 pub mod rank;
 
