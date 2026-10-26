@@ -10,8 +10,12 @@ import {
   mass,
   num,
   power,
+  dragShares,
+  MARGIN,
   readCl,
   readFinVolume,
+  readMargin,
+  readStallStart,
   readReynolds,
   readTailVolume,
   readWingLoading,
@@ -169,5 +173,54 @@ describe("interface texts", () => {
   it("fill their placeholders", () => {
     expect(translate("en", "mission.finding", { done: 3, total: 20 })).toBe("Analysing 3 of 20…");
     expect(translate("fr", "mission.finding", { done: 3 })).toBe("Analyse 3 sur {total}…");
+  });
+});
+
+describe("how the aircraft flies", () => {
+  it("reads the static margin and how far to move the centre of gravity", () => {
+    const mac = 0.2;
+    const unstable = readMargin(-0.05, mac);
+    expect(unstable.level).toBe("danger");
+    // From −5 % to 5 %: 10 % of a 20 cm chord forward.
+    expect(unstable.move).toBeCloseTo(0.02, 12);
+    expect(readMargin(0.03, mac)).toMatchObject({ level: "warning", text: "flies.margin.low" });
+    expect(readMargin(0.03, mac).move).toBeCloseTo(0.004, 12);
+    expect(readMargin(MARGIN.low, mac)).toMatchObject({ level: "ok", move: null });
+    expect(readMargin(0.12, mac).text).toBe("flies.margin.good");
+    const heavy = readMargin(0.35, mac);
+    expect(heavy).toMatchObject({ level: "info", text: "flies.margin.high" });
+    // Back to 15 %.
+    expect(heavy.move).toBeCloseTo(0.04, 12);
+  });
+
+  it("says where the stall starts", () => {
+    const at = (part: "wing" | "canard", f: number) =>
+      readStallStart({ cl_max: 1.1, speed: 7, part, span_fraction: f }).text;
+    expect(at("wing", 0.0)).toBe("flies.stall.root");
+    expect(at("wing", 0.5)).toBe("flies.stall.middle");
+    expect(at("wing", 0.9)).toBe("flies.stall.tip");
+    expect(at("canard", 0.9)).toBe("flies.stall.canard");
+    expect(readStallStart({ cl_max: 1, speed: 7, part: "wing", span_fraction: 0.95 }).level).toBe("warning");
+  });
+
+  it("shares the drag among its parts", () => {
+    const shares = dragShares({
+      induced: 0.008,
+      wing_profile: 0.01,
+      tail_profile: 0.002,
+      fuselage: 0.0,
+      total: 0.02,
+      span_efficiency: 0.97,
+      lift_to_drag: 15,
+      drag: 0.5,
+      power: 6,
+    });
+    [0.4, 0.5, 0.1, 0].forEach((v, i) => expect(shares[i]?.share).toBeCloseTo(v, 12));
+    expect(shares.map((s) => s.key)).toEqual([
+      "flies.drag.induced",
+      "flies.drag.wing",
+      "flies.drag.tail",
+      "flies.drag.fuselage",
+    ]);
   });
 });

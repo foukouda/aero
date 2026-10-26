@@ -5,6 +5,8 @@ import { Channel } from "@tauri-apps/api/core";
 import * as nativeDialogs from "@tauri-apps/plugin-dialog";
 import { call, CommandError, commands, errorTitle } from "./api";
 import type {
+  AircraftAnalysis,
+  AircraftEvent,
   AnalysisRequest,
   BatchFailure,
   CandidateResult,
@@ -76,6 +78,21 @@ export interface RecommendProgress {
   jobId: string;
   done: number;
   total: number;
+}
+
+/** A 3D analysis of the aircraft in progress: computing the polars of its
+ * airfoils, then balancing the aircraft. */
+export interface FlightProgress {
+  jobId: string;
+  phase: "polars" | "solving";
+  done: number;
+  total: number;
+}
+
+/** What a 3D analysis depends on: the aircraft, the flight, the
+ * turbulence and the wing sizing. */
+function flightKey(s: MissionSetup): string {
+  return JSON.stringify([s.aircraft, s.flight, s.ncrit, s.sizing_cl]);
 }
 
 export interface OptimizationRun {
@@ -208,6 +225,13 @@ class AppState {
   galleryBusy = $state(false);
   galleryCount = $state(12);
   gallery = $state<{ seed: number; items: RandomAircraftView[] } | null>(null);
+  /** "How it flies": the last 3D analysis of the aircraft, the one in
+   * progress, and what it was made for. */
+  flightAnalysis = $state<AircraftAnalysis | null>(null);
+  analysingFlight = $state<FlightProgress | null>(null);
+  #flightAnalysisKey = $state<string | null>(null);
+  /** Colour the surfaces of the 3D view by their lift. */
+  colourByLift = $state(true);
 
   #nextToast = 1;
 
@@ -234,6 +258,12 @@ class AppState {
 
   get mission(): MissionSetup | null {
     return this.session?.mission ?? null;
+  }
+
+  /** The aircraft or the flight changed since the last 3D analysis. */
+  get flightAnalysisStale(): boolean {
+    const s = this.mission;
+    return this.flightAnalysis !== null && s !== null && this.#flightAnalysisKey !== flightKey(s);
   }
 
   get missionConditions(): Conditions | null {
@@ -1183,6 +1213,36 @@ class AppState {
 
   async cancelRecommendation() {
     if (this.recommending) await commands.cancelRecommendation(this.recommending.jobId);
+  }
+
+  /** Analyses the whole aircraft in 3D at its flight ("How it flies"). */
+  async runFlightAnalysis() {
+    const setup = this.mission;
+    if (!setup || this.analysingFlight) return;
+    const jobId = `flight-${Date.now()}`;
+    this.analysingFlight = { jobId, phase: "polars", done: 0, total: 0 };
+    const channel = new Channel<AircraftEvent>();
+    channel.onmessage = (event) => {
+      if (!this.analysingFlight) return;
+      if (event.type === "polars") {
+        this.analysingFlight = { ...this.analysingFlight, phase: "polars", done: event.done, total: event.total };
+      } else {
+        this.analysingFlight = { ...this.analysingFlight, phase: "solving" };
+      }
+    };
+    const plain = $state.snapshot(setup) as MissionSetup;
+    await this.guard(async () => {
+      const result = await call(commands.analyzeAircraft({ job_id: jobId, setup: plain }, channel));
+      if (result) {
+        this.flightAnalysis = result;
+        this.#flightAnalysisKey = flightKey(plain);
+      }
+    });
+    this.analysingFlight = null;
+  }
+
+  async cancelFlightAnalysis() {
+    if (this.analysingFlight) await commands.cancelFlightAnalysis(this.analysingFlight.jobId);
   }
 
   /** Reynolds number, lift coefficient and Mach number of the last

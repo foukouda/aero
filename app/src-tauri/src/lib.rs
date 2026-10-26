@@ -50,6 +50,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::random_aircraft,
             commands::recommend_airfoils,
             commands::cancel_recommendation,
+            commands::analyze_aircraft,
+            commands::cancel_flight_analysis,
             commands::update_mission_setup,
             commands::set_airfoils_visible,
             commands::delete_airfoils,

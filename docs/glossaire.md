@@ -96,7 +96,31 @@ Vole confortablement au-dessus : 1,2 à 1,3 fois la vitesse de décrochage est u
 
 Le volume d'empennage horizontal vaut Vh = Sh·lh ÷ (S·c̄) : la surface Sh de l'empennage fois sa distance lh derrière l'aile (entre les quarts avant de leurs cordes moyennes), divisées par la surface S de l'aile fois sa corde moyenne c̄. Un petit empennage loin derrière fait le même travail qu'un grand empennage proche. Les valeurs habituelles vont de 0,35 à 0,8 : en dessous de 0,3 environ, l'avion a tendance à être nerveux en tangage.
 
-Le volume de dérive vaut Vv = Sv·lv ÷ (S·b), avec b l'envergure de l'aile ; valeurs habituelles 0,02 à 0,06. Ce sont des règles tirées des avions existants ; l'analyse 3D donnera la stabilité réelle.
+Le volume de dérive vaut Vv = Sv·lv ÷ (S·b), avec b l'envergure de l'aile ; valeurs habituelles 0,02 à 0,06. Ce sont des règles tirées des avions existants ; l'analyse 3D (« Comment il vole ») donne la stabilité réelle.
+
+### Équilibre (trim)
+
+**Le vol où l'avion s'équilibre seul : portance égale au poids et aucun moment de tangage autour du centre de gravité.**
+
+Un avion est équilibré quand il vole sans que le pilote tienne le manche : l'aile et l'empennage portent ensemble exactement le poids, et leurs moments de tangage autour du centre de gravité s'annulent. L'incidence et le braquage de profondeur qui y parviennent dépendent de la vitesse et de la position du centre de gravité.
+
+L'analyse 3D les trouve en résolvant les deux conditions ensemble. S'il faut plus de 15° de profondeur environ, l'avion est mal centré : centre de gravité trop en avant ou trop en arrière, ou empennage trop petit.
+
+### Marge statique, foyer
+
+**La distance dont le centre de gravité est en avant du foyer, rapportée à la corde moyenne : positive c'est stable, 5 à 15 % est habituel.**
+
+Le foyer (point neutre) est l'endroit où s'applique le surcroît de portance d'une rafale sur tout l'avion : avec le centre de gravité à cet endroit, une rafale qui lève le nez ne le fait ni monter davantage ni revenir. Avec le centre de gravité en avant du foyer, l'avion revient de lui-même à son incidence d'équilibre : il est stable en tangage.
+
+La marge statique est la distance du centre de gravité au foyer, vers l'avant, divisée par la corde aérodynamique moyenne de l'aile. En dessous de zéro l'avion est instable, difficile voire impossible à piloter ; quelques pour cent le rendent vif ; 5 à 15 % est habituel pour les modèles ; beaucoup plus le rend lourd de l'avant : il demande plus de profondeur et vole moins lentement qu'il pourrait. Le fuselage, absent du treillis de tourbillons, avance en général le foyer de quelques pour cent.
+
+### Treillis de tourbillons (VLM)
+
+**La méthode 3D d'AVL : chaque surface portante devient une grille de petits tourbillons en fer à cheval dont les intensités font suivre les surfaces à l'écoulement.**
+
+La méthode des tourbillons en treillis modélise l'aile, l'empennage et la dérive comme des surfaces minces couvertes de tourbillons en fer à cheval : un segment lié en travers de chaque petit panneau et deux brins libres qui partent vers l'aval. Leurs intensités sont choisies pour que l'air longe les surfaces (leurs lignes moyennes) en un point de contrôle par panneau. On en tire la portance, les moments de tangage et de lacet, les dérivées de stabilité et la traînée induite, rapidement et précisément tant que l'écoulement reste attaché.
+
+Elle ignore la viscosité : la traînée de frottement et la portance maximale viennent des polaires visqueuses 2D des profils, bande par bande, comme dans XFLR5. Le treillis d'Aero est un portage d'AVL 3.52 (Mark Drela et Harold Youngren, MIT), vérifié face à AVL lui-même.
 
 ## Forces et coefficients
 

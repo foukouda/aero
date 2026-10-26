@@ -9,6 +9,7 @@ use tauri::State;
 use tauri::ipc::Channel;
 
 use aero_aircraft::{Aircraft, Preset};
+use aero_mission::AircraftAnalysis;
 
 use crate::catalogue::CatalogueEntry;
 use crate::dto::{
@@ -19,7 +20,8 @@ use crate::dto::{
 use crate::engine::Engine;
 use crate::error::{AppError, ErrorKind};
 use crate::mission::{
-    MissionView, RandomAircraftView, RecommendEvent, RecommendRequest, RecommendResult,
+    AircraftEvent, AircraftRequest, MissionView, RandomAircraftView, RecommendEvent,
+    RecommendRequest, RecommendResult,
 };
 use crate::model::{
     AirfoilId, MissionSetup, Modification, OptimizationSetup, PROJECT_FORMAT_VERSION, Settings,
@@ -258,6 +260,26 @@ pub async fn recommend_airfoils(
 #[tauri::command]
 #[specta::specta]
 pub fn cancel_recommendation(engine: Shared<'_>, job_id: String) -> bool {
+    engine.cancel(&job_id)
+}
+
+/// Analyses the aircraft in 3D at its flight ("How it flies"), streaming
+/// progress on `on_event`; `None` when cancelled.
+#[tauri::command]
+#[specta::specta]
+pub async fn analyze_aircraft(
+    engine: Shared<'_>,
+    request: AircraftRequest,
+    on_event: Channel<AircraftEvent>,
+) -> Result<Option<AircraftAnalysis>, AppError> {
+    let engine = engine.inner().clone();
+    blocking(move || engine.analyze_aircraft(&request, |event| on_event.send(event).is_ok())).await
+}
+
+/// Cancels a running 3D analysis.
+#[tauri::command]
+#[specta::specta]
+pub fn cancel_flight_analysis(engine: Shared<'_>, job_id: String) -> bool {
     engine.cancel(&job_id)
 }
 

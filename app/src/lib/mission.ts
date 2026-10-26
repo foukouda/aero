@@ -6,10 +6,12 @@ import type {
   Aircraft,
   CandidateResult,
   Conditions,
+  DragBreakdown,
   Goal,
   MissionSetup,
   Preset as AircraftPreset,
   RecommendResult,
+  StallResult,
 } from "./bindings";
 import type { Lang, MessageKey } from "./i18n";
 
@@ -203,3 +205,40 @@ export const TOP_COLORS: Record<"light" | "dark", string[]> = {
   light: ["#2a78d6", "#eb6834", "#1baf7a"],
   dark: ["#3987e5", "#d95926", "#199e70"],
 };
+
+// ------------------------------------------------------ how the aircraft flies
+
+/** Usual static margins, as fractions of the mean chord. */
+export const MARGIN = { low: 0.05, high: 0.2, target: 0.15 };
+
+/** How to read a static margin (fraction of the mean aerodynamic chord
+ * `mac`, m): the reading and how far to move the centre of gravity (m) to
+ * reach a usual margin — forward for a small one, back for a large one. */
+export function readMargin(margin: number, mac: number): Reading & { move: number | null } {
+  if (margin < 0) return { level: "danger", text: "flies.margin.unstable", move: (MARGIN.low - margin) * mac };
+  if (margin < MARGIN.low) return { level: "warning", text: "flies.margin.low", move: (MARGIN.low - margin) * mac };
+  if (margin <= MARGIN.high) return { level: "ok", text: "flies.margin.good", move: null };
+  return { level: "info", text: "flies.margin.high", move: (margin - MARGIN.target) * mac };
+}
+
+/** Where the stall starts: canard first (safe), near the root (gentle),
+ * halfway, or at the tips (a wing may drop). */
+export function readStallStart(stall: StallResult): Reading {
+  if (stall.part === "canard") return { level: "ok", text: "flies.stall.canard" };
+  const f = stall.span_fraction ?? 0;
+  if (f < 0.35) return { level: "ok", text: "flies.stall.root" };
+  if (f < 0.7) return { level: "info", text: "flies.stall.middle" };
+  return { level: "warning", text: "flies.stall.tip" };
+}
+
+/** The parts of the drag, as fractions of the total. */
+export function dragShares(d: DragBreakdown): { key: MessageKey; share: number }[] {
+  const total = d.total ?? 0;
+  const parts: [MessageKey, number | null][] = [
+    ["flies.drag.induced", d.induced],
+    ["flies.drag.wing", d.wing_profile],
+    ["flies.drag.tail", d.tail_profile],
+    ["flies.drag.fuselage", d.fuselage],
+  ];
+  return parts.map(([key, v]) => ({ key, share: total > 0 ? (v ?? 0) / total : 0 }));
+}

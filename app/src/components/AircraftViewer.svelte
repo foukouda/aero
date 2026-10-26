@@ -8,10 +8,10 @@
   import * as THREE from "three";
   import { OrbitControls } from "three/addons/controls/OrbitControls.js";
   import { CSS2DObject, CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
-  import type { Layout, MeshPart, PartKind } from "../lib/bindings";
+  import type { Layout, MeshPart, PartKind, StripResult } from "../lib/bindings";
   import { app } from "../lib/state.svelte";
   import { length } from "../lib/mission";
-  import { VIEW_DIRECTIONS, addLights, partMesh, type View } from "../lib/scene3d";
+  import { VIEW_DIRECTIONS, addLights, liftColors, partMesh, stallColor, type View } from "../lib/scene3d";
 
   interface Props {
     parts: MeshPart[];
@@ -20,9 +20,13 @@
     wingZ: number;
     selected: PartKind | null;
     onselect: (kind: PartKind) => void;
+    /** Strips of the 3D analysis: the surfaces are coloured by their lift. */
+    strips?: StripResult[] | null;
+    /** Neutral point of the 3D analysis, m behind the nose. */
+    neutralPoint?: number | null;
   }
 
-  let { parts, layout, wingZ, selected, onselect }: Props = $props();
+  let { parts, layout, wingZ, selected, onselect, strips = null, neutralPoint = null }: Props = $props();
 
   const VIEWS: View[] = ["threeQuarter", "top", "front", "side"];
 
@@ -72,7 +76,12 @@
   function buildAircraft() {
     disposeGroup(aircraft);
     const accent = new THREE.Color(cssColor("--accent"));
-    for (const part of parts) aircraft.add(partMesh(part, part.kind === selected ? accent : null));
+    const [ok, warning, danger] = ["--ok", "--warning", "--danger"].map((v) => new THREE.Color(cssColor(v)));
+    const color = (r: number | null) => stallColor(r, ok!, warning!, danger!);
+    for (const part of parts) {
+      const colors = strips ? liftColors(part, strips, color) : null;
+      aircraft.add(partMesh(part, part.kind === selected ? accent : null, colors));
+    }
   }
 
   function label(text: string): CSS2DObject {
@@ -106,6 +115,19 @@
     cgLabel.position.set(0, r * 2.5, 0);
     cg.add(cgLabel);
     markers.add(cg);
+
+    if (neutralPoint !== null && Number.isFinite(neutralPoint)) {
+      // The neutral point: a diamond on the axis, its label below.
+      const np = new THREE.Mesh(
+        new THREE.OctahedronGeometry(r * 0.9),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(cssColor("--accent")) }),
+      );
+      np.position.set(0, wingZ, neutralPoint);
+      const npLabel = label(app.t("viewer.np"));
+      npLabel.position.set(0, -r * 2.5, 0);
+      np.add(npLabel);
+      markers.add(np);
+    }
 
     const w = layout.wing;
     if (w.mac_x !== null && w.mac !== null && w.mac_span !== null) {
@@ -233,6 +255,8 @@
     void selected;
     void layout;
     void wingZ;
+    void strips;
+    void neutralPoint;
     void app.theme;
     if (!renderer) return;
     buildAircraft();
@@ -248,6 +272,13 @@
       <button class="small" onclick={() => setView(v)}>{app.t(`view.${v}`)}</button>
     {/each}
   </div>
+  {#if strips}
+    <ul class="lift-legend" aria-label={app.t("flies.colour")}>
+      <li><span style:background="var(--ok)"></span>{app.t("flies.colour.far")}</li>
+      <li><span style:background="var(--warning)"></span>{app.t("flies.colour.near")}</li>
+      <li><span style:background="var(--danger)"></span>{app.t("flies.colour.stalled")}</li>
+    </ul>
+  {/if}
   <p class="hint muted">
     {app.t("viewer.hint")}
     {#if gridSize > 0}· {app.t("viewer.grid", { size: length(gridSize, app.tourLang) })}{/if}
@@ -296,6 +327,30 @@
   .small {
     font-size: 12px;
     padding: 2px 8px;
+  }
+  .lift-legend {
+    position: absolute;
+    right: 8px;
+    bottom: 6px;
+    margin: 0;
+    padding: 2px 8px;
+    list-style: none;
+    display: flex;
+    gap: 10px;
+    font-size: 11px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--panel) 85%, transparent);
+    pointer-events: none;
+  }
+  .lift-legend li {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .lift-legend span {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
   }
   .hint {
     position: absolute;

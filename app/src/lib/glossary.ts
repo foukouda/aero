@@ -829,12 +829,60 @@ export const GLOSSARY: GlossaryEntry[] = [
       en: {
         term: "Tail volume",
         short: "How big the tail is for the wing it balances: tail area times its distance from the wing, over the wing's area and chord.",
-        long: "The horizontal tail volume is Vh = Sh·lh ÷ (S·c̄): the tail area Sh times its distance lh behind the wing (between the quarter points of their mean chords), divided by the wing area S times its mean chord c̄. A small tail far behind does the same job as a large tail close by. Usual values are 0.35 to 0.8: below about 0.3 the aircraft tends to be twitchy in pitch.\n\nThe fin's volume is Vv = Sv·lv ÷ (S·b), with the wing span b; usual values are 0.02 to 0.06. These are rules of thumb from existing aircraft; the 3D analysis gives the real stability.",
+        long: "The horizontal tail volume is Vh = Sh·lh ÷ (S·c̄): the tail area Sh times its distance lh behind the wing (between the quarter points of their mean chords), divided by the wing area S times its mean chord c̄. A small tail far behind does the same job as a large tail close by. Usual values are 0.35 to 0.8: below about 0.3 the aircraft tends to be twitchy in pitch.\n\nThe fin's volume is Vv = Sv·lv ÷ (S·b), with the wing span b; usual values are 0.02 to 0.06. These are rules of thumb from existing aircraft; the 3D analysis (\"How it flies\") gives the real stability.",
       },
       fr: {
         term: "Volume d'empennage",
         short: "La taille de l'empennage par rapport à l'aile qu'il équilibre : sa surface fois sa distance à l'aile, rapportées à la surface et à la corde de l'aile.",
-        long: "Le volume d'empennage horizontal vaut Vh = Sh·lh ÷ (S·c̄) : la surface Sh de l'empennage fois sa distance lh derrière l'aile (entre les quarts avant de leurs cordes moyennes), divisées par la surface S de l'aile fois sa corde moyenne c̄. Un petit empennage loin derrière fait le même travail qu'un grand empennage proche. Les valeurs habituelles vont de 0,35 à 0,8 : en dessous de 0,3 environ, l'avion a tendance à être nerveux en tangage.\n\nLe volume de dérive vaut Vv = Sv·lv ÷ (S·b), avec b l'envergure de l'aile ; valeurs habituelles 0,02 à 0,06. Ce sont des règles tirées des avions existants ; l'analyse 3D donnera la stabilité réelle.",
+        long: "Le volume d'empennage horizontal vaut Vh = Sh·lh ÷ (S·c̄) : la surface Sh de l'empennage fois sa distance lh derrière l'aile (entre les quarts avant de leurs cordes moyennes), divisées par la surface S de l'aile fois sa corde moyenne c̄. Un petit empennage loin derrière fait le même travail qu'un grand empennage proche. Les valeurs habituelles vont de 0,35 à 0,8 : en dessous de 0,3 environ, l'avion a tendance à être nerveux en tangage.\n\nLe volume de dérive vaut Vv = Sv·lv ÷ (S·b), avec b l'envergure de l'aile ; valeurs habituelles 0,02 à 0,06. Ce sont des règles tirées des avions existants ; l'analyse 3D (« Comment il vole ») donne la stabilité réelle.",
+      },
+    },
+  },
+  {
+    id: "trim",
+    category: "aircraft",
+    text: {
+      en: {
+        term: "Trim",
+        short: "The flight where the aircraft balances itself: lift equal to the weight and no pitching moment about the centre of gravity.",
+        long: "An aircraft is trimmed when it flies steadily without the pilot holding the stick: the wing and the tail together lift exactly the weight, and their pitching moments about the centre of gravity cancel. The angle of attack and the elevator deflection that do this depend on the speed and on where the centre of gravity is.\n\nThe 3D analysis finds them by solving both conditions together. If it needs more than about 15° of elevator, the aircraft is badly balanced: the centre of gravity is too far forward or back, or the tail is too small.",
+      },
+      fr: {
+        term: "Équilibre (trim)",
+        short: "Le vol où l'avion s'équilibre seul : portance égale au poids et aucun moment de tangage autour du centre de gravité.",
+        long: "Un avion est équilibré quand il vole sans que le pilote tienne le manche : l'aile et l'empennage portent ensemble exactement le poids, et leurs moments de tangage autour du centre de gravité s'annulent. L'incidence et le braquage de profondeur qui y parviennent dépendent de la vitesse et de la position du centre de gravité.\n\nL'analyse 3D les trouve en résolvant les deux conditions ensemble. S'il faut plus de 15° de profondeur environ, l'avion est mal centré : centre de gravité trop en avant ou trop en arrière, ou empennage trop petit.",
+      },
+    },
+  },
+  {
+    id: "static-margin",
+    category: "aircraft",
+    text: {
+      en: {
+        term: "Static margin, neutral point",
+        short: "How far the centre of gravity is ahead of the neutral point, as a fraction of the mean chord: positive is stable, 5 to 15 % is usual.",
+        long: "The neutral point is where the extra lift of a gust acts on the whole aircraft: with the centre of gravity there, a nose-up gust neither pitches the nose further up nor brings it back. With the centre of gravity ahead of it, the aircraft weathervanes back to its trimmed angle: it is stable in pitch.\n\nThe static margin is the distance from the centre of gravity forward to the neutral point, divided by the wing's mean aerodynamic chord. Below zero the aircraft is unstable and hard or impossible to fly; a few percent makes it twitchy; 5 to 15 % is usual for models; much more makes it nose-heavy, needing more elevator and flying slower than it could. The fuselage, not part of the vortex lattice, usually moves the neutral point forward by a few percent.",
+      },
+      fr: {
+        term: "Marge statique, foyer",
+        short: "La distance dont le centre de gravité est en avant du foyer, rapportée à la corde moyenne : positive c'est stable, 5 à 15 % est habituel.",
+        long: "Le foyer (point neutre) est l'endroit où s'applique le surcroît de portance d'une rafale sur tout l'avion : avec le centre de gravité à cet endroit, une rafale qui lève le nez ne le fait ni monter davantage ni revenir. Avec le centre de gravité en avant du foyer, l'avion revient de lui-même à son incidence d'équilibre : il est stable en tangage.\n\nLa marge statique est la distance du centre de gravité au foyer, vers l'avant, divisée par la corde aérodynamique moyenne de l'aile. En dessous de zéro l'avion est instable, difficile voire impossible à piloter ; quelques pour cent le rendent vif ; 5 à 15 % est habituel pour les modèles ; beaucoup plus le rend lourd de l'avant : il demande plus de profondeur et vole moins lentement qu'il pourrait. Le fuselage, absent du treillis de tourbillons, avance en général le foyer de quelques pour cent.",
+      },
+    },
+  },
+  {
+    id: "vortex-lattice",
+    category: "aircraft",
+    text: {
+      en: {
+        term: "Vortex lattice",
+        short: "The 3D method of AVL: each lifting surface becomes a grid of small horseshoe vortices whose strengths make the flow follow the surfaces.",
+        long: "The vortex lattice method models the wing, the tail and the fin as thin surfaces covered with horseshoe vortices: a bound segment across each small panel and two trailing legs running downstream. Their strengths are chosen so that the air flows along the surfaces (along their camber lines) at one control point per panel. The lift, the pitching and yawing moments, the stability derivatives and the induced drag follow, quickly and accurately for attached flow.\n\nIt does not know about viscosity: the friction drag and the maximum lift come from the 2D viscous polars of the airfoils, strip by strip, as in XFLR5. Aero's lattice is a port of AVL 3.52 (Mark Drela and Harold Youngren, MIT), checked against AVL itself.",
+      },
+      fr: {
+        term: "Treillis de tourbillons (VLM)",
+        short: "La méthode 3D d'AVL : chaque surface portante devient une grille de petits tourbillons en fer à cheval dont les intensités font suivre les surfaces à l'écoulement.",
+        long: "La méthode des tourbillons en treillis modélise l'aile, l'empennage et la dérive comme des surfaces minces couvertes de tourbillons en fer à cheval : un segment lié en travers de chaque petit panneau et deux brins libres qui partent vers l'aval. Leurs intensités sont choisies pour que l'air longe les surfaces (leurs lignes moyennes) en un point de contrôle par panneau. On en tire la portance, les moments de tangage et de lacet, les dérivées de stabilité et la traînée induite, rapidement et précisément tant que l'écoulement reste attaché.\n\nElle ignore la viscosité : la traînée de frottement et la portance maximale viennent des polaires visqueuses 2D des profils, bande par bande, comme dans XFLR5. Le treillis d'Aero est un portage d'AVL 3.52 (Mark Drela et Harold Youngren, MIT), vérifié face à AVL lui-même.",
       },
     },
   },

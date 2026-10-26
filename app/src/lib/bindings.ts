@@ -78,6 +78,34 @@ export const commands = {
 	recommendAirfoils: (request: RecommendRequest, onEvent: Channel<RecommendEvent>) => typedError<RecommendResult, AppError>(__TAURI_INVOKE("recommend_airfoils", { request, onEvent })),
 	/**  Cancels a running airfoil evaluation. */
 	cancelRecommendation: (jobId: string) => __TAURI_INVOKE<boolean>("cancel_recommendation", { jobId }),
+	/**
+	 *  Analyses the aircraft in 3D at its flight ("How it flies"), streaming
+	 *  progress on `on_event`; `None` when cancelled.
+	 */
+	analyzeAircraft: (request: AircraftRequest, onEvent: Channel<AircraftEvent>) => typedError<{
+	/**  Lift coefficient needed for level flight. */
+	required_cl: number | null,
+	/**  Dynamic pressure, Pa. */
+	dynamic_pressure: number | null,
+	/**  Reynolds number on the wing's mean aerodynamic chord. */
+	reynolds: number | null,
+	/**  Trim. */
+	trim: TrimResult,
+	/**  Static stability. */
+	stability: StabilityResult,
+	/**  Drag. */
+	drag: DragBreakdown,
+	/**  Stall. */
+	stall: StallResult | null,
+	/**  Every strip of the lattice, in its order. */
+	strips: StripResult[],
+	/**  What to look at. */
+	warnings: AnalysisWarning[],
+	/**  Number of horseshoe vortices. */
+	vortices: number,
+} | null, AppError>(__TAURI_INVOKE("analyze_aircraft", { request, onEvent })),
+	/**  Cancels a running 3D analysis. */
+	cancelFlightAnalysis: (jobId: string) => __TAURI_INVOKE<boolean>("cancel_flight_analysis", { jobId }),
 	/**  Replaces the flight of the "My aircraft" tab. */
 	updateMissionSetup: (setup: MissionSetup) => __TAURI_INVOKE<void>("update_mission_setup", { setup }),
 	/**  Shows or hides several airfoils. */
@@ -149,6 +177,49 @@ export type Aircraft = {
 	 *  0.25 for a flying wing; ahead of the wing with a canard).
 	 */
 	cg_mac_fraction: number | null,
+};
+
+/**  How the aircraft flies in a level flight. */
+export type AircraftAnalysis = {
+	/**  Lift coefficient needed for level flight. */
+	required_cl: number | null,
+	/**  Dynamic pressure, Pa. */
+	dynamic_pressure: number | null,
+	/**  Reynolds number on the wing's mean aerodynamic chord. */
+	reynolds: number | null,
+	/**  Trim. */
+	trim: TrimResult,
+	/**  Static stability. */
+	stability: StabilityResult,
+	/**  Drag. */
+	drag: DragBreakdown,
+	/**  Stall. */
+	stall: StallResult | null,
+	/**  Every strip of the lattice, in its order. */
+	strips: StripResult[],
+	/**  What to look at. */
+	warnings: AnalysisWarning[],
+	/**  Number of horseshoe vortices. */
+	vortices: number,
+};
+
+/**  Progress of a 3D analysis, streamed over a channel. */
+export type AircraftEvent = 
+/**  The polars of the airfoils not computed before. */
+{ type: "polars"; 
+/**  Polars done. */
+done: number; 
+/**  Polars to compute. */
+total: number } | 
+/**  The aircraft is being balanced and read against its polars. */
+{ type: "solving" };
+
+/**  A 3D analysis of the aircraft of the "My aircraft" tab. */
+export type AircraftRequest = {
+	/**  Identifier used to cancel the analysis. */
+	job_id: string,
+	/**  The aircraft and its flight (the wing sized as the tab shows it). */
+	setup: MissionSetup,
 };
 
 /**  A candidate analysed for a flight. */
@@ -305,6 +376,23 @@ export type AnalysisView = {
 	 */
 	viscous: ViscousView | null,
 };
+
+/**  Something the user should know about the analysis. */
+export type AnalysisWarning = 
+/**
+ *  The aircraft cannot be trimmed with a reasonable elevator: the
+ *  centre of gravity is too far forward or back, or the tail too small.
+ */
+"cannot_trim" | 
+/**
+ *  Part of the wing flies beyond the maximum lift of its airfoil: it is
+ *  stalled at this speed.
+ */
+"wing_stalled" | 
+/**  Part of the tail (or canard) flies beyond its airfoil's range. */
+"tail_stalled" | 
+/**  Some strips are outside the polars computed (no data). */
+"missing_polars";
 
 /**  An error with a message meant for the user. */
 export type AppError = {
@@ -734,6 +822,31 @@ export type DesignView = {
 	te_gap: [(number | null), (number | null)],
 	/**  Trailing-edge angle of the new airfoil, degrees (full). */
 	te_angle_deg: number | null,
+};
+
+/**  Drag of the aircraft in the trimmed flight. */
+export type DragBreakdown = {
+	/**  Induced drag coefficient (Trefftz plane). */
+	induced: number | null,
+	/**  Profile drag of the wing (and canard). */
+	wing_profile: number | null,
+	/**  Profile drag of the tail and fin. */
+	tail_profile: number | null,
+	/**  Skin friction of the fuselage. */
+	fuselage: number | null,
+	/**  Total drag coefficient. */
+	total: number | null,
+	/**  Span efficiency of the lift distribution. */
+	span_efficiency: number | null,
+	/**  Glide ratio, lift / drag. */
+	lift_to_drag: number | null,
+	/**  Drag, N. */
+	drag: number | null,
+	/**
+	 *  Power needed to fly, drag × speed, W (before propeller and motor
+	 *  losses).
+	 */
+	power: number | null,
 };
 
 /**  Category of an error, for the user interface. */
@@ -1611,6 +1724,47 @@ export type Shape = {
 	y: (number | null)[],
 };
 
+/**  Static stability at the trimmed flight. */
+export type StabilityResult = {
+	/**  Neutral point: distance behind the nose, m. */
+	neutral_point: number | null,
+	/**  Centre of gravity: distance behind the nose, m. */
+	center_of_gravity: number | null,
+	/**
+	 *  Static margin, (neutral point − centre of gravity) / mean
+	 *  aerodynamic chord: positive is stable (5 to 15 % is usual).
+	 */
+	static_margin: number | null,
+	/**  Lift slope of the aircraft, per radian. */
+	cl_alpha: number | null,
+	/**  Pitching moment slope, per radian (negative is stable). */
+	cm_alpha: number | null,
+	/**  Weathercock stability Cnβ, per radian (positive is stable). */
+	cn_beta: number | null,
+	/**  Dihedral effect Clβ, per radian (negative is stable). */
+	cl_beta: number | null,
+	/**
+	 *  Spiral stability `Clβ Cnr / (Clr Cnβ)`, above 1 when the aircraft
+	 *  comes back to level flight by itself.
+	 */
+	spiral: number | null,
+};
+
+/**  The stall of the trimmed aircraft. */
+export type StallResult = {
+	/**  Maximum trimmed lift coefficient of the aircraft. */
+	cl_max: number | null,
+	/**  Stall speed in level flight, m/s. */
+	speed: number | null,
+	/**  Where the stall starts. */
+	part: SurfaceKind,
+	/**
+	 *  How far out along the half span it starts, 0 at the root, 1 at the
+	 *  tip.
+	 */
+	span_fraction: number | null,
+};
+
 /**  Why a minimization stopped. */
 export type Stop = 
 /**  The evaluation budget is spent. */
@@ -1661,6 +1815,53 @@ export type StoredPolar = {
 	/**  The polar. */
 	polar: PolarData,
 };
+
+/**  One strip of the lattice in the trimmed flight. */
+export type StripResult = {
+	/**  Part it belongs to. */
+	part: SurfaceKind,
+	/**  The left half. */
+	left: boolean,
+	/**
+	 *  Distance from the root along the span (y, or the height of a fin),
+	 *  m.
+	 */
+	span_position: number | null,
+	/**  Fraction of the half span, 0 at the root, 1 at the tip. */
+	span_fraction: number | null,
+	/**  Leading edge at the middle of the strip, m. */
+	leading_edge: [(number | null), (number | null), (number | null)],
+	/**  Chord, m. */
+	chord: number | null,
+	/**  Area, m². */
+	area: number | null,
+	/**  Reynolds number. */
+	reynolds: number | null,
+	/**  Lift coefficient referred to the velocity normal to the sweep. */
+	cl: number | null,
+	/**  Maximum lift coefficient of the airfoil at this Reynolds number. */
+	cl_max: number | null,
+	/**  Lowest lift coefficient of the airfoil (the negative stall). */
+	cl_min: number | null,
+	/**  Profile drag coefficient from the polar. */
+	cd: number | null,
+	/**
+	 *  Corners of the strip, m: leading and trailing edge at one end, then
+	 *  trailing and leading edge at the other (for drawing).
+	 */
+	corners: [([(number | null), (number | null), (number | null)]), ([(number | null), (number | null), (number | null)]), ([(number | null), (number | null), (number | null)]), ([(number | null), (number | null), (number | null)])],
+};
+
+/**  Which part a surface is. */
+export type SurfaceKind = 
+/**  Main wing. */
+"wing" | 
+/**  Canard, ahead of the wing. */
+"canard" | 
+/**  Horizontal tail. */
+"tail" | 
+/**  Vertical fin. */
+"fin";
 
 /**
  *  A lifting surface — wing, canard or horizontal tail, mirrored about the
@@ -1773,6 +1974,26 @@ export type Transition = {
 	xi: number | null,
 	/**  True if forced by the trip, false for free transition (N = Ncrit). */
 	forced: boolean,
+};
+
+/**  The trimmed flight. */
+export type TrimResult = {
+	/**  Angle of attack of the fuselage axis, degrees. */
+	alpha_deg: number | null,
+	/**
+	 *  Elevator (or all-moving tail, canard, elevons) deflection, degrees,
+	 *  positive trailing edge down.
+	 */
+	elevator_deg: number | null,
+	/**  Lift coefficient (the required one when trimmed). */
+	cl: number | null,
+	/**  Pitching moment left (zero when trimmed). */
+	cm: number | null,
+	/**
+	 *  The aircraft could be trimmed within ±20° of angle of attack and
+	 *  ±[`MAX_ELEVATOR`] of elevator.
+	 */
+	trimmed: boolean,
 };
 
 /**

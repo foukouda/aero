@@ -96,7 +96,31 @@ Fly comfortably above it: 1.2 to 1.3 times the stall speed is a usual margin.
 
 The horizontal tail volume is Vh = Sh·lh ÷ (S·c̄): the tail area Sh times its distance lh behind the wing (between the quarter points of their mean chords), divided by the wing area S times its mean chord c̄. A small tail far behind does the same job as a large tail close by. Usual values are 0.35 to 0.8: below about 0.3 the aircraft tends to be twitchy in pitch.
 
-The fin's volume is Vv = Sv·lv ÷ (S·b), with the wing span b; usual values are 0.02 to 0.06. These are rules of thumb from existing aircraft; the 3D analysis gives the real stability.
+The fin's volume is Vv = Sv·lv ÷ (S·b), with the wing span b; usual values are 0.02 to 0.06. These are rules of thumb from existing aircraft; the 3D analysis ("How it flies") gives the real stability.
+
+### Trim
+
+**The flight where the aircraft balances itself: lift equal to the weight and no pitching moment about the centre of gravity.**
+
+An aircraft is trimmed when it flies steadily without the pilot holding the stick: the wing and the tail together lift exactly the weight, and their pitching moments about the centre of gravity cancel. The angle of attack and the elevator deflection that do this depend on the speed and on where the centre of gravity is.
+
+The 3D analysis finds them by solving both conditions together. If it needs more than about 15° of elevator, the aircraft is badly balanced: the centre of gravity is too far forward or back, or the tail is too small.
+
+### Static margin, neutral point
+
+**How far the centre of gravity is ahead of the neutral point, as a fraction of the mean chord: positive is stable, 5 to 15 % is usual.**
+
+The neutral point is where the extra lift of a gust acts on the whole aircraft: with the centre of gravity there, a nose-up gust neither pitches the nose further up nor brings it back. With the centre of gravity ahead of it, the aircraft weathervanes back to its trimmed angle: it is stable in pitch.
+
+The static margin is the distance from the centre of gravity forward to the neutral point, divided by the wing's mean aerodynamic chord. Below zero the aircraft is unstable and hard or impossible to fly; a few percent makes it twitchy; 5 to 15 % is usual for models; much more makes it nose-heavy, needing more elevator and flying slower than it could. The fuselage, not part of the vortex lattice, usually moves the neutral point forward by a few percent.
+
+### Vortex lattice
+
+**The 3D method of AVL: each lifting surface becomes a grid of small horseshoe vortices whose strengths make the flow follow the surfaces.**
+
+The vortex lattice method models the wing, the tail and the fin as thin surfaces covered with horseshoe vortices: a bound segment across each small panel and two trailing legs running downstream. Their strengths are chosen so that the air flows along the surfaces (along their camber lines) at one control point per panel. The lift, the pitching and yawing moments, the stability derivatives and the induced drag follow, quickly and accurately for attached flow.
+
+It does not know about viscosity: the friction drag and the maximum lift come from the 2D viscous polars of the airfoils, strip by strip, as in XFLR5. Aero's lattice is a port of AVL 3.52 (Mark Drela and Harold Youngren, MIT), checked against AVL itself.
 
 ## Forces and coefficients
 

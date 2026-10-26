@@ -9,13 +9,14 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use aero_aircraft::{
-    Aircraft, AirfoilPools, Configuration, Layout, MeshOptions, MeshPart, Rng, layout, mesh,
-    random_aircraft,
+    Aircraft, AirfoilPools, Configuration, LatticeOptions, Layout, MeshOptions, MeshPart, Rng,
+    layout, mesh, random_aircraft,
 };
 use aero_geometry::Airfoil;
 use aero_mission::{
-    AirfoilEvaluation, AnalysisSettings, Conditions, Flight, Goal, Wing, WingConstraint, WingModel,
-    evaluate, rank,
+    AircraftAnalysis, AirfoilEvaluation, AnalysisSettings, Conditions, Flight, Goal, MissionError,
+    PolarRequest, PolarSource, PreparedAnalysis, SectionPolar, Wing, WingConstraint, WingModel,
+    evaluate, rank, section_polar,
 };
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -369,4 +370,197 @@ mod tests {
         assert_eq!(x[0], airfoil.x()[0]);
         assert_eq!(*x.last().unwrap(), *airfoil.x().last().unwrap());
     }
+}
+
+/// A 3D analysis of the aircraft of the "My aircraft" tab.
+#[derive(Debug, Clone, PartialEq, Deserialize, Type)]
+pub struct AircraftRequest {
+    /// Identifier used to cancel the analysis.
+    pub job_id: String,
+    /// The aircraft and its flight (the wing sized as the tab shows it).
+    pub setup: MissionSetup,
+}
+
+/// Progress of a 3D analysis, streamed over a channel.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AircraftEvent {
+    /// The polars of the airfoils not computed before.
+    Polars {
+        /// Polars done.
+        done: u32,
+        /// Polars to compute.
+        total: u32,
+    },
+    /// The aircraft is being balanced and read against its polars.
+    Solving,
+}
+
+/// Viscous polars kept between analyses, by airfoil shape (library
+/// airfoils change under the same key), Reynolds and Mach numbers and
+/// turbulence.
+#[derive(Debug, Default)]
+pub struct PolarStore {
+    polars: HashMap<(u64, u64, u64, u64), SectionPolar>,
+}
+
+impl PolarStore {
+    /// Number of polars kept.
+    pub fn len(&self) -> usize {
+        self.polars.len()
+    }
+
+    /// No polar kept.
+    pub fn is_empty(&self) -> bool {
+        self.polars.is_empty()
+    }
+}
+
+/// A fingerprint of an airfoil's coordinates.
+fn shape_hash(a: &Airfoil) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for v in a.x().iter().chain(a.y()) {
+        v.to_bits().hash(&mut h);
+    }
+    h.finish()
+}
+
+/// The polars of an analysis read from the store (computing any missing).
+struct StoreSource<'a> {
+    store: &'a Mutex<PolarStore>,
+    airfoils: &'a HashMap<String, (Airfoil, u64)>,
+    settings: AnalysisSettings,
+}
+
+impl StoreSource<'_> {
+    fn id(&self, hash: u64, r: &PolarRequest) -> (u64, u64, u64, u64) {
+        (
+            hash,
+            r.reynolds.to_bits(),
+            r.mach.to_bits(),
+            self.settings.ncrit.to_bits(),
+        )
+    }
+}
+
+impl PolarSource for StoreSource<'_> {
+    fn polar(&mut self, key: &str, reynolds: f64, mach: f64) -> aero_mission::Result<SectionPolar> {
+        let (airfoil, hash) = self
+            .airfoils
+            .get(key)
+            .ok_or_else(|| MissionError::InvalidInput(format!("unknown airfoil {key}")))?;
+        let request = PolarRequest {
+            key: key.to_owned(),
+            reynolds,
+            mach,
+        };
+        let id = self.id(*hash, &request);
+        if let Some(p) = lock(self.store).polars.get(&id) {
+            return Ok(p.clone());
+        }
+        let p = section_polar(airfoil, reynolds, mach, &self.settings)?;
+        lock(self.store).polars.insert(id, p.clone());
+        Ok(p)
+    }
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Analyses the aircraft of `request` in 3D: the polars missing from
+/// `store` first, in parallel (one per core, one core left to the
+/// interface), then the trim, stability, drag and stall. `None` when
+/// cancelled.
+pub fn analyze_aircraft(
+    request: &AircraftRequest,
+    airfoil: &dyn Fn(&str) -> Option<Airfoil>,
+    store: &Mutex<PolarStore>,
+    cancel: &AtomicBool,
+    emit: &(impl Fn(AircraftEvent) + Sync),
+) -> Result<Option<AircraftAnalysis>, AppError> {
+    let setup = &request.setup;
+    let view = mission_view(setup, airfoil)?;
+    let prepared = PreparedAnalysis::new(
+        &view.aircraft,
+        &setup.flight,
+        airfoil,
+        &LatticeOptions::default(),
+    )?;
+    let settings = AnalysisSettings {
+        ncrit: setup.ncrit,
+        ..AnalysisSettings::default()
+    };
+
+    // The airfoils, resolved once.
+    let requests = prepared.polar_requests();
+    let mut airfoils: HashMap<String, (Airfoil, u64)> = HashMap::new();
+    for r in &requests {
+        if !airfoils.contains_key(&r.key) {
+            let a = airfoil(&r.key).ok_or_else(|| {
+                AppError::from(MissionError::InvalidInput(format!(
+                    "unknown airfoil {}",
+                    r.key
+                )))
+            })?;
+            let h = shape_hash(&a);
+            airfoils.insert(r.key.clone(), (a, h));
+        }
+    }
+    let source = StoreSource {
+        store,
+        airfoils: &airfoils,
+        settings,
+    };
+    let missing: Vec<(u64, &PolarRequest)> = requests
+        .iter()
+        .filter_map(|r| {
+            let (_, h) = airfoils.get(&r.key)?;
+            let id = source.id(*h, r);
+            (!lock(store).polars.contains_key(&id)).then_some((*h, r))
+        })
+        .collect();
+
+    let total = u32::try_from(missing.len()).unwrap_or(u32::MAX);
+    emit(AircraftEvent::Polars { done: 0, total });
+    let next = AtomicUsize::new(0);
+    let done = AtomicU32::new(0);
+    let threads = std::thread::available_parallelism()
+        .map_or(1, |n| n.get().saturating_sub(1).max(1))
+        .min(missing.len().max(1));
+    std::thread::scope(|scope| {
+        for _ in 0..threads {
+            scope.spawn(|| {
+                loop {
+                    if cancel.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    let i = next.fetch_add(1, Ordering::Relaxed);
+                    let Some((hash, r)) = missing.get(i) else {
+                        break;
+                    };
+                    let Some((a, _)) = airfoils.get(&r.key) else {
+                        continue;
+                    };
+                    // A polar that cannot be computed is kept empty: the
+                    // analysis then reports the missing data.
+                    let polar =
+                        section_polar(a, r.reynolds, r.mach, &settings).unwrap_or(SectionPolar {
+                            reynolds: r.reynolds,
+                            points: Vec::new(),
+                        });
+                    lock(store).polars.insert(source.id(*hash, r), polar);
+                    let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                    emit(AircraftEvent::Polars { done: n, total });
+                }
+            });
+        }
+    });
+    if cancel.load(Ordering::Relaxed) {
+        return Ok(None);
+    }
+    emit(AircraftEvent::Solving);
+    let mut source = source;
+    Ok(Some(prepared.run(&mut source)?))
 }

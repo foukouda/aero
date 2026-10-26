@@ -135,6 +135,8 @@ pub struct Engine {
     jobs: Mutex<HashMap<String, Arc<AtomicBool>>>,
     /// Inverse design in progress.
     design: Mutex<Option<DesignSession>>,
+    /// Viscous polars of the 3D analyses.
+    polars: Mutex<crate::mission::PolarStore>,
 }
 
 /// Locks a mutex, recovering the data if another thread panicked.
@@ -1434,6 +1436,34 @@ impl Engine {
         crate::mission::mission_view(setup, &|key| self.airfoil_by_key(key))
     }
 
+    /// Analyses the aircraft of the "My aircraft" tab in 3D, calling
+    /// `on_event` with progress. `on_event` returning false (receiver gone)
+    /// cancels it, as does [`Engine::cancel`]; `None` when cancelled.
+    pub fn analyze_aircraft(
+        &self,
+        request: &crate::mission::AircraftRequest,
+        on_event: impl FnMut(crate::mission::AircraftEvent) -> bool + Send,
+    ) -> Result<Option<aero_mission::AircraftAnalysis>, AppError> {
+        let flag = Arc::new(AtomicBool::new(false));
+        lock(&self.jobs).insert(request.job_id.clone(), flag.clone());
+        let sink = Mutex::new(on_event);
+        let emit = |event: crate::mission::AircraftEvent| {
+            let mut send = lock(&sink);
+            if !(*send)(event) {
+                flag.store(true, Ordering::Relaxed);
+            }
+        };
+        let result = crate::mission::analyze_aircraft(
+            request,
+            &|key| self.airfoil_by_key(key),
+            &self.polars,
+            &flag,
+            &emit,
+        );
+        lock(&self.jobs).remove(&request.job_id);
+        result
+    }
+
     /// Adds the best design of the last optimization to the library.
     pub fn add_optimized_airfoil(&self) -> Result<AirfoilSummary, AppError> {
         let mut session = lock(&self.session);
@@ -1660,6 +1690,57 @@ mod tests {
             catalogue_ids: ["s1223", "sd7037", "naca0012"].map(String::from).to_vec(),
             airfoil_ids,
         }
+    }
+
+    #[test]
+    fn the_aircraft_flies_in_3d_and_its_polars_are_kept() {
+        use crate::mission::{AircraftEvent, AircraftRequest};
+        let e = Engine::new();
+        let request = AircraftRequest {
+            job_id: "flight".into(),
+            setup: MissionSetup::default(),
+        };
+        let mut events = Vec::new();
+        let r = e
+            .analyze_aircraft(&request, |ev| {
+                events.push(ev);
+                true
+            })
+            .unwrap()
+            .unwrap();
+        assert!(r.trim.trimmed, "{:?}", r.trim);
+        assert!(r.stability.static_margin > 0.0);
+        assert!(r.stall.is_some() && r.drag.lift_to_drag > 3.0);
+        let Some(AircraftEvent::Polars { done: 0, total }) = events.first().cloned() else {
+            panic!("{events:?}");
+        };
+        assert!(total > 0);
+        assert_eq!(events.last(), Some(&AircraftEvent::Solving));
+        assert_eq!(events.len() as u32, total + 2);
+        assert_eq!(lock(&e.polars).len() as u32, total);
+
+        // Again: nothing to compute, the same result.
+        events.clear();
+        let again = e
+            .analyze_aircraft(&request, |ev| {
+                events.push(ev);
+                true
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(again, r);
+        assert_eq!(
+            events,
+            [
+                AircraftEvent::Polars { done: 0, total: 0 },
+                AircraftEvent::Solving
+            ]
+        );
+
+        // A closed channel cancels it.
+        let mut slower = request.clone();
+        slower.setup.flight.speed *= 0.5;
+        assert_eq!(e.analyze_aircraft(&slower, |_| false).unwrap(), None);
     }
 
     #[test]

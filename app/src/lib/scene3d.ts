@@ -4,7 +4,7 @@
 // — a rotation, which keeps the triangles' orientation.
 
 import * as THREE from "three";
-import type { MeshPart, PartKind } from "./bindings";
+import type { MeshPart, PartKind, StripResult } from "./bindings";
 
 export const PART_COLORS: Record<PartKind, number> = {
   wing: 0xc9d4e2,
@@ -25,8 +25,13 @@ export const VIEW_DIRECTIONS: Record<View, [number, number, number]> = {
   side: [-1, 0.08, 0],
 };
 
-/** A part as a three.js mesh with its outline; `highlight` tints it. */
-export function partMesh(part: MeshPart, highlight: THREE.Color | null = null): THREE.Mesh {
+/** A part as a three.js mesh with its outline; `highlight` tints it,
+ * `colors` (r, g, b per vertex) paint it. */
+export function partMesh(
+  part: MeshPart,
+  highlight: THREE.Color | null = null,
+  colors: Float32Array | null = null,
+): THREE.Mesh {
   const p = part.positions;
   const positions = new Float32Array(p.length);
   for (let i = 0; i < p.length; i += 3) {
@@ -38,13 +43,16 @@ export function partMesh(part: MeshPart, highlight: THREE.Color | null = null): 
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setIndex(part.indices.map((i) => i ?? 0));
   geometry.computeVertexNormals();
+  if (colors) geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   const material = new THREE.MeshStandardMaterial({
-    color: PART_COLORS[part.kind],
+    color: colors ? 0xffffff : PART_COLORS[part.kind],
+    vertexColors: colors !== null,
     roughness: 0.6,
     metalness: 0.05,
     side: THREE.DoubleSide,
-    emissive: highlight ?? new THREE.Color(0x000000),
-    emissiveIntensity: highlight ? 0.35 : 0,
+    // A painted part shows its selection by its outline only.
+    emissive: highlight && !colors ? highlight : new THREE.Color(0x000000),
+    emissiveIntensity: highlight && !colors ? 0.35 : 0,
   });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.userData.kind = part.kind;
@@ -158,6 +166,64 @@ export function renderThumbnails(aircraft: MeshPart[][], width: number, height: 
     disposeChildren(group);
     renderer.dispose();
     renderer.forceContextLoss();
+  }
+  return out;
+}
+
+/** How close a strip is to its stall: its lift over the maximum (or the
+ * negative minimum) of its airfoil; null without data. */
+export function stallRatio(s: StripResult): number | null {
+  const cl = s.cl;
+  if (cl === null) return null;
+  const limit = cl >= 0 ? s.cl_max : s.cl_min;
+  if (limit === null || limit === 0 || Math.sign(limit) !== Math.sign(cl || 1)) return null;
+  return cl / limit;
+}
+
+/** Colour of a stall ratio: `ok` up to 0.6, to `warning` at 0.9, to
+ * `danger` at 1 and beyond. */
+export function stallColor(ratio: number | null, ok: THREE.Color, warning: THREE.Color, danger: THREE.Color): THREE.Color {
+  if (ratio === null) return new THREE.Color(0x9ca3af);
+  if (ratio <= 0.6) return ok.clone();
+  if (ratio <= 0.9) return ok.clone().lerp(warning, (ratio - 0.6) / 0.3);
+  return warning.clone().lerp(danger, Math.min(1, (ratio - 0.9) / 0.1));
+}
+
+/** Vertex colours of a part from the strips of the 3D analysis: each
+ * vertex takes the colour of the strip it lies in along the span (y, or z
+ * for the fin; the left half by negative y). Null for the fuselage or
+ * without strips of that part. */
+export function liftColors(
+  part: MeshPart,
+  strips: StripResult[],
+  color: (ratio: number | null) => THREE.Color,
+): Float32Array | null {
+  if (part.kind === "fuselage") return null;
+  const axis = part.kind === "fin" ? 2 : 1;
+  const mine = strips
+    .filter((s) => s.part === part.kind)
+    .map((s) => {
+      const v = s.corners.map((c) => c[axis] ?? 0);
+      return { lo: Math.min(...v), hi: Math.max(...v), color: color(stallRatio(s)) };
+    });
+  if (!mine.length) return null;
+  const p = part.positions;
+  const out = new Float32Array(p.length);
+  for (let i = 0; i < p.length; i += 3) {
+    const v = p[i + axis] ?? 0;
+    let best = mine[0]!;
+    let gap = Number.POSITIVE_INFINITY;
+    for (const m of mine) {
+      const d = v < m.lo ? m.lo - v : v > m.hi ? v - m.hi : 0;
+      if (d < gap) {
+        gap = d;
+        best = m;
+        if (d === 0) break;
+      }
+    }
+    out[i] = best.color.r;
+    out[i + 1] = best.color.g;
+    out[i + 2] = best.color.b;
   }
   return out;
 }

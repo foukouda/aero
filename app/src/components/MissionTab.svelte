@@ -8,6 +8,7 @@
   import SurfaceEditor from "./SurfaceEditor.svelte";
   import AircraftGallery from "./AircraftGallery.svelte";
   import MissionResults from "./MissionResults.svelte";
+  import FlightAnalysis from "./FlightAnalysis.svelte";
   import type { MissionSetup, PartKind, SurfaceParams } from "../lib/bindings";
   import { defaultSurface } from "../lib/aircraft";
   import { app } from "../lib/state.svelte";
@@ -114,6 +115,8 @@
     view ? readFinVolume(view.layout.fin_volume, view.aircraft.tail === null && view.aircraft.canard === null) : null,
   );
   const seaLevelDensity = 1.225;
+  /** The 3D analysis, when it is up to date with the aircraft. */
+  const fresh = $derived(app.flightAnalysis && !app.flightAnalysisStale ? app.flightAnalysis : null);
 </script>
 
 
@@ -428,6 +431,8 @@
             wingZ={view.aircraft.wing.z ?? 0}
             selected={openPart === "cg" ? null : openPart}
             onselect={select}
+            strips={fresh && app.colourByLift ? fresh.strips : null}
+            neutralPoint={fresh?.stability.neutral_point ?? null}
           />
         {/if}
         {#if app.missionError}
@@ -505,6 +510,8 @@
           </div>
         {/if}
       </section>
+
+      <FlightAnalysis />
 
       <MissionResults />
     </div>

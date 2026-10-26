@@ -161,6 +161,27 @@ the viewer, README, NOTICE (three.js, AVL references), release.
   every derivative = finite differences. One AVL quirk kept and documented:
   its alpha derivatives turn non-zero roll and yaw rates with the wrong sign
   (no effect in steady flight). 33 injected bugs all caught.
+- P4 done on 2026-10-26: `aero_aircraft::lattice` turns the aircraft into
+  AVL's lattice (camber lines from the airfoils, a pitch control: the
+  whole tail or canard turning, elevons on a flying wing);
+  `aero_mission::analysis` trims it at the flight (angle of attack and
+  elevator), gives the neutral point and static margin, the weathercock
+  and dihedral effects, each strip's lift against its airfoil's maximum at
+  its own Reynolds number, the drag (Trefftz-plane induced, strip profile
+  drag from the viscous polars, fuselage skin friction by the turbulent
+  flat plate and Raymer's form factor), glide ratio and power, and the
+  trimmed stall by the critical-section method (a bracketed search with
+  the Reynolds numbers of the stall speed, so that the critical strip is
+  exactly at its maximum there). Polars on a Reynolds grid (10^0.2 steps,
+  Mach rounded down to 0.05), cached by airfoil shape and computed in
+  parallel. In "My aircraft", a "How it flies" card: balance, static
+  margin with where to move the centre of gravity, glide and power with
+  the parts of the drag, the stall speed and where it starts, the lift
+  along the wing against its maximum, the surfaces coloured by their lift
+  in 3D and the neutral point marked; EN/FR, glossary entries (trim,
+  static margin, vortex lattice). The fuselage's effect on stability is not
+  modelled and the card says so. 26 of 27 injected bugs caught (the last
+  one only slows the stall search).
 
 ## Order and checks
 
