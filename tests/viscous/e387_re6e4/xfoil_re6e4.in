@@ -1,0 +1,43 @@
+PLOP
+G
+
+LOAD e387.dat
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+PSAV panels.dat
+OPER
+CINC
+VISC 60000.0
+MACH 0.0
+VPAR
+N 9.0
+XTR 1.0 1.0
+
+PACC
+vpolar_re6e4.txt
+vdump_re6e4.bin
+ASEQ -2.0 10.0 1.0
+PACC
+PACC
+vpoints_re6e4.txt
+vpdump_re6e4.bin
+INIT
+ALFA 0.0
+CPWR vcp_re6e4_a+00.0.txt
+DUMP vbl_re6e4_a+00.0.txt
+INIT
+ALFA 4.0
+CPWR vcp_re6e4_a+04.0.txt
+DUMP vbl_re6e4_a+04.0.txt
+INIT
+ALFA 8.0
+CPWR vcp_re6e4_a+08.0.txt
+DUMP vbl_re6e4_a+08.0.txt
+PACC
+
+QUIT
