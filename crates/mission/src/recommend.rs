@@ -111,7 +111,7 @@ pub struct Buildability {
     /// chord, above the chord line (`y/c`): positive for an undercambered
     /// (hollow) lower surface.
     pub undercamber: f64,
-    /// Thick enough (at least 8 %) and without a hollow lower surface:
+    /// Thick enough (at least 9 %) and without a hollow lower surface:
     /// easy to build with ribs on a flat board, or from foam.
     pub easy: bool,
 }
@@ -337,7 +337,7 @@ fn buildability(airfoil: &Airfoil) -> Buildability {
     Buildability {
         thickness,
         undercamber,
-        easy: thickness >= 0.08 && undercamber <= 0.005,
+        easy: thickness >= 0.09 && undercamber <= 0.005,
     }
 }
 

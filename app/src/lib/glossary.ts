@@ -7,6 +7,7 @@ import type { TourLang } from "./tour";
 
 export type GlossaryCategory =
   | "basics"
+  | "aircraft"
   | "coefficients"
   | "flow"
   | "boundary-layer"
@@ -33,6 +34,7 @@ export interface GlossaryEntry {
 
 export const CATEGORY_TITLES: Record<GlossaryCategory, Record<TourLang, string>> = {
   basics: { en: "Basics", fr: "Les bases" },
+  aircraft: { en: "From the aircraft to the airfoil", fr: "De l'avion au profil" },
   coefficients: { en: "Forces and coefficients", fr: "Forces et coefficients" },
   flow: { en: "Flow conditions", fr: "Conditions d'écoulement" },
   "boundary-layer": { en: "Boundary layer and transition", fr: "Couche limite et transition" },
@@ -736,6 +738,87 @@ export const GLOSSARY: GlossaryEntry[] = [
         term: "CMA-ES et Nelder–Mead",
         short: "Les deux méthodes de recherche : CMA-ES explore largement avec des populations de candidats, Nelder–Mead affine le meilleur.",
         long: "CMA-ES (stratégie d'évolution par adaptation de la matrice de covariance) tire des populations de candidats aléatoires autour du meilleur actuel, et apprend quelles directions sont payantes ; chaque population est analysée en parallèle sur tous les cœurs. Nelder–Mead peaufine ensuite le résultat en déplaçant un petit simplexe de candidats. La graine (seed) fixe les tirages aléatoires : la même graine donne exactement le même résultat.",
+      },
+    },
+  },
+  // ---------------------------------------------------------- aircraft
+  {
+    id: "wing-loading",
+    category: "aircraft",
+    text: {
+      en: {
+        term: "Wing loading",
+        short: "The aircraft's weight divided by its wing area: what each square decimetre of wing carries.",
+        long: "Wing loading = weight ÷ wing area, shown in grams per square decimetre (g/dm²), the unit of model aircraft (1 kg/m² = 10 g/dm²). A light wing loading makes a wing that flies slowly and gently; a heavy one needs speed to take off and land, but goes through wind and turbulence better.\n\nWith the same airfoil, the stall speed grows with the square root of the wing loading: doubling the loading raises it by about 41 %. Typical values: indoor models under 15 g/dm², park flyers and gliders 15 to 35, sport models 35 to 70, a Cessna 172 about 690.",
+      },
+      fr: {
+        term: "Charge alaire",
+        short: "Le poids de l'appareil divisé par la surface de l'aile : ce que porte chaque décimètre carré d'aile.",
+        long: "Charge alaire = poids ÷ surface alaire, affichée en grammes par décimètre carré (g/dm²), l'unité des modélistes (1 kg/m² = 10 g/dm²). Une charge alaire faible donne une aile qui vole lentement et en douceur ; une charge élevée demande de la vitesse pour décoller et se poser, mais passe mieux le vent et la turbulence.\n\nAvec le même profil, la vitesse de décrochage croît comme la racine carrée de la charge alaire : doubler la charge l'augmente d'environ 41 %. Valeurs typiques : modèles d'intérieur sous 15 g/dm², park flyers et planeurs 15 à 35, modèles de sport 35 à 70, un Cessna 172 environ 690.",
+      },
+    },
+  },
+  {
+    id: "atmosphere",
+    category: "aircraft",
+    text: {
+      en: {
+        term: "Standard atmosphere",
+        short: "The model of the air used in aviation: temperature, pressure and density as a function of altitude, on an average day.",
+        long: "The International Standard Atmosphere (ISA) describes an average day: 15 °C and 1013.25 hPa at sea level, the temperature falling by 6.5 °C per kilometre up to 11 km, then constant at −56.5 °C. Aero computes the density and the viscosity of the air from it (U.S. Standard Atmosphere 1976, checked against its tables).\n\nThe thinner the air, the faster a wing must fly to make the same lift: at 3000 m the density is 74 % of its sea-level value. A hot day thins the air too: set the temperature offset in the advanced settings of My aircraft.",
+      },
+      fr: {
+        term: "Atmosphère standard",
+        short: "Le modèle de l'air utilisé en aviation : température, pression et masse volumique en fonction de l'altitude, pour une journée moyenne.",
+        long: "L'atmosphère type internationale (ISA) décrit une journée moyenne : 15 °C et 1013,25 hPa au niveau de la mer, une température qui baisse de 6,5 °C par kilomètre jusqu'à 11 km, puis reste à −56,5 °C. Aero en déduit la masse volumique et la viscosité de l'air (U.S. Standard Atmosphere 1976, vérifiée contre ses tables).\n\nPlus l'air est léger, plus une aile doit voler vite pour produire la même portance : à 3000 m la masse volumique vaut 74 % de sa valeur au niveau de la mer. Une journée chaude allège aussi l'air : règle l'écart de température dans les réglages avancés de Mon avion.",
+      },
+    },
+  },
+  {
+    id: "aspect-ratio",
+    category: "aircraft",
+    text: {
+      en: {
+        term: "Aspect ratio",
+        short: "How slender a wing is: span squared divided by wing area (span ÷ chord for a rectangular wing).",
+        long: "A long, narrow wing (a high aspect ratio, 10 to 30 for sailplanes) loses less energy in its wing-tip vortices, so it has less induced drag. A short, wide wing (4 to 7 for trainers and aerobatic models) is sturdier and turns faster. Aero uses the aspect ratio in the induced-drag estimate of My aircraft.",
+      },
+      fr: {
+        term: "Allongement",
+        short: "La finesse de forme d'une aile : l'envergure au carré divisée par la surface (envergure ÷ corde pour une aile rectangulaire).",
+        long: "Une aile longue et étroite (grand allongement, 10 à 30 pour les planeurs) perd moins d'énergie dans ses tourbillons marginaux, donc a moins de traînée induite. Une aile courte et large (4 à 7 pour les avions d'école et de voltige) est plus solide et tourne plus vite. Aero utilise l'allongement dans l'estimation de la traînée induite de Mon avion.",
+      },
+    },
+  },
+  {
+    id: "induced-drag",
+    category: "aircraft",
+    text: {
+      en: {
+        term: "Induced drag",
+        short: "The drag a finite wing pays for making lift: air spills around the tips and forms vortices.",
+        long: "Air at high pressure under the wing flows around the tips towards the low pressure above, forming wing-tip vortices; the wing pays for them with extra drag. The classical estimate is CDi = CL² ÷ (π e AR): it grows with the square of the lift coefficient and falls with the aspect ratio AR; the span efficiency e (about 0.9 for a straight rectangular wing, 1 for an elliptic one) measures how well the lift is spread along the span.\n\nAt low speed, when CL is high, induced drag is often the largest part of a model's drag. A 2D airfoil analysis does not include it: Aero adds it in the wing estimate of My aircraft.",
+      },
+      fr: {
+        term: "Traînée induite",
+        short: "La traînée qu'une aile de longueur finie paie pour porter : l'air contourne les bouts d'aile et forme des tourbillons.",
+        long: "L'air en surpression sous l'aile contourne les saumons vers la dépression du dessus, ce qui forme les tourbillons marginaux ; l'aile les paie par une traînée supplémentaire. L'estimation classique est CDi = CL² ÷ (π e AR) : elle croît comme le carré du coefficient de portance et diminue avec l'allongement AR ; le coefficient d'Oswald e (environ 0,9 pour une aile rectangulaire droite, 1 pour une aile elliptique) mesure la qualité de la répartition de la portance le long de l'envergure.\n\nÀ basse vitesse, quand CL est grand, la traînée induite est souvent la plus grosse part de la traînée d'un modèle. Une analyse de profil 2D ne la compte pas : Aero l'ajoute dans l'estimation de l'aile de Mon avion.",
+      },
+    },
+  },
+  {
+    id: "stall-speed",
+    category: "aircraft",
+    text: {
+      en: {
+        term: "Stall speed",
+        short: "The slowest speed at which the wing still carries the aircraft in level flight.",
+        long: "Below this speed the wing would need more than its maximum lift coefficient: it stalls. V = √(2 W ÷ (ρ S CLmax)), with W the weight, ρ the air density, S the wing area and CLmax the wing's maximum lift coefficient. Aero takes 90 % of the airfoil's: a whole wing stalls a little before its section, and XFOIL-type methods over-predict the maximum lift by about that much (10 % on the E387 compared with NASA wind-tunnel measurements).\n\nFly comfortably above it: 1.2 to 1.3 times the stall speed is a usual margin.",
+      },
+      fr: {
+        term: "Vitesse de décrochage",
+        short: "La vitesse la plus faible à laquelle l'aile porte encore l'appareil en vol en palier.",
+        long: "En dessous de cette vitesse, l'aile aurait besoin de plus que son coefficient de portance maximal : elle décroche. V = √(2 W ÷ (ρ S CLmax)), avec W le poids, ρ la masse volumique de l'air, S la surface alaire et CLmax le coefficient de portance maximal de l'aile. Aero prend 90 % de celui du profil : une aile entière décroche un peu avant sa section, et les méthodes de type XFOIL surestiment la portance maximale d'à peu près autant (10 % sur l'E387 comparé aux mesures en soufflerie de la NASA).\n\nVole confortablement au-dessus : 1,2 à 1,3 fois la vitesse de décrochage est une marge habituelle.",
       },
     },
   },

@@ -19,7 +19,7 @@ use crate::engine::Engine;
 use crate::error::{AppError, ErrorKind};
 use crate::mission::{RecommendEvent, RecommendRequest, RecommendResult};
 use crate::model::{
-    AirfoilId, Modification, OptimizationSetup, PROJECT_FORMAT_VERSION, Settings,
+    AirfoilId, MissionSetup, Modification, OptimizationSetup, PROJECT_FORMAT_VERSION, Settings,
     StoredOptimization, StoredPolar,
 };
 
@@ -393,6 +393,13 @@ pub fn cancel_optimization(engine: Shared<'_>, job_id: String) -> bool {
 #[specta::specta]
 pub fn update_optimization_setup(engine: Shared<'_>, setup: OptimizationSetup) {
     engine.update_optimization_setup(setup);
+}
+
+/// Replaces the flight of the "My aircraft" tab.
+#[tauri::command]
+#[specta::specta]
+pub fn update_mission_setup(engine: Shared<'_>, setup: MissionSetup) {
+    engine.update_mission_setup(setup);
 }
 
 /// Adds the best design of the last optimization to the library.

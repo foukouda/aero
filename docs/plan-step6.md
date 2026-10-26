@@ -203,6 +203,27 @@ aspect ratio, induced drag, stall speed, wing area), README, release 0.3.0.
   cancellation). At Re ≈ 10⁵ and Cl 0.56 the glider sections come first
   (Cd ≈ 0.015) and the S1223 has three times their drag; at Cl 1.37 only
   the S1223 can fly.
+- M4 done on 2026-10-26: the "My aircraft" tab, first in the bar and the
+  default view, written in English and French from the start (`lib/i18n.ts`,
+  which U4 extends to the rest): the flight as sentences with presets (park
+  flyer to Cessna 172), "know my wing" or "size it for me", the goal, the
+  advanced settings (air turbulence as Ncrit, hot day, e, wing Cl max
+  factor); live cards (Cl needed, Reynolds number, wing loading, air) with a
+  status in words and icons, and the wing drawn to scale next to an A4
+  sheet or a person; the three best airfoils (outline, description, stall
+  speed, glide ratio, power, angle, Cd, Cl max, ease of building), their
+  polars highlighted with the first three CVD-safe colours of the dataviz
+  palette, the others grey, and the table of all candidates; "Analyse it"
+  and "Optimize it for my flight" carry the flight to the other tabs. The
+  flight is saved in the project (format 4; format 3 still opens, checked
+  on a frozen file). New glossary category "From the aircraft to the
+  airfoil" (wing loading, standard atmosphere, aspect ratio, induced drag,
+  stall speed). Found while checking it in the app: at Re 7.5·10⁴ a single
+  prescribed-Cl point from a fresh boundary layer may not converge, so the
+  Analysis tab now reaches such a point from 0° in steps (flagged "reached
+  from 0°"), and the Cp* line is drawn only where it means something; the
+  "easy to build" thickness became 9 % (8.5 % sections are not a
+  beginner's build).
 
 Validated on 2026-10-26: the mission parts first, then the interface.
 M1 → M2 → M3 → M4 → U1 → U2 → U3 → U4 → D. Each part: tests green,

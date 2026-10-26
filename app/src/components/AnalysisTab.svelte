@@ -43,7 +43,7 @@
       }
       if (r.cp_star !== null) cpStar = r.cp_star;
     }
-    if (cpStar !== null && out.length) {
+    if (cpStar !== null && cpStar > -10 && out.length) {
       out.push({ label: "Cp* (sonic)", color: "#9ca3af", x: [0, 1], y: [cpStar, cpStar], dash: [2, 3] });
     }
     return out;
@@ -234,6 +234,13 @@
                     >not converged</span
                   >
                 {/if}
+                {#if v?.approached}
+                  <span
+                    class="muted"
+                    title="It did not converge from a fresh boundary layer; it was reached from 0° in steps, each from the previous boundary layer, as in an XFOIL sequence"
+                    >reached from 0°</span
+                  >
+                {/if}
                 {#if r.supercritical}<span class="warn" title="Cp min below Cp*">supercritical</span>{/if}
                 <button class="small" title="Export the Cp distribution as CSV" onclick={() => app.exportCpCsv(a.id)}>Cp CSV</button>
                 {#if v}
@@ -252,7 +259,7 @@
       </tbody>
     </table>
     {#if viscous}
-      <p class="note muted">ᵗ: transition forced by the trip. Viscous points start from a fresh boundary layer, as XFOIL after INIT.</p>
+      <p class="note muted">ᵗ: transition forced by the trip. Viscous points start from a fresh boundary layer, as XFOIL after INIT; one that does not converge is reached from 0° in steps (“reached from 0°”).</p>
     {/if}
   </section>
 

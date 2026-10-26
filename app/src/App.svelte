@@ -7,19 +7,22 @@
   import PolarsTab from "./components/PolarsTab.svelte";
   import OptimizeTab from "./components/OptimizeTab.svelte";
   import DesignTab from "./components/DesignTab.svelte";
+  import MissionTab from "./components/MissionTab.svelte";
   import Toasts from "./components/Toasts.svelte";
   import Tour from "./components/Tour.svelte";
   import Glossary from "./components/Glossary.svelte";
   import { app, dialogs, type Tab } from "./lib/state.svelte";
+  import type { MessageKey } from "./lib/i18n";
 
   let dragging = $state(false);
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "geometry", label: "Geometry" },
-    { id: "analysis", label: "Analysis" },
-    { id: "polars", label: "Polars" },
-    { id: "optimize", label: "Optimize" },
-    { id: "design", label: "Inverse design" },
+  const tabs: { id: Tab; label: MessageKey }[] = [
+    { id: "mission", label: "tab.mission" },
+    { id: "geometry", label: "tab.geometry" },
+    { id: "analysis", label: "tab.analysis" },
+    { id: "polars", label: "tab.polars" },
+    { id: "optimize", label: "tab.optimize" },
+    { id: "design", label: "tab.design" },
   ];
 
   onMount(() => {
@@ -75,7 +78,7 @@
     </div>
     <nav class="tabs" aria-label="Views" data-tour="tabs">
       {#each tabs as tab (tab.id)}
-        <button class:active={app.tab === tab.id} onclick={() => (app.tab = tab.id)}>{tab.label}</button>
+        <button class:active={app.tab === tab.id} onclick={() => (app.tab = tab.id)}>{app.t(tab.label)}</button>
       {/each}
     </nav>
     <div class="actions">
@@ -102,10 +105,14 @@
     </div>
   </header>
 
-  <div class="content">
-    <Library />
+  <div class="content" class:full={app.tab === "mission"}>
+    {#if app.tab !== "mission"}
+      <Library />
+    {/if}
     <main>
-      {#if app.tab === "geometry"}
+      {#if app.tab === "mission"}
+        <MissionTab />
+      {:else if app.tab === "geometry"}
         <GeometryTab />
       {:else if app.tab === "analysis"}
         <AnalysisTab />
@@ -170,7 +177,8 @@
   .tabs button {
     border: none;
     background: none;
-    padding: 4px 16px;
+    padding: 4px 12px;
+    white-space: nowrap;
   }
   .tabs button.active {
     background: var(--panel);
@@ -181,6 +189,9 @@
     display: flex;
     justify-content: flex-end;
     gap: 6px;
+  }
+  .actions button {
+    white-space: nowrap;
   }
   .project-actions {
     display: flex;
@@ -201,6 +212,9 @@
     gap: 12px;
     padding: 12px;
     min-height: 0;
+  }
+  .content.full {
+    grid-template-columns: minmax(0, 1fr);
   }
   main {
     min-width: 0;

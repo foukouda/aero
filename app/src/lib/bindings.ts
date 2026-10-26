@@ -73,6 +73,8 @@ export const commands = {
 	recommendAirfoils: (request: RecommendRequest, onEvent: Channel<RecommendEvent>) => typedError<RecommendResult, AppError>(__TAURI_INVOKE("recommend_airfoils", { request, onEvent })),
 	/**  Cancels a running airfoil evaluation. */
 	cancelRecommendation: (jobId: string) => __TAURI_INVOKE<boolean>("cancel_recommendation", { jobId }),
+	/**  Replaces the flight of the "My aircraft" tab. */
+	updateMissionSetup: (setup: MissionSetup) => __TAURI_INVOKE<void>("update_mission_setup", { setup }),
 	/**  Shows or hides several airfoils. */
 	setAirfoilsVisible: (ids: number[], visible: boolean) => typedError<null, AppError>(__TAURI_INVOKE("set_airfoils_visible", { ids, visible })),
 	/**  Deletes several airfoils. */
@@ -396,7 +398,7 @@ export type Buildability = {
 	 */
 	undercamber: number | null,
 	/**
-	 *  Thick enough (at least 8 %) and without a hollow lower surface:
+	 *  Thick enough (at least 9 %) and without a hollow lower surface:
 	 *  easy to build with ribs on a flat board, or from foam.
 	 */
 	easy: boolean,
@@ -428,6 +430,13 @@ export type CandidateResult = {
 	source: CandidateSource,
 	/**  Display name. */
 	name: string,
+	/**
+	 *  Outline of the shape (at most [`OUTLINE_POINTS`] points), for a
+	 *  thumbnail.
+	 */
+	outline_x: (number | null)[],
+	/**  Ordinates of the outline. */
+	outline_y: (number | null)[],
 	/**  Evaluation, when the analysis could run. */
 	evaluation: AirfoilEvaluation | null,
 	/**  Why the analysis could not run. */
@@ -847,6 +856,19 @@ export type GeometryView = {
 	normalized: boolean,
 };
 
+/**  What the user wants most. */
+export type Goal = 
+/**
+ *  The least drag at the flight's speed: the longest glide, the longest
+ *  flight on a battery (for a given flight both come down to the
+ *  lowest drag at the required lift coefficient).
+ */
+"least_drag" | 
+/**  The largest maximum lift: the slowest stall, the largest load. */
+"slow_flight" | 
+/**  The least drag among the shapes that are easy to build. */
+"easy_to_build";
+
 /**
  *  Moment and force on the part of the airfoil aft of a flap hinge, per
  *  unit span, divided by `½ρV²c²` (moment) and `½ρV²c` (forces), as XFOIL's
@@ -932,6 +954,28 @@ export type Method =
 "cma_es" | 
 /**  Nelder–Mead only, from the initial design. */
 "nelder_mead";
+
+/**
+ *  The flight of the "My aircraft" tab, from which airfoils are
+ *  recommended.
+ */
+export type MissionSetup = {
+	/**  Speed, altitude and mass. */
+	flight: Flight,
+	/**  The wing (as given, or as last sized). */
+	wing: Wing,
+	/**
+	 *  When set, the wing is sized to fly at this lift coefficient, keeping
+	 *  its span.
+	 */
+	sizing_cl: number | null,
+	/**  What matters most. */
+	goal: Goal,
+	/**  Critical amplification exponent of the transition model. */
+	ncrit: number | null,
+	/**  Finite-wing estimate. */
+	model: WingModel,
+};
 
 /**  A modification of an airfoil (XFOIL `GDES` commands and `INTE`). */
 export type Modification = 
@@ -1344,6 +1388,8 @@ export type SessionView = {
 	optimization: OptimizationSetup,
 	/**  Result of the last shape optimization. */
 	last_optimization: StoredOptimization | null,
+	/**  The flight of the "My aircraft" tab. */
+	mission: MissionSetup,
 };
 
 /**  Analysis settings of the session. */
@@ -1661,6 +1707,11 @@ export type ViscousView = {
 	cdf: number | null,
 	/**  True if the Newton iteration converged. */
 	converged: boolean,
+	/**
+	 *  The point did not converge from a fresh boundary layer and was
+	 *  reached from 0° in steps, each from the previous boundary layer.
+	 */
+	approached: boolean,
 	/**  Newton iterations performed. */
 	iterations: number,
 	/**  Inviscid pressure coefficient at each node. */
@@ -1696,12 +1747,12 @@ export type WingModel = {
 	 *  Span efficiency `e` of the induced drag `CL² / (π e AR)`: 1 for an
 	 *  elliptic loading, about 0.9 for a straight rectangular wing.
 	 */
-	span_efficiency?: number | null,
+	span_efficiency: number | null,
 	/**
 	 *  Wing maximum lift as a fraction of the airfoil's: the wing stalls
 	 *  a little before its section.
 	 */
-	cl_max_factor?: number | null,
+	cl_max_factor: number | null,
 };
 
 /* Tauri Specta runtime */

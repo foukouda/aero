@@ -57,6 +57,11 @@ pub struct CandidateResult {
     pub source: CandidateSource,
     /// Display name.
     pub name: String,
+    /// Outline of the shape (at most [`OUTLINE_POINTS`] points), for a
+    /// thumbnail.
+    pub outline_x: Vec<f64>,
+    /// Ordinates of the outline.
+    pub outline_y: Vec<f64>,
     /// Evaluation, when the analysis could run.
     pub evaluation: Option<AirfoilEvaluation>,
     /// Why the analysis could not run.
@@ -124,6 +129,24 @@ pub struct Candidate {
     pub airfoil: Airfoil,
 }
 
+/// Most points of a candidate's outline.
+pub const OUTLINE_POINTS: usize = 80;
+
+/// Every k-th point of the airfoil, keeping both trailing-edge points.
+fn outline(airfoil: &Airfoil) -> (Vec<f64>, Vec<f64>) {
+    let (x, y) = (airfoil.x(), airfoil.y());
+    let n = x.len();
+    let step = n.div_ceil(OUTLINE_POINTS - 1).max(1);
+    let mut keep: Vec<usize> = (0..n).step_by(step).collect();
+    if keep.last() != Some(&(n - 1)) {
+        keep.push(n - 1);
+    }
+    (
+        keep.iter().map(|&i| x[i]).collect(),
+        keep.iter().map(|&i| y[i]).collect(),
+    )
+}
+
 /// Conditions of `flight` on `wing`.
 pub fn conditions(flight: &Flight, wing: &Wing) -> Result<Conditions, AppError> {
     Ok(flight.conditions(wing)?)
@@ -157,9 +180,12 @@ pub fn recommend(
                     let Some(c) = candidates.get(i) else { break };
                     let outcome =
                         evaluate(&c.airfoil, &conditions, &request.settings, &request.model);
+                    let (outline_x, outline_y) = outline(&c.airfoil);
                     let result = CandidateResult {
                         source: c.source.clone(),
                         name: c.name.clone(),
+                        outline_x,
+                        outline_y,
                         error: outcome.as_ref().err().map(ToString::to_string),
                         evaluation: outcome.ok(),
                     };
@@ -224,4 +250,22 @@ fn ranking(candidates: &[CandidateResult], goal: Goal) -> Vec<u32> {
         .into_iter()
         .map(|i| u32::try_from(i).unwrap_or(u32::MAX))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use aero_geometry::{NacaOptions, naca};
+
+    use super::*;
+
+    #[test]
+    fn outlines_are_small_and_closed() {
+        let airfoil = naca("2412", &NacaOptions::default()).unwrap();
+        assert!(airfoil.len() > OUTLINE_POINTS);
+        let (x, y) = outline(&airfoil);
+        assert!(x.len() <= OUTLINE_POINTS && x.len() > OUTLINE_POINTS / 2);
+        assert_eq!(x.len(), y.len());
+        assert_eq!(x[0], airfoil.x()[0]);
+        assert_eq!(*x.last().unwrap(), *airfoil.x().last().unwrap());
+    }
 }

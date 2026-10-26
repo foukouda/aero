@@ -41,9 +41,9 @@ use crate::mission::{
     self, Candidate, CandidateSource, RecommendEvent, RecommendRequest, RecommendResult,
 };
 use crate::model::{
-    AirfoilEntry, AirfoilId, AirfoilOrigin, Modification, OperatingMode, OptimizationSetup,
-    PolarData, Session, Settings, Shape, StoredOptimization, StoredPolar, load_project,
-    save_project,
+    AirfoilEntry, AirfoilId, AirfoilOrigin, MissionSetup, Modification, OperatingMode,
+    OptimizationSetup, PolarData, Session, Settings, Shape, StoredOptimization, StoredPolar,
+    load_project, save_project,
 };
 
 /// Largest accepted coordinate file, in bytes.
@@ -192,7 +192,12 @@ fn write_file(path: &Path, contents: &[u8]) -> Result<(), AppError> {
 }
 
 /// View of a viscous solution.
-fn viscous_view(id: AirfoilId, solver: &ViscousSolver, sol: &ViscousSolution) -> AnalysisView {
+fn viscous_view(
+    id: AirfoilId,
+    solver: &ViscousSolver,
+    sol: &ViscousSolution,
+    approached: bool,
+) -> AnalysisView {
     let g = solver.inviscid().geometry();
     let x = g.x();
     let le_index = (0..x.len())
@@ -230,6 +235,7 @@ fn viscous_view(id: AirfoilId, solver: &ViscousSolver, sol: &ViscousSolution) ->
             cd: sol.cd,
             cdf: sol.cdf,
             converged: sol.converged,
+            approached,
             iterations: u32::try_from(sol.iterations).unwrap_or(u32::MAX),
             cp_inviscid: sol.cp_inviscid.clone(),
             transition: sol.transition,
@@ -258,6 +264,7 @@ impl Engine {
                 .map(|p| p.display().to_string()),
             optimization: session.optimization.clone(),
             last_optimization: session.last_optimization.clone(),
+            mission: session.mission,
         }
     }
 
@@ -911,18 +918,49 @@ impl Engine {
     }
 
     /// Viscous solution of a request.
+    ///
+    /// The point starts from a fresh boundary layer, as XFOIL after `INIT`.
+    /// If that does not converge (frequent at low Reynolds numbers), it is
+    /// reached from 0° in steps of at most 1°, each from the previous
+    /// boundary layer as in an XFOIL sequence; the flag tells which.
     fn viscous_solution(
         &self,
         id: AirfoilId,
         request: &AnalysisRequest,
-    ) -> Result<(Arc<ViscousSolver>, ViscousSolution), AppError> {
+    ) -> Result<(Arc<ViscousSolver>, ViscousSolution, bool), AppError> {
         let options = request.viscous.options(request.mach);
         let solver = self.viscous_solver(id, request.flap_hinge, &options)?;
         let sol = match request.mode {
             OperatingMode::Alpha => solver.solve(request.alpha_deg)?,
             OperatingMode::Cl => solver.solve_cl(request.cl)?,
         };
-        Ok((solver, sol))
+        if sol.converged {
+            return Ok((solver, sol, false));
+        }
+        let target = match request.mode {
+            OperatingMode::Alpha => request.alpha_deg,
+            OperatingMode::Cl => {
+                solver
+                    .inviscid()
+                    .solve_cl(request.cl, request.mach)?
+                    .alpha_deg
+            }
+        };
+        let steps = target.abs().ceil().max(1.0);
+        let mut session = solver.session();
+        for k in 0..steps as usize {
+            // Unconverged intermediate points still improve the guess.
+            let _ = session.solve(target * k as f64 / steps);
+        }
+        let approached = match request.mode {
+            OperatingMode::Alpha => session.solve(request.alpha_deg)?,
+            OperatingMode::Cl => session.solve_cl(request.cl)?,
+        };
+        Ok(if approached.converged {
+            (solver, approached, true)
+        } else {
+            (solver, sol, false)
+        })
     }
 
     /// Inviscid solution of a request.
@@ -949,8 +987,8 @@ impl Engine {
         request: &AnalysisRequest,
     ) -> Result<AnalysisView, AppError> {
         if request.viscous.enabled {
-            let (solver, sol) = self.viscous_solution(id, request)?;
-            return Ok(viscous_view(id, &solver, &sol));
+            let (solver, sol, approached) = self.viscous_solution(id, request)?;
+            return Ok(viscous_view(id, &solver, &sol, approached));
         }
         let (solver, sol) = self.inviscid_solution(id, request)?;
         let x = solver.geometry().x();
@@ -1342,6 +1380,11 @@ impl Engine {
         lock(&self.session).optimization = setup;
     }
 
+    /// Replaces the flight of the "My aircraft" tab.
+    pub fn update_mission_setup(&self, setup: MissionSetup) {
+        lock(&self.session).mission = setup;
+    }
+
     /// Adds the best design of the last optimization to the library.
     pub fn add_optimized_airfoil(&self) -> Result<AirfoilSummary, AppError> {
         let mut session = lock(&self.session);
@@ -1395,7 +1438,7 @@ impl Engine {
         path: &Path,
     ) -> Result<(), AppError> {
         if request.viscous.enabled {
-            let (solver, sol) = self.viscous_solution(id, request)?;
+            let (solver, sol, _) = self.viscous_solution(id, request)?;
             let g = solver.inviscid().geometry();
             return write_file(path, export::viscous_cp_csv(g.x(), g.y(), &sol).as_bytes());
         }
@@ -1411,7 +1454,7 @@ impl Engine {
         request: &AnalysisRequest,
         path: &Path,
     ) -> Result<(), AppError> {
-        let (_, sol) = self.viscous_solution(id, request)?;
+        let (_, sol, _) = self.viscous_solution(id, request)?;
         write_file(path, export::boundary_layer_csv(&sol).as_bytes())
     }
 
@@ -1648,6 +1691,57 @@ mod tests {
         assert!(err.message.contains("bad.dat"));
         let missing = e.import_file(Path::new("does/not/exist.dat")).unwrap_err();
         assert_eq!(missing.kind, ErrorKind::Io);
+    }
+
+    #[test]
+    fn unconverged_points_are_approached_from_zero() {
+        // RG-15 at Re 75 500, Cl 0.655 (a 300 g model at 20 km/h): from a
+        // fresh boundary layer the point does not converge; reached from 0°
+        // in steps it does, and agrees with the warm-started polar of the
+        // recommendation (Cd 0.0171 there, interpolated).
+        let e = Engine::new();
+        let id = e.add_from_catalogue(&["rg15".to_string()]).unwrap().added[0].id;
+        let viscous = ViscousSettings {
+            enabled: true,
+            reynolds: 75_500.0,
+            ..INVISCID
+        };
+        let request = AnalysisRequest {
+            mode: OperatingMode::Cl,
+            cl: 0.655,
+            mach: 0.016,
+            ..at(0.0, 0.0, &viscous)
+        };
+        let (solver, fresh) = {
+            let options = viscous.options(0.016);
+            let solver = e.viscous_solver(id, None, &options).unwrap();
+            let fresh = solver.solve_cl(0.655).unwrap();
+            (solver, fresh)
+        };
+        assert!(
+            !fresh.converged,
+            "the case no longer exercises the fallback"
+        );
+        drop(solver);
+        let view = e.analyze(id, &request).unwrap();
+        let v = view.viscous.unwrap();
+        assert!(v.converged && v.approached);
+        assert!((v.cd - 0.0171).abs() < 0.001, "Cd {}", v.cd);
+        // A point that converges directly is not flagged.
+        let easy = e
+            .analyze(
+                id,
+                &at(
+                    2.0,
+                    0.0,
+                    &ViscousSettings {
+                        reynolds: 1e6,
+                        ..viscous
+                    },
+                ),
+            )
+            .unwrap();
+        assert!(!easy.viscous.unwrap().approached);
     }
 
     #[test]

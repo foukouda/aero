@@ -8,6 +8,7 @@ use aero_foil2d::viscous::{
     AmplificationModel, MachReynoldsVariation, ViscousOptions, ViscousPolar,
 };
 use aero_geometry::{Airfoil, HingeY, Normalization, PanelingOptions, panel};
+use aero_mission::{Flight, Goal, Wing, WingModel};
 use aero_optim::{
     Constraints, DesignPoint, Evaluation, HistoryEntry, Objective, OptimizeOptions, Problem, Stop,
     Target,
@@ -25,7 +26,8 @@ pub type AirfoilId = u32;
 /// - 1: inviscid analyses only.
 /// - 2: viscous settings; stored polars are tagged `inviscid` or `viscous`.
 /// - 3: shape optimization setup and last result.
-pub const PROJECT_FORMAT_VERSION: u32 = 3;
+/// - 4: the flight of the "My aircraft" tab.
+pub const PROJECT_FORMAT_VERSION: u32 = 4;
 
 /// Magic string identifying project files.
 pub const PROJECT_FORMAT: &str = "aero-project";
@@ -390,6 +392,47 @@ pub struct StoredOptimization {
     pub elapsed_s: f64,
 }
 
+/// The flight of the "My aircraft" tab, from which airfoils are
+/// recommended.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+pub struct MissionSetup {
+    /// Speed, altitude and mass.
+    pub flight: Flight,
+    /// The wing (as given, or as last sized).
+    pub wing: Wing,
+    /// When set, the wing is sized to fly at this lift coefficient, keeping
+    /// its span.
+    pub sizing_cl: Option<f64>,
+    /// What matters most.
+    pub goal: Goal,
+    /// Critical amplification exponent of the transition model.
+    pub ncrit: f64,
+    /// Finite-wing estimate.
+    pub model: WingModel,
+}
+
+impl Default for MissionSetup {
+    /// A 300 g model at 20 km/h, 100 m high, with a 1.2 m × 20 cm wing.
+    fn default() -> Self {
+        Self {
+            flight: Flight {
+                speed: 20.0 / 3.6,
+                altitude: 100.0,
+                temperature_offset: 0.0,
+                mass: 0.3,
+            },
+            wing: Wing {
+                span: 1.2,
+                chord: 0.2,
+            },
+            sizing_cl: None,
+            goal: Goal::LeastDrag,
+            ncrit: 9.0,
+            model: WingModel::default(),
+        }
+    }
+}
+
 /// The whole state of a working session.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Session {
@@ -407,6 +450,9 @@ pub struct Session {
     /// Result of the last shape optimization.
     #[serde(default)]
     pub last_optimization: Option<StoredOptimization>,
+    /// The flight of the "My aircraft" tab (absent before format 4).
+    #[serde(default)]
+    pub mission: MissionSetup,
 }
 
 impl Session {
@@ -801,5 +847,26 @@ mod tests {
         );
         assert_eq!(s.optimization, OptimizationSetup::default());
         assert_eq!(s.last_optimization, None);
+    }
+
+    #[test]
+    fn version_3_fixture_still_loads() {
+        // Frozen file of format version 3 (optimization setup; no flight).
+        let text = include_str!("../tests/fixtures/project_v3.json");
+        let s = load_project(text).unwrap();
+        assert_eq!(s.airfoils.len(), 1);
+        assert_eq!(s.settings.viscous.reynolds, 4.0e5);
+        assert_eq!(s.optimization.problem.points[0].target, Target::Cl(0.7));
+        assert_eq!(s.mission, MissionSetup::default());
+    }
+
+    #[test]
+    fn the_flight_is_saved() {
+        let (mut s, _, _) = session_with_two();
+        s.mission.flight.speed = 12.0;
+        s.mission.sizing_cl = Some(0.6);
+        s.mission.goal = Goal::SlowFlight;
+        let back = load_project(&save_project(&s).unwrap()).unwrap();
+        assert_eq!(back.mission, s.mission);
     }
 }

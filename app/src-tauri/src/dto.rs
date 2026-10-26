@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::model::{
-    AirfoilId, AirfoilOrigin, OperatingMode, OptimizationSetup, Settings, Shape,
+    AirfoilId, AirfoilOrigin, MissionSetup, OperatingMode, OptimizationSetup, Settings, Shape,
     StoredOptimization, StoredPolar, ViscousSettings,
 };
 use aero_optim::{Evaluation, HistoryEntry, Phase};
@@ -56,6 +56,8 @@ pub struct SessionView {
     pub optimization: OptimizationSetup,
     /// Result of the last shape optimization.
     pub last_optimization: Option<StoredOptimization>,
+    /// The flight of the "My aircraft" tab.
+    pub mission: MissionSetup,
 }
 
 /// Result of an import.
@@ -170,6 +172,9 @@ pub struct ViscousView {
     pub cdf: f64,
     /// True if the Newton iteration converged.
     pub converged: bool,
+    /// The point did not converge from a fresh boundary layer and was
+    /// reached from 0° in steps, each from the previous boundary layer.
+    pub approached: bool,
     /// Newton iterations performed.
     pub iterations: u32,
     /// Inviscid pressure coefficient at each node.

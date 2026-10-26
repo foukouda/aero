@@ -78,7 +78,6 @@ impl WingConstraint {
 /// Coefficients of the finite-wing estimate.
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
 pub struct WingModel {
     /// Span efficiency `e` of the induced drag `CL² / (π e AR)`: 1 for an
     /// elliptic loading, about 0.9 for a straight rectangular wing.

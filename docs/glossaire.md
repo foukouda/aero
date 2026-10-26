@@ -50,6 +50,46 @@ XFOIL (1986–2013) est le programme d'analyse de profils le plus utilisé, écr
 
 Aero est une réécriture de XFOIL 6.996 en Rust ; ses résultats sont comparés à ceux de XFOIL sur des cas de référence, jusqu'aux chiffres que XFOIL affiche.
 
+## De l'avion au profil
+
+### Charge alaire
+
+**Le poids de l'appareil divisé par la surface de l'aile : ce que porte chaque décimètre carré d'aile.**
+
+Charge alaire = poids ÷ surface alaire, affichée en grammes par décimètre carré (g/dm²), l'unité des modélistes (1 kg/m² = 10 g/dm²). Une charge alaire faible donne une aile qui vole lentement et en douceur ; une charge élevée demande de la vitesse pour décoller et se poser, mais passe mieux le vent et la turbulence.
+
+Avec le même profil, la vitesse de décrochage croît comme la racine carrée de la charge alaire : doubler la charge l'augmente d'environ 41 %. Valeurs typiques : modèles d'intérieur sous 15 g/dm², park flyers et planeurs 15 à 35, modèles de sport 35 à 70, un Cessna 172 environ 690.
+
+### Atmosphère standard
+
+**Le modèle de l'air utilisé en aviation : température, pression et masse volumique en fonction de l'altitude, pour une journée moyenne.**
+
+L'atmosphère type internationale (ISA) décrit une journée moyenne : 15 °C et 1013,25 hPa au niveau de la mer, une température qui baisse de 6,5 °C par kilomètre jusqu'à 11 km, puis reste à −56,5 °C. Aero en déduit la masse volumique et la viscosité de l'air (U.S. Standard Atmosphere 1976, vérifiée contre ses tables).
+
+Plus l'air est léger, plus une aile doit voler vite pour produire la même portance : à 3000 m la masse volumique vaut 74 % de sa valeur au niveau de la mer. Une journée chaude allège aussi l'air : règle l'écart de température dans les réglages avancés de Mon avion.
+
+### Allongement
+
+**La finesse de forme d'une aile : l'envergure au carré divisée par la surface (envergure ÷ corde pour une aile rectangulaire).**
+
+Une aile longue et étroite (grand allongement, 10 à 30 pour les planeurs) perd moins d'énergie dans ses tourbillons marginaux, donc a moins de traînée induite. Une aile courte et large (4 à 7 pour les avions d'école et de voltige) est plus solide et tourne plus vite. Aero utilise l'allongement dans l'estimation de la traînée induite de Mon avion.
+
+### Traînée induite
+
+**La traînée qu'une aile de longueur finie paie pour porter : l'air contourne les bouts d'aile et forme des tourbillons.**
+
+L'air en surpression sous l'aile contourne les saumons vers la dépression du dessus, ce qui forme les tourbillons marginaux ; l'aile les paie par une traînée supplémentaire. L'estimation classique est CDi = CL² ÷ (π e AR) : elle croît comme le carré du coefficient de portance et diminue avec l'allongement AR ; le coefficient d'Oswald e (environ 0,9 pour une aile rectangulaire droite, 1 pour une aile elliptique) mesure la qualité de la répartition de la portance le long de l'envergure.
+
+À basse vitesse, quand CL est grand, la traînée induite est souvent la plus grosse part de la traînée d'un modèle. Une analyse de profil 2D ne la compte pas : Aero l'ajoute dans l'estimation de l'aile de Mon avion.
+
+### Vitesse de décrochage
+
+**La vitesse la plus faible à laquelle l'aile porte encore l'appareil en vol en palier.**
+
+En dessous de cette vitesse, l'aile aurait besoin de plus que son coefficient de portance maximal : elle décroche. V = √(2 W ÷ (ρ S CLmax)), avec W le poids, ρ la masse volumique de l'air, S la surface alaire et CLmax le coefficient de portance maximal de l'aile. Aero prend 90 % de celui du profil : une aile entière décroche un peu avant sa section, et les méthodes de type XFOIL surestiment la portance maximale d'à peu près autant (10 % sur l'E387 comparé aux mesures en soufflerie de la NASA).
+
+Vole confortablement au-dessus : 1,2 à 1,3 fois la vitesse de décrochage est une marge habituelle.
+
 ## Forces et coefficients
 
 ### Coefficient sans dimension

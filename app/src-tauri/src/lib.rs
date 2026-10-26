@@ -48,6 +48,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::size_wing,
             commands::recommend_airfoils,
             commands::cancel_recommendation,
+            commands::update_mission_setup,
             commands::set_airfoils_visible,
             commands::delete_airfoils,
             commands::duplicate_airfoil,

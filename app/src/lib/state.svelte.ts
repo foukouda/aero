@@ -7,6 +7,12 @@ import { call, CommandError, commands, errorTitle } from "./api";
 import type {
   AnalysisRequest,
   BatchFailure,
+  CandidateResult,
+  CatalogueEntry,
+  Conditions,
+  MissionSetup,
+  RecommendEvent,
+  RecommendResult,
   AnalysisView,
   BestDesign,
   DesignEdit,
@@ -36,8 +42,10 @@ import type {
 import { improvement, objectiveName } from "./optimize";
 import { latestRunner } from "./latest";
 import { TOUR_STEPS, defaultTourLang, type TourAction, type TourLang } from "./tour";
+import { translate, type MessageKey } from "./i18n";
+import { sig } from "./mission";
 
-export type Tab = "geometry" | "analysis" | "polars" | "optimize" | "design";
+export type Tab = "mission" | "geometry" | "analysis" | "polars" | "optimize" | "design";
 export type Theme = "light" | "dark";
 
 export interface Toast {
@@ -58,6 +66,12 @@ export interface SweepProgress {
   /** Same for a viscous sweep. */
   liveViscous: Record<number, ViscousPolarPoint[]>;
   failures: number;
+}
+
+export interface RecommendProgress {
+  jobId: string;
+  done: number;
+  total: number;
 }
 
 export interface OptimizationRun {
@@ -144,7 +158,7 @@ function failureList(failed: BatchFailure[], shown = 3): string {
 class AppState {
   session = $state<SessionView | null>(null);
   selectedId = $state<number | null>(null);
-  tab = $state<Tab>("geometry");
+  tab = $state<Tab>("mission");
   theme = $state<Theme>(initialTheme());
   geometries = $state<Record<number, GeometryView>>({});
   analyses = $state<Record<number, AnalysisView>>({});
@@ -169,6 +183,17 @@ class AppState {
   /** Glossary panel, and the entry to show. */
   glossaryOpen = $state(false);
   glossaryTerm = $state<string | null>(null);
+  /** Airfoil catalogue (My aircraft tab). */
+  catalogue = $state<CatalogueEntry[]>([]);
+  /** Conditions of the flight of the My aircraft tab, or why they cannot
+   * be computed. */
+  missionConditions = $state<Conditions | null>(null);
+  missionError = $state<string | null>(null);
+  /** Last airfoil evaluation for the flight, and the one in progress. */
+  recommendation = $state<RecommendResult | null>(null);
+  recommending = $state<RecommendProgress | null>(null);
+  /** Also evaluate the library airfoils. */
+  includeLibrary = $state(true);
 
   #nextToast = 1;
 
@@ -186,6 +211,15 @@ class AppState {
 
   get settings(): Settings | null {
     return this.session?.settings ?? null;
+  }
+
+  /** Interface text in the current language. */
+  t(key: MessageKey, params: Record<string, string | number> = {}): string {
+    return translate(this.tourLang, key, params);
+  }
+
+  get mission(): MissionSetup | null {
+    return this.session?.mission ?? null;
   }
 
   get viscous(): ViscousSettings {
@@ -252,6 +286,7 @@ class AppState {
     this.setTheme(this.theme);
     await this.guard(async () => {
       this.applySession(await commands.getSession());
+      this.catalogue = await call(commands.getCatalogue());
     });
     // First launch: offer the guided tour.
     if (stored("aero-tour-seen") === null && this.airfoils.length === 0) this.startTour();
@@ -326,6 +361,7 @@ class AppState {
       if (!this.geometries[a.id]) void this.loadGeometry(a.id);
     }
     void this.analyzeVisible();
+    void this.#computeMission($state.snapshot(view.mission) as MissionSetup);
   }
 
   async refresh() {
@@ -1002,6 +1038,175 @@ class AppState {
       this.analysisErrors = {};
       this.applySession(view);
       this.dirty = false;
+    });
+  }
+
+  // ------------------------------------------------------------ my aircraft
+
+  #saveMission = latestRunner(async (setup: MissionSetup) => {
+    await commands.updateMissionSetup(setup);
+  });
+
+  /** Conditions of a flight; sizes the wing first when asked. */
+  #computeMission = latestRunner(async (setup: MissionSetup) => {
+    try {
+      let wing = setup.wing;
+      if (setup.sizing_cl !== null) {
+        wing = await call(
+          commands.sizeWing(setup.flight, setup.sizing_cl, { kind: "span", value: setup.wing.span }),
+        );
+        if (this.session && wing.chord !== this.session.mission.wing.chord) {
+          this.session.mission = { ...this.session.mission, wing };
+          void this.#saveMission($state.snapshot(this.session.mission) as MissionSetup);
+        }
+      }
+      this.missionConditions = await call(commands.missionConditions(setup.flight, wing));
+      this.missionError = null;
+    } catch (e) {
+      this.missionConditions = null;
+      this.missionError = e instanceof Error ? e.message : String(e);
+    }
+  });
+
+  /** Changes the flight of the My aircraft tab. */
+  updateMission(setup: MissionSetup) {
+    if (!this.session) return;
+    this.session.mission = setup;
+    this.dirty = true;
+    const plain = $state.snapshot(setup) as MissionSetup;
+    void this.#saveMission(plain);
+    void this.#computeMission(plain);
+  }
+
+  /** Evaluates the catalogue (and the library) for the flight. */
+  async runRecommendation() {
+    const setup = this.mission;
+    if (!setup || this.recommending) return;
+    const jobId = `recommend-${Date.now()}`;
+    const catalogueIds = this.catalogue.map((c) => c.id);
+    const airfoilIds = this.includeLibrary ? this.airfoils.map((a) => a.id) : [];
+    this.recommending = { jobId, done: 0, total: catalogueIds.length + airfoilIds.length };
+    const channel = new Channel<RecommendEvent>();
+    channel.onmessage = (event) => {
+      if (!this.recommending || event.type !== "progress") return;
+      this.recommending = { ...this.recommending, done: event.done, total: event.total };
+    };
+    const plain = $state.snapshot(setup) as MissionSetup;
+    await this.guard(async () => {
+      this.recommendation = await call(
+        commands.recommendAirfoils(
+          {
+            job_id: jobId,
+            flight: plain.flight,
+            wing: plain.wing,
+            settings: { ncrit: plain.ncrit },
+            model: plain.model,
+            catalogue_ids: catalogueIds,
+            airfoil_ids: airfoilIds,
+          },
+          channel,
+        ),
+      );
+    });
+    this.recommending = null;
+  }
+
+  async cancelRecommendation() {
+    if (this.recommending) await commands.cancelRecommendation(this.recommending.jobId);
+  }
+
+  /** Reynolds number, lift coefficient and Mach number of the last
+   * evaluated flight, rounded as the analysis settings show them. */
+  #flightValues(): { reynolds: number; cl: number; mach: number } | null {
+    const c = this.recommendation?.conditions;
+    if (!c || c.reynolds === null || c.required_cl === null || c.mach === null) return null;
+    return {
+      reynolds: Number(c.reynolds.toPrecision(3)),
+      cl: Number(c.required_cl.toFixed(3)),
+      mach: Number(c.mach.toFixed(3)),
+    };
+  }
+
+  /** Puts a candidate in the library (if needed) and selects it. */
+  async #candidateInLibrary(c: CandidateResult): Promise<number | null> {
+    if (c.source.kind === "library") {
+      this.selectedId = c.source.id;
+      return c.source.id;
+    }
+    const r = await call(commands.addFromCatalogue([c.source.id]));
+    const id = r.added[0]?.id ?? null;
+    this.dirty = true;
+    await this.refresh();
+    if (id !== null) this.selectedId = id;
+    return id;
+  }
+
+  /** Opens a candidate in the Analysis tab at the flight's conditions. */
+  async analyseCandidate(c: CandidateResult) {
+    const flight = this.#flightValues();
+    if (!flight) return;
+    await this.guard(async () => {
+      if ((await this.#candidateInLibrary(c)) === null) return;
+      const { reynolds, cl, mach } = flight;
+      const ncrit = this.mission?.ncrit ?? 9;
+      this.updateSettings({
+        mode: "cl",
+        cl,
+        mach,
+        viscous: {
+          ...($state.snapshot(this.viscous) as ViscousSettings),
+          enabled: true,
+          reynolds,
+          ncrit: [ncrit, ncrit],
+        },
+      });
+      this.tab = "analysis";
+      this.notify(
+        "info",
+        this.t("toast.analyse.title"),
+        this.t("toast.analyse", {
+          name: c.name,
+          re: sig(reynolds, this.tourLang),
+          cl: cl.toFixed(2),
+        }),
+      );
+    });
+  }
+
+  /** Opens a candidate in the Optimize tab: least drag at the flight's lift
+   * coefficient and Reynolds number, keeping at least its thickness. */
+  async optimizeCandidate(c: CandidateResult) {
+    const flight = this.#flightValues();
+    const setup = this.session?.optimization;
+    if (!flight || !setup) return;
+    await this.guard(async () => {
+      if ((await this.#candidateInLibrary(c)) === null) return;
+      const s = $state.snapshot(setup) as OptimizationSetup;
+      const ncrit = this.mission?.ncrit ?? 9;
+      const { reynolds, cl, mach } = flight;
+      s.problem.points = [{ target: { kind: "cl", value: cl }, weight: 1 }];
+      s.problem.objective = "min_drag";
+      s.problem.viscous = {
+        ...s.problem.viscous,
+        reynolds,
+        mach,
+        ncrit: [ncrit, ncrit],
+      };
+      // Rounded down to 0.1 % so the airfoil itself satisfies it.
+      const thickness = c.evaluation?.buildability.thickness;
+      if (thickness) {
+        s.problem.constraints = {
+          ...s.problem.constraints,
+          min_thickness: Math.floor(thickness * 1000) / 1000,
+        };
+      }
+      this.updateOptimizationSetup(s);
+      this.tab = "optimize";
+      this.notify(
+        "info",
+        this.t("toast.optimize.title"),
+        this.t("toast.optimize", { name: c.name, re: sig(reynolds, this.tourLang), cl: cl.toFixed(2) }),
+      );
     });
   }
 

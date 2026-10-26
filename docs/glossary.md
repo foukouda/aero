@@ -50,6 +50,46 @@ XFOIL (1986–2013) is the most widely used airfoil analysis program, written in
 
 Aero is a rewrite of XFOIL 6.996 in Rust; its results are checked against those of XFOIL on reference cases, down to the digits XFOIL prints.
 
+## From the aircraft to the airfoil
+
+### Wing loading
+
+**The aircraft's weight divided by its wing area: what each square decimetre of wing carries.**
+
+Wing loading = weight ÷ wing area, shown in grams per square decimetre (g/dm²), the unit of model aircraft (1 kg/m² = 10 g/dm²). A light wing loading makes a wing that flies slowly and gently; a heavy one needs speed to take off and land, but goes through wind and turbulence better.
+
+With the same airfoil, the stall speed grows with the square root of the wing loading: doubling the loading raises it by about 41 %. Typical values: indoor models under 15 g/dm², park flyers and gliders 15 to 35, sport models 35 to 70, a Cessna 172 about 690.
+
+### Standard atmosphere
+
+**The model of the air used in aviation: temperature, pressure and density as a function of altitude, on an average day.**
+
+The International Standard Atmosphere (ISA) describes an average day: 15 °C and 1013.25 hPa at sea level, the temperature falling by 6.5 °C per kilometre up to 11 km, then constant at −56.5 °C. Aero computes the density and the viscosity of the air from it (U.S. Standard Atmosphere 1976, checked against its tables).
+
+The thinner the air, the faster a wing must fly to make the same lift: at 3000 m the density is 74 % of its sea-level value. A hot day thins the air too: set the temperature offset in the advanced settings of My aircraft.
+
+### Aspect ratio
+
+**How slender a wing is: span squared divided by wing area (span ÷ chord for a rectangular wing).**
+
+A long, narrow wing (a high aspect ratio, 10 to 30 for sailplanes) loses less energy in its wing-tip vortices, so it has less induced drag. A short, wide wing (4 to 7 for trainers and aerobatic models) is sturdier and turns faster. Aero uses the aspect ratio in the induced-drag estimate of My aircraft.
+
+### Induced drag
+
+**The drag a finite wing pays for making lift: air spills around the tips and forms vortices.**
+
+Air at high pressure under the wing flows around the tips towards the low pressure above, forming wing-tip vortices; the wing pays for them with extra drag. The classical estimate is CDi = CL² ÷ (π e AR): it grows with the square of the lift coefficient and falls with the aspect ratio AR; the span efficiency e (about 0.9 for a straight rectangular wing, 1 for an elliptic one) measures how well the lift is spread along the span.
+
+At low speed, when CL is high, induced drag is often the largest part of a model's drag. A 2D airfoil analysis does not include it: Aero adds it in the wing estimate of My aircraft.
+
+### Stall speed
+
+**The slowest speed at which the wing still carries the aircraft in level flight.**
+
+Below this speed the wing would need more than its maximum lift coefficient: it stalls. V = √(2 W ÷ (ρ S CLmax)), with W the weight, ρ the air density, S the wing area and CLmax the wing's maximum lift coefficient. Aero takes 90 % of the airfoil's: a whole wing stalls a little before its section, and XFOIL-type methods over-predict the maximum lift by about that much (10 % on the E387 compared with NASA wind-tunnel measurements).
+
+Fly comfortably above it: 1.2 to 1.3 times the stall speed is a usual margin.
+
 ## Forces and coefficients
 
 ### Dimensionless coefficient
