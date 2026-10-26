@@ -98,6 +98,13 @@ export type AlphaSweep = {
 	step_deg: number | null,
 };
 
+/**  Amplification rate of the eᴺ transition criterion. */
+export type AmplificationModel = 
+/**  Drela's envelope correlation (XFOIL `DAMPL`, the default). */
+"original" | 
+/**  The modified correlation of XFOIL's `DAMP` command (`DAMPL2`). */
+"modified";
+
 /**  Result of a single angle-of-attack analysis. */
 export type AnalysisView = {
 	/**  Airfoil. */
@@ -296,6 +303,25 @@ export type ImportResult = {
 	warnings: string[],
 };
 
+/**
+ *  How the Mach and Reynolds numbers vary with the lift coefficient (XFOIL
+ *  `TYPE`). With a variation, [`ViscousOptions::mach`] and
+ *  [`ViscousOptions::reynolds`] are the values at CL = 1.
+ */
+export type MachReynoldsVariation = 
+/**  Fixed Mach and Reynolds numbers (type 1: fixed chord and speed). */
+"fixed" | 
+/**
+ *  `M·√CL` and `Re·√CL` fixed (type 2: fixed chord and wing loading,
+ *  the speed varies).
+ */
+"inverse_sqrt_cl" | 
+/**
+ *  `M` and `Re·CL` fixed (type 3: fixed speed and lift, the chord
+ *  varies).
+ */
+"inverse_cl";
+
 /**  How an airfoil is normalized to unit chord. */
 export type Normalization = 
 /**
@@ -448,8 +474,13 @@ cancelled: boolean };
 
 /**  A point of a sweep that could not be computed. */
 export type SweepFailure = {
-	/**  Angle of attack, degrees. */
+	/**
+	 *  Angle of attack, degrees (the last one reached for a prescribed-CL
+	 *  point).
+	 */
 	alpha_deg: number | null,
+	/**  Prescribed lift coefficient, for a prescribed-CL sweep. */
+	cl?: number | null,
 	/**  Human readable reason. */
 	message: string,
 };
@@ -481,14 +512,22 @@ export type Transition = {
 };
 
 /**
- *  Options of a viscous analysis (XFOIL `OPER`: `VISC`, `MACH`, `VPAR`,
- *  `ITER`).
+ *  Options of a viscous analysis (XFOIL `OPER`: `VISC`, `MACH`, `TYPE`,
+ *  `VPAR`, `DAMP`, `ITER`).
  */
 export type ViscousOptions = {
-	/**  Reynolds number based on the chord and the freestream speed. */
+	/**
+	 *  Reynolds number based on the chord and the freestream speed (at
+	 *  CL = 1 with a [`MachReynoldsVariation`]).
+	 */
 	reynolds?: number | null,
-	/**  Freestream Mach number, `0 ≤ M < 1`. */
+	/**
+	 *  Freestream Mach number, `0 ≤ M < 1` (at CL = 1 with a
+	 *  [`MachReynoldsVariation`]).
+	 */
 	mach?: number | null,
+	/**  Dependence of the Mach and Reynolds numbers on the lift. */
+	variation?: MachReynoldsVariation,
 	/**
 	 *  Critical amplification ratio `Ncrit` of the eᴺ transition criterion
 	 *  on the top and bottom surfaces (XFOIL default 9: average wind
@@ -500,6 +539,8 @@ export type ViscousOptions = {
 	 *  surfaces; 1 or more means free transition only.
 	 */
 	xtr?: [(number | null), (number | null)],
+	/**  Amplification rate correlation. */
+	amplification?: AmplificationModel,
 	/**
 	 *  Newton iterations allowed for one operating point (XFOIL `ITER`,
 	 *  default 20). Points of a sweep get 5 more, as with XFOIL's `ASEQ`.
@@ -512,10 +553,15 @@ export type ViscousOptions = {
 	vaccel?: number | null,
 };
 
-/**  Result of a viscous angle-of-attack sweep. */
+/**  Result of a viscous sweep. */
 export type ViscousPolar = {
 	/**  Options of the analysis. */
 	options: ViscousOptions,
+	/**
+	 *  True for a prescribed-CL sweep (XFOIL `CSEQ`), false for an
+	 *  angle-of-attack sweep (`ASEQ`).
+	 */
+	prescribed_cl?: boolean,
 	/**  Converged points, in sweep order. */
 	points: ViscousPolarPoint[],
 	/**
@@ -525,7 +571,7 @@ export type ViscousPolar = {
 	failures: SweepFailure[],
 	/**
 	 *  True if the sweep stopped after 4 successive unconverged points, as
-	 *  XFOIL's `ASEQ` does.
+	 *  XFOIL's sequences do.
 	 */
 	stopped: boolean,
 	/**  True if the sweep was cancelled by the caller. */
@@ -552,6 +598,15 @@ export type ViscousPolarPoint = {
 	xtr_top: number | null,
 	/**  Transition x/c on the bottom surface. */
 	xtr_bottom: number | null,
+	/**
+	 *  Reynolds number of the point (varies with CL with a
+	 *  [`MachReynoldsVariation`]).
+	 */
+	reynolds?: number | null,
+	/**  Mach number of the point. */
+	mach?: number | null,
+	/**  Flap hinge moment coefficient, if a hinge is set. */
+	hinge_moment?: number | null,
 	/**  Newton iterations. */
 	iterations: number,
 };

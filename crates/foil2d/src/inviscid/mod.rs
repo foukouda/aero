@@ -25,16 +25,19 @@
 //! ```
 
 mod error;
+mod hinge;
 mod panel;
 mod psilin;
 mod solver;
 
 pub use error::{InviscidError, Result};
+pub use hinge::HingeMoment;
+pub(crate) use hinge::hinge_moment;
 pub use panel::{PanelGeometry, TrailingEdgePanel};
 pub(crate) use psilin::psilin;
 pub use psilin::{FieldPoint, Influence};
 pub use solver::{
-    AlphaSweep, InviscidOptions, InviscidSolution, InviscidSolver, OperatingPoint, Polar,
+    AlphaSweep, ClSweep, InviscidOptions, InviscidSolution, InviscidSolver, OperatingPoint, Polar,
     PolarPoint, SweepFailure, SweepProgress, sonic_cp,
 };
 pub(crate) use solver::{clcalc, te_bisector};

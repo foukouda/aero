@@ -25,8 +25,9 @@ mod viscal;
 
 pub use error::{Result, ViscousError};
 pub use solver::{
-    BoundaryLayer, Transition, ViscousOptions, ViscousPolar, ViscousPolarPoint, ViscousSession,
-    ViscousSolution, ViscousSolver, ViscousSweepProgress,
+    AmplificationModel, BoundaryLayer, MachReynoldsVariation, Transition, ViscousOptions,
+    ViscousPolar, ViscousPolarPoint, ViscousSession, ViscousSolution, ViscousSolver,
+    ViscousSweepProgress,
 };
 
 #[cfg(test)]

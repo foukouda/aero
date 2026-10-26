@@ -77,7 +77,7 @@ impl Session<'_> {
 
     /// Boundary-layer distributions as XFOIL's `PLXADD` writes them.
     fn distributions(&self) -> [SideDistributions; 2] {
-        let minf = self.par.mach;
+        let minf = self.minf;
         let beta = (1.0 - minf * minf).sqrt();
         let bfac = 0.5 * minf * minf / (1.0 + beta);
         let que = 0.5 * self.qinf * self.qinf;
@@ -119,7 +119,7 @@ impl Session<'_> {
     /// the current boundary layer (call [`Self::reset_boundary_layer`] first
     /// for XFOIL's `INIT`).
     fn alfa(&mut self, alpha_deg: f64, itmax: usize) -> PointOutput {
-        self.set_alpha(alpha_deg.to_radians());
+        self.alfa_command(alpha_deg.to_radians());
         let (iterations, converged) = self.viscal(itmax);
         self.output(iterations, converged)
     }
@@ -147,7 +147,7 @@ impl Session<'_> {
         let mut iseqex = 0;
         for ipoint in 1..=npoint {
             let alfa = aa1 + daa * (ipoint - 1) as f64;
-            self.set_alpha(alfa);
+            self.aseq_point(alfa);
             let (iterations, converged) = self.viscal(itmax + 5);
             let out = self.output(iterations, converged);
             visit(self, &out);
@@ -238,6 +238,7 @@ fn params(re: f64, mach: f64) -> Parameters {
     Parameters {
         reynolds: re,
         mach,
+        variation: super::session::Variation::Fixed,
         ncrit: [9.0, 9.0],
         xtr: [1.0, 1.0],
         damp2: false,

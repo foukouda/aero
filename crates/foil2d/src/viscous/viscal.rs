@@ -65,8 +65,16 @@ impl Session<'_> {
             self.setbl();
             self.blsolv();
             self.update();
-            // (Mach and Reynolds numbers are fixed: MRCL and COMSET do not
-            // change them.)
+            if self.lalfa {
+                // New Mach and Reynolds numbers for the new CL.
+                let cl = self.cl;
+                (self.minf_cl, self.reinf_cl) = self.mrcl(cl);
+                self.comset();
+            } else {
+                // New inviscid speeds for the new α.
+                self.qiset();
+                self.uicalc();
+            }
             self.qvfue();
             self.gamqv();
             self.stmove();
@@ -76,6 +84,7 @@ impl Session<'_> {
             if self.rmsbl < EPS1 {
                 self.lvconv = true;
                 self.avisc = self.alfa;
+                self.mvisc = self.minf;
                 converged = true;
                 break;
             }

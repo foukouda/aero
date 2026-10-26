@@ -489,6 +489,7 @@ impl Engine {
                     Some(point) => points.push(point),
                     None => failures.push(SweepFailure {
                         alpha_deg: progress.alpha_deg,
+                        cl: None,
                         message: progress.error.clone().unwrap_or_default(),
                     }),
                 }
@@ -548,6 +549,7 @@ impl Engine {
                 Some(point) => points.push(point),
                 None => failures.push(SweepFailure {
                     alpha_deg: progress.alpha_deg,
+                    cl: progress.cl_target,
                     message: progress.error.clone().unwrap_or_default(),
                 }),
             }

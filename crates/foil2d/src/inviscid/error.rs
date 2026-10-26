@@ -50,6 +50,10 @@ pub enum InviscidError {
         mach: f64,
     },
 
+    /// The prescribed lift coefficient cannot be reached.
+    #[error("the lift coefficient {0} cannot be reached")]
+    LiftNotReached(f64),
+
     /// The angle-of-attack sweep definition is invalid.
     #[error("invalid sweep: {0}")]
     InvalidSweep(String),

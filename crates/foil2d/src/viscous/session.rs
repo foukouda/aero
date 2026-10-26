@@ -142,13 +142,28 @@ impl GlobalSystem {
     }
 }
 
+/// How the Mach and Reynolds numbers depend on CL (XFOIL `TYPE`, `MATYP`
+/// and `RETYP`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Variation {
+    /// Type 1: fixed (`MATYP = RETYP = 1`).
+    Fixed,
+    /// Type 2: `M·√CL` and `Re·√CL` fixed (`MATYP = RETYP = 2`).
+    InverseSqrtCl,
+    /// Type 3: `M` and `Re·CL` fixed (`MATYP = 1`, `RETYP = 3`).
+    InverseCl,
+}
+
 /// Parameters of a viscous analysis.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Parameters {
-    /// Reynolds number based on chord and freestream speed.
+    /// Reynolds number based on chord and freestream speed, at CL = 1 when
+    /// it varies with CL (XFOIL `REINF1`).
     pub reynolds: f64,
-    /// Freestream Mach number.
+    /// Freestream Mach number, at CL = 1 when it varies with CL (`MINF1`).
     pub mach: f64,
+    /// Dependence of the Mach and Reynolds numbers on CL.
+    pub variation: Variation,
     /// Critical amplification ratio per side (top, bottom).
     pub ncrit: [f64; 2],
     /// Trip location x/c per side; ≥ 1 for free transition only.
@@ -178,10 +193,22 @@ pub(crate) struct Session<'a> {
 
     /// Angle of attack (radians).
     pub alfa: f64,
+    /// α prescribed (true) or CL prescribed (XFOIL `LALFA`).
+    pub lalfa: bool,
+    /// Prescribed CL (XFOIL `CLSPEC`).
+    pub clspec: f64,
     pub qinf: f64,
+    /// Current freestream Mach and Reynolds numbers (XFOIL `MINF`,
+    /// `REINF`) and their derivatives wrt CL (`MINF_CL`, `REINF_CL`).
+    pub minf: f64,
+    pub reinf: f64,
+    pub minf_cl: f64,
+    pub reinf_cl: f64,
     /// Kármán–Tsien parameter of the freestream Mach number.
     pub tklam: f64,
     pub cl: f64,
+    pub cl_alf: f64,
+    pub cl_msq: f64,
     pub cm: f64,
     pub cdp: f64,
     pub cd: f64,
@@ -209,8 +236,9 @@ pub(crate) struct Session<'a> {
     pub lipan: bool,
     pub lblini: bool,
     pub lvconv: bool,
-    /// Angle of attack of the converged viscous solution.
+    /// Angle of attack and Mach number of the converged viscous solution.
     pub avisc: f64,
+    pub mvisc: f64,
 
     /// Stagnation point: node before it, arc length and sensitivities to
     /// the vorticity of the two nodes around it.
@@ -259,9 +287,17 @@ impl<'a> Session<'a> {
             n,
             nw,
             alfa: 0.0,
+            lalfa: true,
+            clspec: 0.0,
             qinf,
+            minf: par.mach,
+            reinf: par.reynolds,
+            minf_cl: 0.0,
+            reinf_cl: 0.0,
             tklam: 0.0,
             cl: 0.0,
+            cl_alf: 0.0,
+            cl_msq: 0.0,
             cm: 0.0,
             cdp: 0.0,
             cd: 0.0,
@@ -282,6 +318,7 @@ impl<'a> Session<'a> {
             lblini: false,
             lvconv: false,
             avisc: 0.0,
+            mvisc: 0.0,
             ist: 0,
             sst: 0.0,
             sst_go: 0.0,
@@ -305,6 +342,8 @@ impl<'a> Session<'a> {
             s.qinvu[0][i] = g[(i, 0)];
             s.qinvu[1][i] = g[(i, 1)];
         }
+        // As XFOIL's VISC, MACH and TYPE commands.
+        (s.minf_cl, s.reinf_cl) = s.mrcl(1.0);
         s.comset();
         s
     }
@@ -322,7 +361,7 @@ impl<'a> Session<'a> {
 
     /// XFOIL `COMSET`: Kármán–Tsien parameter.
     pub fn comset(&mut self) {
-        let minf = self.par.mach;
+        let minf = self.minf;
         let beta = (1.0 - minf * minf).sqrt();
         self.tklam = minf * minf / ((1.0 + beta) * (1.0 + beta));
     }
@@ -333,33 +372,167 @@ impl<'a> Session<'a> {
         self.lipan = false;
     }
 
-    /// The operating-point part of XFOIL's `ALFA`/`ASEQ` commands: inviscid
-    /// solution at `alfa` (`SPECAL`) and invalidation of the wake and of the
-    /// converged flag when the angle changes.
-    pub fn set_alpha(&mut self, alfa: f64) {
-        self.alfa = alfa;
-        self.qinf = 1.0;
-        self.specal();
+    /// XFOIL `MRCL`: sets the Mach and Reynolds numbers for a lift
+    /// coefficient `cls`; returns their derivatives wrt CL.
+    pub fn mrcl(&mut self, cls: f64) -> (f64, f64) {
+        let cla = cls.max(0.000001);
+        let (minf1, reinf1) = (self.par.mach, self.par.reynolds);
+        let (mut minf, mut m_cls) = match self.par.variation {
+            Variation::InverseSqrtCl => {
+                let minf = minf1 / cla.sqrt();
+                (minf, -0.5 * minf / cla)
+            }
+            Variation::Fixed | Variation::InverseCl => (minf1, 0.0),
+        };
+        let (mut reinf, mut r_cls) = match self.par.variation {
+            Variation::Fixed => (reinf1, 0.0),
+            Variation::InverseSqrtCl => {
+                let reinf = reinf1 / cla.sqrt();
+                (reinf, -0.5 * reinf / cla)
+            }
+            Variation::InverseCl => {
+                let reinf = reinf1 / cla;
+                (reinf, -reinf / cla)
+            }
+        };
+        // "CL too low for chosen Mach(CL) dependence".
+        if minf >= 0.99 {
+            minf = 0.99;
+            m_cls = 0.0;
+        }
+        let rrat = if reinf1 > 0.0 { reinf / reinf1 } else { 1.0 };
+        // "CL too low for chosen Re(CL) dependence".
+        if rrat > 100.0 {
+            reinf = reinf1 * 100.0;
+            r_cls = 0.0;
+        }
+        self.minf = minf;
+        self.reinf = reinf;
+        (m_cls, r_cls)
+    }
+
+    /// Clears the wake and convergence flags that no longer apply, as the
+    /// operating-point commands of XFOIL do.
+    fn invalidate(&mut self) {
         if (self.alfa - self.awake).abs() > 1.0e-5 {
             self.lwake = false;
         }
         if (self.alfa - self.avisc).abs() > 1.0e-5 {
             self.lvconv = false;
         }
+        if (self.minf - self.mvisc).abs() > 1.0e-5 {
+            self.lvconv = false;
+        }
     }
 
-    /// XFOIL `SPECAL` at fixed Mach number: inviscid vorticity, speeds and
-    /// forces at the current angle of attack.
-    fn specal(&mut self) {
+    /// XFOIL `ALFA`: inviscid solution at `alfa` (`SPECAL`), then
+    /// invalidation of the wake and of the converged flag.
+    pub fn alfa_command(&mut self, alfa: f64) {
+        self.lalfa = true;
+        self.alfa = alfa;
+        self.qinf = 1.0;
+        self.specal();
+        self.invalidate();
+    }
+
+    /// One point of XFOIL's `ASEQ` (the flags are checked before `SPECAL`).
+    pub fn aseq_point(&mut self, alfa: f64) {
+        self.lalfa = true;
+        self.alfa = alfa;
+        self.invalidate();
+        self.specal();
+    }
+
+    /// XFOIL `CL`: inviscid solution at the prescribed lift, starting from
+    /// α = 0 (`SPECCL`).
+    pub fn cl_command(&mut self, cl: f64) {
+        self.lalfa = false;
+        self.clspec = cl;
+        self.alfa = 0.0;
+        self.qinf = 1.0;
+        self.speccl();
+        self.invalidate();
+    }
+
+    /// One point of XFOIL's `CSEQ`, starting from the current α.
+    pub fn cseq_point(&mut self, cl: f64) {
+        self.lalfa = false;
+        self.clspec = cl;
+        self.speccl();
+        self.invalidate();
+        self.specal();
+    }
+
+    /// Inviscid vorticity at the current angle of attack.
+    fn set_gamma(&mut self) {
         let g = self.inv.base_solutions();
         let (sina, cosa) = self.alfa.sin_cos();
         for i in 0..self.n {
             self.gam[i] = cosa * g[(i, 0)] + sina * g[(i, 1)];
             self.gam_a[i] = -sina * g[(i, 0)] + cosa * g[(i, 1)];
         }
+    }
+
+    /// XFOIL `SPECAL`: inviscid vorticity, speeds and forces at the current
+    /// angle of attack, with the Mach number converged for CL if it depends
+    /// on it.
+    fn specal(&mut self) {
+        self.set_gamma();
         self.qiset();
+
+        // Newton iteration on the CL that defines the Mach number.
+        let mut clm = 1.0;
+        let (mut minf_clm, _) = self.mrcl(clm);
         self.comset();
         self.clcalc();
+        let fixed_mach = self.par.variation != Variation::InverseSqrtCl;
+        for _ in 0..20 {
+            let msq_clm = 2.0 * self.minf * minf_clm;
+            let dclm = (self.cl - clm) / (1.0 - self.cl_msq * msq_clm);
+            let clm1 = clm;
+            // Underrelaxation keeping M(CL) below 1.
+            let mut rlx = 1.0;
+            for _ in 0..12 {
+                clm = clm1 + rlx * dclm;
+                minf_clm = self.mrcl(clm).0;
+                if fixed_mach || self.minf == 0.0 || minf_clm != 0.0 {
+                    break;
+                }
+                rlx *= 0.5;
+            }
+            self.comset();
+            self.clcalc();
+            if dclm.abs() <= 1.0e-6 {
+                break;
+            }
+        }
+        // (XFOIL: "SPECAL: Minf convergence failed" after 20 iterations.)
+
+        let cl = self.cl;
+        (self.minf_cl, self.reinf_cl) = self.mrcl(cl);
+        self.comset();
+        self.clcalc();
+    }
+
+    /// XFOIL `SPECCL`: Newton iteration on α for the inviscid CL to be the
+    /// prescribed one, at the Mach number of that CL.
+    fn speccl(&mut self) {
+        let clspec = self.clspec;
+        (self.minf_cl, self.reinf_cl) = self.mrcl(clspec);
+        self.comset();
+        self.set_gamma();
+        self.clcalc();
+        for _ in 0..20 {
+            let dalfa = (clspec - self.cl) / self.cl_alf;
+            self.alfa += dalfa;
+            self.set_gamma();
+            self.clcalc();
+            if dalfa.abs() <= 1.0e-6 {
+                break;
+            }
+        }
+        // (XFOIL: "SPECCL: CL convergence failed" after 20 iterations.)
+        self.qiset();
     }
 
     /// XFOIL `CLCALC` with the current vorticity.
@@ -371,10 +544,12 @@ impl<'a> Session<'a> {
             &self.gam,
             &self.gam_a,
             self.alfa,
-            self.par.mach,
+            self.minf,
             self.par.moment_reference,
         );
         self.cl = c.cl;
+        self.cl_alf = c.cl_alpha;
+        self.cl_msq = c.cl_msq;
         self.cm = c.cm;
         self.cdp = c.cdp;
     }
@@ -757,7 +932,7 @@ impl<'a> Session<'a> {
 
     /// XFOIL `CPCALC`: compressible pressure coefficients of the speeds `q`.
     pub fn cpcalc(&self, q: &[f64]) -> Vec<f64> {
-        let minf = self.par.mach;
+        let minf = self.minf;
         let beta = (1.0 - minf * minf).sqrt();
         let bfac = 0.5 * minf * minf / (1.0 + beta);
         q.iter()

@@ -151,6 +151,7 @@ mod tests {
             airfoil_name: "B".into(),
             polar: PolarData::Viscous(ViscousPolar {
                 options: ViscousOptions::default(),
+                prescribed_cl: false,
                 points: vec![ViscousPolarPoint {
                     alpha_deg: 4.0,
                     cl: 0.43,
@@ -161,6 +162,9 @@ mod tests {
                     cp_min: -1.4,
                     xtr_top: 0.25,
                     xtr_bottom: 0.97,
+                    reynolds: 1.0e6,
+                    mach: 0.0,
+                    hinge_moment: None,
                     iterations: 7,
                 }],
                 failures: vec![],

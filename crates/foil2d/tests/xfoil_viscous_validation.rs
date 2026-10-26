@@ -24,6 +24,8 @@ mod common;
 use common::viscous::{
     LogComparison, TOLERANCES, check_viscous_case, compare_logs, viscous_validation_dir,
 };
+use std::ops::ControlFlow;
+
 use common::{cases_in, par_map};
 
 /// The validation set must not silently shrink.
@@ -202,10 +204,10 @@ fn cases_that_break_xfoil_terminate() {
         }
         for run in case.viscous_runs() {
             let solver = common::viscous::viscous_solver(&case, &run);
-            let polar = solver.sweep(&run.polar).unwrap();
-            assert!(polar.points.len() + polar.failures.len() <= run.polar.alphas().unwrap().len());
+            let polar = run.run_polar(&mut solver.session(), |_, _| ControlFlow::Continue(()));
+            assert!(polar.points.len() + polar.failures.len() <= run.polar_len());
             for &alpha in &run.points {
-                let s = solver.solve(alpha).unwrap();
+                let s = run.run_point(&mut solver.session(), alpha).unwrap();
                 assert!(s.iterations <= run.options.max_iterations);
             }
         }

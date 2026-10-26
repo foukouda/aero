@@ -11,7 +11,7 @@
 
 use super::blsys::{Flow, Regime};
 use super::march::dslim;
-use super::session::Session;
+use super::session::{Session, Variation};
 
 impl Session<'_> {
     /// System line, panel node and sign of the tangential velocity of every
@@ -58,13 +58,14 @@ impl Session<'_> {
     /// velocities and displacement thicknesses, then linearizes the interval
     /// equations of every station into the global Newton system.
     pub(crate) fn setbl(&mut self) {
-        // Mach and Reynolds numbers do not depend on CL here (MATYP = RETYP
-        // = 1): their sensitivities to the global variable vanish.
-        let re_clmr = 0.0;
-        let msq_clmr = 0.0;
+        // Mach and Reynolds numbers of the CL that defines them, and their
+        // sensitivities to it (the global variable when α is prescribed).
+        let clmr = if self.lalfa { self.cl } else { self.clspec };
+        let (ma_clmr, re_clmr) = self.mrcl(clmr);
+        let msq_clmr = 2.0 * self.minf * ma_clmr;
 
         self.comset();
-        self.bl.flow = Flow::new(self.qinf, self.par.mach, self.par.reynolds);
+        self.bl.flow = Flow::new(self.qinf, self.minf, self.reinf);
         self.bl.damp2 = self.par.damp2;
 
         if !self.lblini {
@@ -88,6 +89,9 @@ impl Session<'_> {
         let jvte2 = bot.isys[bot.iblte];
         let dule1 = top.uedg[2] - usav[0][2];
         let dule2 = bot.uedg[2] - usav[1][2];
+        let ule1_a = top.uinv_a[2];
+        let ule2_a = bot.uinv_a[2];
+        let lalfa = self.lalfa;
 
         // Leading- and trailing-edge Ue sensitivities to all mass defects.
         let mut ule1_m = vec![0.0; nsys];
@@ -115,6 +119,8 @@ impl Session<'_> {
             // No station "1" at the similarity station.
             u1_m.iter_mut().for_each(|v| *v = 0.0);
             d1_m.iter_mut().for_each(|v| *v = 0.0);
+            let mut u1_a = 0.0;
+            let mut d1_a = 0.0;
             let mut due1 = 0.0;
             let mut dds1 = 0.0;
 
@@ -172,6 +178,8 @@ impl Session<'_> {
                     d2_m[jv] = d2_u2 * u2_m[jv];
                 }
                 d2_m[iv] += d2_m2;
+                let u2_a = side.uinv_a[ibl];
+                let d2_a = d2_u2 * u2_a;
 
                 // "Forced" changes due to the mismatch between UEDG and
                 // USAV = UINV + DIJ·MASS.
@@ -243,7 +251,13 @@ impl Session<'_> {
                     }
                     sys.vb[iv][k] = [vs.vs1[k][0], vs.vs1[k][1]];
                     sys.va[iv][k] = [vs.vs2[k][0], vs.vs2[k][1]];
-                    sys.vdel[iv][k][1] = vs.vsr[k] * re_clmr + vs.vsm[k] * msq_clmr;
+                    sys.vdel[iv][k][1] = if lalfa {
+                        vs.vsr[k] * re_clmr + vs.vsm[k] * msq_clmr
+                    } else {
+                        (vs.vs1[k][3] * u1_a + vs.vs1[k][2] * d1_a)
+                            + (vs.vs2[k][3] * u2_a + vs.vs2[k][2] * d2_a)
+                            + xi_coef * (xi_ule1 * ule1_a + xi_ule2 * ule2_a)
+                    };
                     sys.vdel[iv][k][0] = vs.vsrez[k]
                         + (vs.vs1[k][3] * due1 + vs.vs1[k][2] * dds1)
                         + (vs.vs2[k][3] * due2 + vs.vs2[k][2] * dds2)
@@ -301,6 +315,8 @@ impl Session<'_> {
 
                 std::mem::swap(&mut u1_m, &mut u2_m);
                 std::mem::swap(&mut d1_m, &mut d2_m);
+                u1_a = u2_a;
+                d1_a = d2_a;
                 due1 = due2;
                 dds1 = dds2;
 
@@ -487,15 +503,21 @@ impl Session<'_> {
 
     /// XFOIL `UPDATE`: adds the Newton changes to the boundary-layer
     /// variables, underrelaxed if they are too large, and measures them
-    /// (`rmsbl`). With a prescribed α the global variable is CL, whose
-    /// change also limits the relaxation.
+    /// (`rmsbl`). The global variable is CL when α is prescribed, α when CL
+    /// is; its change also limits the relaxation.
     pub(crate) fn update(&mut self) {
-        // Maximum CL change per iteration (fixed Mach number: MATYP = 1).
+        // Maximum CL and α changes per iteration.
         const DCLMAX: f64 = 0.5;
-        const DCLMIN: f64 = -0.5;
+        let dclmin = if self.par.variation == Variation::InverseSqrtCl {
+            (-0.9 * self.cl).max(-0.5)
+        } else {
+            -0.5
+        };
+        let dalmax = 0.5 * std::f64::consts::PI / 180.0;
+        let dalmin = -dalmax;
         const GAMM1: f64 = 0.4;
 
-        let minf = self.par.mach;
+        let minf = self.minf;
         let qinf = self.qinf;
         let hstinv = GAMM1 * (minf / qinf).powi(2) / (1.0 + 0.5 * GAMM1 * minf * minf);
 
@@ -527,9 +549,10 @@ impl Session<'_> {
                     dui += ue_m * mplus[jv];
                     dui_ac += ue_m * mac[jv];
                 }
-                // UINV does not depend on the global variable CL.
+                // UINV depends on the global variable only if it is α.
+                let uinv_ac = if self.lalfa { 0.0 } else { side.uinv_a[ibl] };
                 unew[is][ibl] = side.uinv[ibl] + dui;
-                u_ac[is][ibl] = dui_ac;
+                u_ac[is][ibl] = uinv_ac + dui_ac;
             }
         }
 
@@ -562,6 +585,7 @@ impl Session<'_> {
         let geo = self.geo();
         let (x, y) = (&geo.x, &geo.y);
         let mut clnew = 0.0;
+        let mut cl_a = 0.0;
         let mut cl_ms = 0.0;
         let mut cl_ac = 0.0;
         let (mut cpg1, mut cpg1_ms, mut cpg1_ac) = pressure(qnew[0], q_ac[0]);
@@ -569,7 +593,9 @@ impl Session<'_> {
             let ip = if i + 1 == n { 0 } else { i + 1 };
             let (cpg2, cpg2_ms, cpg2_ac) = pressure(qnew[ip], q_ac[ip]);
             let dx = (x[ip] - x[i]) * ca + (y[ip] - y[i]) * sa;
+            let dx_a = -(x[ip] - x[i]) * sa + (y[ip] - y[i]) * ca;
             clnew += dx * 0.5 * (cpg2 + cpg1);
+            cl_a += dx_a * 0.5 * (cpg2 + cpg1);
             cl_ms += dx * 0.5 * (cpg2_ms + cpg1_ms);
             cl_ac += dx * 0.5 * (cpg2_ac + cpg1_ac);
             cpg1 = cpg2;
@@ -577,17 +603,28 @@ impl Session<'_> {
             cpg1_ac = cpg2_ac;
         }
 
-        // α prescribed: the global variable is CL, the Mach number does not
-        // depend on it (MINF_CL = 0).
-        let minf_cl = 0.0;
         let mut rlx = 1.0;
-        let dac = (clnew - self.cl) / (1.0 - cl_ac - cl_ms * 2.0 * minf * minf_cl);
-        if rlx * dac > DCLMAX {
-            rlx = DCLMAX / dac;
-        }
-        if rlx * dac < DCLMIN {
-            rlx = DCLMIN / dac;
-        }
+        let dac = if self.lalfa {
+            // α prescribed: change of CL (and of Re, M with it).
+            let dac = (clnew - self.cl) / (1.0 - cl_ac - cl_ms * 2.0 * minf * self.minf_cl);
+            if rlx * dac > DCLMAX {
+                rlx = DCLMAX / dac;
+            }
+            if rlx * dac < dclmin {
+                rlx = dclmin / dac;
+            }
+            dac
+        } else {
+            // CL prescribed: change of α driving CL to its value.
+            let dac = (clnew - self.clspec) / (0.0 - cl_ac - cl_a);
+            if rlx * dac > dalmax {
+                rlx = dalmax / dac;
+            }
+            if rlx * dac < dalmin {
+                rlx = dalmin / dac;
+            }
+            dac
+        };
 
         // Changes of the boundary-layer variables and underrelaxation.
         const DHI: f64 = 1.5;
@@ -649,8 +686,12 @@ impl Session<'_> {
         self.ismxbl = ismxbl;
         self.rlx = rlx;
 
-        // Underrelaxed change of CL.
-        self.cl += rlx * dac;
+        // Underrelaxed change of the global variable.
+        if self.lalfa {
+            self.cl += rlx * dac;
+        } else {
+            self.alfa += rlx * dac;
+        }
 
         // Update the boundary-layer variables.
         for is in 0..2 {

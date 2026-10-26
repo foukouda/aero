@@ -9,6 +9,7 @@ use faer::{Mat, MatRef};
 use serde::{Deserialize, Serialize};
 
 use super::error::{InviscidError, Result};
+use super::hinge::{HingeMoment, hinge_moment};
 use super::panel::PanelGeometry;
 use super::psilin::{FieldPoint, Influence, psilin};
 
@@ -33,6 +34,9 @@ pub struct InviscidOptions {
     /// Moment reference point (XFOIL `XCMREF`, `YCMREF`), in airfoil
     /// coordinates. Defaults to the quarter chord `(0.25, 0)`.
     pub moment_reference: [f64; 2],
+    /// Flap hinge point (XFOIL `FNEW`): when set, the solutions include the
+    /// hinge moment of the part of the airfoil aft of it.
+    pub flap_hinge: Option<[f64; 2]>,
 }
 
 impl Default for InviscidOptions {
@@ -40,6 +44,7 @@ impl Default for InviscidOptions {
         Self {
             allow_supercritical: false,
             moment_reference: [0.25, 0.0],
+            flap_hinge: None,
         }
     }
 }
@@ -103,6 +108,8 @@ pub struct InviscidSolution {
     /// True if `Cp min < Cp*` (only possible with
     /// [`InviscidOptions::allow_supercritical`]).
     pub supercritical: bool,
+    /// Flap hinge moment, if a hinge is set ([`InviscidOptions::flap_hinge`]).
+    pub hinge: Option<HingeMoment>,
 }
 
 /// An angle-of-attack sweep, with the semantics of XFOIL's `ASEQ`.
@@ -123,36 +130,56 @@ impl AlphaSweep {
 
     /// The angles of attack of the sweep (XFOIL: `N = INT((A2 − A1)/ΔA + 0.5) + 1`).
     pub fn alphas(&self) -> Result<Vec<f64>> {
-        let Self {
-            start_deg: a1,
-            end_deg: a2,
-            step_deg,
-        } = *self;
-        if !(a1.is_finite() && a2.is_finite() && step_deg.is_finite()) {
-            return Err(InviscidError::InvalidSweep("values must be finite".into()));
-        }
-        if step_deg == 0.0 {
-            if a1 == a2 {
-                return Ok(vec![a1]);
-            }
-            return Err(InviscidError::InvalidSweep(
-                "the step must not be zero".into(),
-            ));
-        }
-        let step = if a2 < a1 {
-            -step_deg.abs()
-        } else {
-            step_deg.abs()
-        };
-        let count = ((a2 - a1) / step + 0.5).floor() + 1.0;
-        if count > Self::MAX_POINTS as f64 {
-            return Err(InviscidError::InvalidSweep(format!(
-                "too many points ({count}), at most {}",
-                Self::MAX_POINTS
-            )));
-        }
-        Ok((0..count as usize).map(|k| a1 + step * k as f64).collect())
+        sweep_values(self.start_deg, self.end_deg, self.step_deg)
     }
+}
+
+/// A sweep of prescribed lift coefficients, with the semantics of XFOIL's
+/// `CSEQ`.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ClSweep {
+    /// First lift coefficient.
+    pub start: f64,
+    /// Last lift coefficient (included when it falls on the grid).
+    pub end: f64,
+    /// Increment; its sign is adjusted to go from start to end.
+    pub step: f64,
+}
+
+impl ClSweep {
+    /// The lift coefficients of the sweep (XFOIL: `N = INT((CL2 − CL1)/ΔCL + 0.5) + 1`).
+    pub fn values(&self) -> Result<Vec<f64>> {
+        sweep_values(self.start, self.end, self.step)
+    }
+}
+
+/// Values `a1 + k·step` from `a1` to `a2`, as XFOIL's sequences.
+fn sweep_values(a1: f64, a2: f64, step_deg: f64) -> Result<Vec<f64>> {
+    if !(a1.is_finite() && a2.is_finite() && step_deg.is_finite()) {
+        return Err(InviscidError::InvalidSweep("values must be finite".into()));
+    }
+    if step_deg == 0.0 {
+        if a1 == a2 {
+            return Ok(vec![a1]);
+        }
+        return Err(InviscidError::InvalidSweep(
+            "the step must not be zero".into(),
+        ));
+    }
+    let step = if a2 < a1 {
+        -step_deg.abs()
+    } else {
+        step_deg.abs()
+    };
+    let count = ((a2 - a1) / step + 0.5).floor() + 1.0;
+    if count > AlphaSweep::MAX_POINTS as f64 {
+        return Err(InviscidError::InvalidSweep(format!(
+            "too many points ({count}), at most {}",
+            AlphaSweep::MAX_POINTS
+        )));
+    }
+    Ok((0..count as usize).map(|k| a1 + step * k as f64).collect())
 }
 
 /// Coefficients of one converged point of a polar.
@@ -193,8 +220,12 @@ impl From<&InviscidSolution> for PolarPoint {
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SweepFailure {
-    /// Angle of attack, degrees.
+    /// Angle of attack, degrees (the last one reached for a prescribed-CL
+    /// point).
     pub alpha_deg: f64,
+    /// Prescribed lift coefficient, for a prescribed-CL sweep.
+    #[serde(default)]
+    pub cl: Option<f64>,
     /// Human readable reason.
     pub message: String,
 }
@@ -517,6 +548,7 @@ impl InviscidSolver {
             });
         }
 
+        let cp_for_hinge = cp.clone();
         let tklam = minf * minf / ((1.0 + beta) * (1.0 + beta));
         let surface_speed_compressible = gam
             .iter()
@@ -538,7 +570,77 @@ impl InviscidSolver {
             cp_min_index,
             cp_star,
             supercritical,
+            hinge: self
+                .options
+                .flap_hinge
+                .map(|h| hinge_moment(&self.geometry, &cp_for_hinge, h)),
         })
+    }
+
+    /// Solves for a prescribed lift coefficient (XFOIL `CLI`, `SPECCL`):
+    /// Newton iteration on α from α = 0. Fails if the lift cannot be
+    /// reached.
+    pub fn solve_cl(&self, cl: f64, mach: f64) -> Result<InviscidSolution> {
+        if !cl.is_finite() {
+            return Err(InviscidError::LiftNotReached(cl));
+        }
+        validate_mach(mach)?;
+        let n = self.len();
+        let mut alfa: f64 = 0.0;
+        let mut gam = vec![0.0; n];
+        let mut gam_a = vec![0.0; n];
+        let mut coefficients = |alfa: f64| {
+            let (sina, cosa) = alfa.sin_cos();
+            for i in 0..n {
+                let (g0, g90) = (self.gamu[(i, 0)], self.gamu[(i, 1)]);
+                gam[i] = cosa * g0 + sina * g90;
+                gam_a[i] = -sina * g0 + cosa * g90;
+            }
+            clcalc(
+                &self.geometry.x,
+                &self.geometry.y,
+                &gam,
+                &gam_a,
+                alfa,
+                mach,
+                self.options.moment_reference,
+            )
+        };
+        let mut c = coefficients(alfa);
+        for _ in 0..20 {
+            let dalfa = (cl - c.cl) / c.cl_alpha;
+            alfa += dalfa;
+            c = coefficients(alfa);
+            if dalfa.abs() <= 1.0e-6 {
+                break;
+            }
+        }
+        let error = (c.cl - cl).abs();
+        if error.is_nan() || error > 1.0e-6 * cl.abs().max(1.0) {
+            return Err(InviscidError::LiftNotReached(cl));
+        }
+        self.solve(OperatingPoint {
+            alpha_deg: alfa.to_degrees(),
+            mach,
+        })
+    }
+
+    /// Runs a prescribed-CL sweep (XFOIL `CSEQ` without the boundary layer).
+    pub fn sweep_cl(&self, sweep: &ClSweep, mach: f64) -> Result<Polar> {
+        self.sweep_cl_with(sweep, mach, |_| ControlFlow::Continue(()))
+    }
+
+    /// Runs a prescribed-CL sweep, calling `on_progress` after each point
+    /// as [`Self::sweep_with`] does.
+    pub fn sweep_cl_with(
+        &self,
+        sweep: &ClSweep,
+        mach: f64,
+        on_progress: impl FnMut(&SweepProgress) -> ControlFlow<()>,
+    ) -> Result<Polar> {
+        validate_mach(mach)?;
+        let values = sweep.values()?;
+        self.run_sweep(&values, mach, true, on_progress)
     }
 
     /// Runs an angle-of-attack sweep reusing the factorization.
@@ -553,19 +655,43 @@ impl InviscidSolver {
         &self,
         sweep: &AlphaSweep,
         mach: f64,
-        mut on_progress: impl FnMut(&SweepProgress) -> ControlFlow<()>,
+        on_progress: impl FnMut(&SweepProgress) -> ControlFlow<()>,
     ) -> Result<Polar> {
         validate_mach(mach)?;
         let alphas = sweep.alphas()?;
-        let total = alphas.len();
+        self.run_sweep(&alphas, mach, false, on_progress)
+    }
+
+    fn run_sweep(
+        &self,
+        values: &[f64],
+        mach: f64,
+        prescribed_cl: bool,
+        mut on_progress: impl FnMut(&SweepProgress) -> ControlFlow<()>,
+    ) -> Result<Polar> {
+        let total = values.len();
         let mut polar = Polar {
             mach,
             points: Vec::with_capacity(total),
             failures: Vec::new(),
             cancelled: false,
         };
-        for (index, &alpha_deg) in alphas.iter().enumerate() {
-            let (point, error) = match self.solve(OperatingPoint { alpha_deg, mach }) {
+        for (index, &value) in values.iter().enumerate() {
+            let result = if prescribed_cl {
+                self.solve_cl(value, mach)
+            } else {
+                self.solve(OperatingPoint {
+                    alpha_deg: value,
+                    mach,
+                })
+            };
+            let alpha_deg = match &result {
+                Ok(s) => s.alpha_deg,
+                Err(_) if prescribed_cl => f64::NAN,
+                Err(_) => value,
+            };
+            let cl = prescribed_cl.then_some(value);
+            let (point, error) = match result {
                 Ok(solution) => {
                     let p = PolarPoint::from(&solution);
                     polar.points.push(p);
@@ -575,6 +701,7 @@ impl InviscidSolver {
                     let message = e.to_string();
                     polar.failures.push(SweepFailure {
                         alpha_deg,
+                        cl,
                         message: message.clone(),
                     });
                     (None, Some(message))
@@ -623,6 +750,8 @@ pub(crate) struct Coefficients {
     pub cm: f64,
     pub cdp: f64,
     pub cl_alpha: f64,
+    /// dCL/d(M∞²).
+    pub cl_msq: f64,
 }
 
 /// XFOIL `CLCALC`: trapezoidal integration of the (compressible) surface
@@ -640,24 +769,28 @@ pub(crate) fn clcalc(
     let (sa, ca) = alfa.sin_cos();
     let [xref, yref] = reference;
     let beta = (1.0 - minf * minf).sqrt();
+    let beta_msq = -0.5 / beta;
     let bfac = 0.5 * minf * minf / (1.0 + beta);
+    let bfac_msq = 0.5 / (1.0 + beta) - bfac / (1.0 + beta) * beta_msq;
 
     let pressure = |g: f64, g_a: f64| {
         let cginc = 1.0 - g * g;
         let cpg = cginc / (beta + bfac * cginc);
+        let cpg_msq = -cpg / (beta + bfac * cginc) * (beta_msq + bfac_msq * cginc);
         let cpi_gam = -2.0 * g;
         let cpc_cpi = (1.0 - bfac * cpg) / (beta + bfac * cginc);
-        (cpg, cpc_cpi * cpi_gam * g_a)
+        (cpg, cpc_cpi * cpi_gam * g_a, cpg_msq)
     };
 
     let mut cl = 0.0;
     let mut cm = 0.0;
     let mut cdp = 0.0;
     let mut cl_alpha = 0.0;
-    let (mut cpg1, mut cpg1_alf) = pressure(gam[0], gam_a[0]);
+    let mut cl_msq = 0.0;
+    let (mut cpg1, mut cpg1_alf, mut cpg1_msq) = pressure(gam[0], gam_a[0]);
     for i in 0..n {
         let ip = if i + 1 == n { 0 } else { i + 1 };
-        let (cpg2, cpg2_alf) = pressure(gam[ip], gam_a[ip]);
+        let (cpg2, cpg2_alf, cpg2_msq) = pressure(gam[ip], gam_a[ip]);
 
         let dx = (x[ip] - x[i]) * ca + (y[ip] - y[i]) * sa;
         let dy = (y[ip] - y[i]) * ca - (x[ip] - x[i]) * sa;
@@ -674,15 +807,18 @@ pub(crate) fn clcalc(
         cdp -= dy * ag;
         cm -= dx * (ag * ax + dg * dx / 12.0) + dy * (ag * ay + dg * dy / 12.0);
         cl_alpha += dx * ag_alf + ag * dx_alf;
+        cl_msq += dx * 0.5 * (cpg2_msq + cpg1_msq);
 
         cpg1 = cpg2;
         cpg1_alf = cpg2_alf;
+        cpg1_msq = cpg2_msq;
     }
     Coefficients {
         cl,
         cm,
         cdp,
         cl_alpha,
+        cl_msq,
     }
 }
 
@@ -990,5 +1126,39 @@ mod tests {
         let back: InviscidOptions =
             serde_json::from_str(&serde_json::to_string(&o).unwrap()).unwrap();
         assert_eq!(back, o);
+    }
+
+    #[test]
+    fn prescribed_lift_matches_angle_of_attack() {
+        let s = solver("2412", TrailingEdge::Open);
+        for mach in [0.0, 0.3] {
+            let a = s
+                .solve(OperatingPoint {
+                    alpha_deg: 3.0,
+                    mach,
+                })
+                .unwrap();
+            let c = s.solve_cl(a.cl, mach).unwrap();
+            assert!((c.alpha_deg - 3.0).abs() < 1e-7, "{}", c.alpha_deg);
+            assert!((c.cl - a.cl).abs() < 1e-9);
+        }
+        assert!(matches!(
+            s.solve_cl(50.0, 0.0),
+            Err(InviscidError::LiftNotReached(_))
+        ));
+        let polar = s
+            .sweep_cl(
+                &ClSweep {
+                    start: 0.0,
+                    end: 1.0,
+                    step: 0.25,
+                },
+                0.0,
+            )
+            .unwrap();
+        let cls: Vec<f64> = polar.points.iter().map(|p| p.cl).collect();
+        for (cl, want) in cls.iter().zip([0.0, 0.25, 0.5, 0.75, 1.0]) {
+            assert!((cl - want).abs() < 1e-9);
+        }
     }
 }

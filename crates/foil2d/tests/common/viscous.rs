@@ -6,8 +6,11 @@ use std::path::{Path, PathBuf};
 
 use std::ops::ControlFlow;
 
-use aero_foil2d::inviscid::{AlphaSweep, InviscidOptions, InviscidSolver};
-use aero_foil2d::viscous::{BoundaryLayer, ViscousOptions, ViscousSolution, ViscousSolver};
+use aero_foil2d::inviscid::{AlphaSweep, ClSweep, InviscidOptions, InviscidSolver};
+use aero_foil2d::viscous::{
+    AmplificationModel, BoundaryLayer, MachReynoldsVariation, ViscousOptions, ViscousPolar,
+    ViscousSession, ViscousSolution, ViscousSolver, ViscousSweepProgress,
+};
 
 use super::{Case, close};
 
@@ -20,11 +23,75 @@ pub fn viscous_validation_dir() -> PathBuf {
 }
 
 /// One `[[viscous]]` run of a case: one XFOIL session.
+#[derive(Debug, Clone)]
 pub struct ViscousRun {
     pub name: String,
     pub options: ViscousOptions,
-    pub polar: AlphaSweep,
+    /// Prescribed lift coefficients (`CSEQ`, `CL`) instead of angles.
+    pub prescribed_cl: bool,
+    /// Flap hinge of the case.
+    pub hinge: Option<[f64; 2]>,
+    /// Polar: start, end and step (angles or lift coefficients).
+    pub polar: [f64; 3],
+    /// Single points (angles or lift coefficients).
     pub points: Vec<f64>,
+}
+
+impl ViscousRun {
+    pub fn alpha_sweep(&self) -> AlphaSweep {
+        AlphaSweep {
+            start_deg: self.polar[0],
+            end_deg: self.polar[1],
+            step_deg: self.polar[2],
+        }
+    }
+
+    pub fn cl_sweep(&self) -> ClSweep {
+        ClSweep {
+            start: self.polar[0],
+            end: self.polar[1],
+            step: self.polar[2],
+        }
+    }
+
+    /// Number of points of the polar.
+    pub fn polar_len(&self) -> usize {
+        if self.prescribed_cl {
+            self.cl_sweep().values().unwrap().len()
+        } else {
+            self.alpha_sweep().alphas().unwrap().len()
+        }
+    }
+
+    /// The polar sequence (`ASEQ` or `CSEQ`) on a session.
+    pub fn run_polar(
+        &self,
+        session: &mut ViscousSession<'_>,
+        on_progress: impl FnMut(&ViscousSweepProgress, Option<&ViscousSolution>) -> ControlFlow<()>,
+    ) -> ViscousPolar {
+        if self.prescribed_cl {
+            session
+                .sweep_cl_with(&self.cl_sweep(), on_progress)
+                .unwrap()
+        } else {
+            session
+                .sweep_with(&self.alpha_sweep(), on_progress)
+                .unwrap()
+        }
+    }
+
+    /// A single point (`ALFA` or `CL`) on a session.
+    pub fn run_point(
+        &self,
+        session: &mut ViscousSession<'_>,
+        value: f64,
+    ) -> aero_foil2d::viscous::Result<ViscousSolution> {
+        if self.prescribed_cl {
+            session.solve_cl(value)
+        } else {
+            session.solve(value)
+        }
+    }
 }
 
 impl Case {
@@ -42,20 +109,31 @@ impl Case {
                 };
                 let polar = r["polar"].as_table().unwrap();
                 let p = |k: &str| polar[k].as_float().unwrap();
+                let variation = match r.get("type").and_then(toml::Value::as_integer) {
+                    None | Some(1) => MachReynoldsVariation::Fixed,
+                    Some(2) => MachReynoldsVariation::InverseSqrtCl,
+                    Some(3) => MachReynoldsVariation::InverseCl,
+                    Some(t) => panic!("unknown type {t}"),
+                };
+                let damp2 = r.get("damp2").and_then(toml::Value::as_bool) == Some(true);
                 ViscousRun {
                     name: r["name"].as_str().unwrap().to_string(),
                     options: ViscousOptions {
                         reynolds: f("reynolds"),
                         mach: f("mach"),
+                        variation,
                         ncrit: pair("ncrit"),
                         xtr: pair("xtr"),
+                        amplification: if damp2 {
+                            AmplificationModel::Modified
+                        } else {
+                            AmplificationModel::Original
+                        },
                         ..ViscousOptions::default()
                     },
-                    polar: AlphaSweep {
-                        start_deg: p("start"),
-                        end_deg: p("end"),
-                        step_deg: p("step"),
-                    },
+                    prescribed_cl: r.get("mode").and_then(toml::Value::as_str) == Some("cl"),
+                    hinge: self.hinge(),
+                    polar: [p("start"), p("end"), p("step")],
                     points: r["points"]
                         .as_array()
                         .unwrap()
@@ -65,6 +143,16 @@ impl Case {
                 }
             })
             .collect()
+    }
+}
+
+impl Case {
+    /// Flap hinge of the case (`hinge = [x, y]`).
+    pub fn hinge(&self) -> Option<[f64; 2]> {
+        self.manifest
+            .get("hinge")
+            .and_then(|v| v.as_array())
+            .map(|a| [a[0].as_float().unwrap(), a[1].as_float().unwrap()])
     }
 }
 
@@ -138,6 +226,8 @@ pub struct ViscousPolarRow {
     pub cdp: f64,
     pub cm: f64,
     pub cp_min: f64,
+    /// Flap hinge moment (`HINC`).
+    pub hinge: Option<f64>,
     pub xtr: [f64; 2],
 }
 
@@ -150,19 +240,28 @@ pub fn parse_viscous_polar(text: &str) -> Vec<ViscousPolarRow> {
         .iter()
         .position(|l| l.trim_start().starts_with("------"))
         .expect("polar header");
+    // Columns before the four per-side ones, by name.
+    let names: Vec<&str> = lines[header - 1]
+        .split_whitespace()
+        .take_while(|w| !w.starts_with("Top_"))
+        .collect();
+    let col = |name: &str| names.iter().position(|n| *n == name);
+    let k = names.len();
     lines[header + 1..]
         .iter()
         .filter(|l| !l.trim().is_empty())
         .map(|l| {
             let v: Vec<f64> = l.split_whitespace().map(|w| w.parse().unwrap()).collect();
+            let get = |name: &str| v[col(name).unwrap()];
             ViscousPolarRow {
-                alpha: v[0],
-                cl: v[1],
-                cd: v[2],
-                cdp: v[3],
-                cm: v[4],
-                cp_min: v[5],
-                xtr: [v[6], v[8]],
+                alpha: get("alpha"),
+                cl: get("CL"),
+                cd: get("CD"),
+                cdp: get("CDp"),
+                cm: get("CM"),
+                cp_min: get("Cpmin"),
+                hinge: col("Chinge").map(|i| v[i]),
+                xtr: [v[k], v[k + 2]],
             }
         })
         .collect()
@@ -303,6 +402,7 @@ pub fn viscous_solver(case: &Case, run: &ViscousRun) -> ViscousSolver {
         &case.our_panels(),
         &InviscidOptions {
             allow_supercritical: true,
+            flap_hinge: run.hinge,
             ..InviscidOptions::default()
         },
     )
@@ -320,14 +420,14 @@ pub fn check_viscous_case(case: &Case) -> (ViscousStats, Vec<String>) {
 
         // The polar: one warm-started sweep.
         let mut converged: Vec<ViscousSolution> = Vec::new();
-        let polar = solver
-            .sweep_with(&run.polar, |_, s| {
-                if let Some(s) = s.filter(|s| s.converged) {
-                    converged.push(s.clone());
-                }
-                ControlFlow::Continue(())
-            })
-            .unwrap();
+        let polar = run.run_polar(&mut solver.session(), |_, s| {
+            if let Some(s) = s.filter(|s| s.converged) {
+                converged.push(s.clone());
+            }
+            ControlFlow::Continue(())
+        });
+        // Angles found by the solver are compared less tightly.
+        let alpha_tol = if run.prescribed_cl { 1e-6 } else { 1e-9 };
         assert!(
             polar
                 .failures
@@ -338,7 +438,11 @@ pub fn check_viscous_case(case: &Case) -> (ViscousStats, Vec<String>) {
         let rows = parse_viscous_polar(&std::fs::read_to_string(file("vpolar", "txt")).unwrap());
         let ours: Vec<f64> = converged.iter().map(|s| s.alpha_deg).collect();
         let theirs: Vec<f64> = dump.iter().map(|d| d.alpha).collect();
-        if ours.len() != theirs.len() || ours.iter().zip(&theirs).any(|(a, b)| (a - b).abs() > 1e-9)
+        if ours.len() != theirs.len()
+            || ours
+                .iter()
+                .zip(&theirs)
+                .any(|(a, b)| (a - b).abs() > alpha_tol)
         {
             failures.push(format!(
                 "{} {}: converged points {ours:?}, XFOIL {theirs:?}",
@@ -349,11 +453,16 @@ pub fn check_viscous_case(case: &Case) -> (ViscousStats, Vec<String>) {
         for ((s, d), row) in converged.iter().zip(&dump).zip(&rows) {
             let tag = format!("{} {} polar a={}", case.name, run.name, d.alpha);
             compare_viscous(s, d, &tag, &mut stats);
-            for (name, a, b, tol) in [
+            let mut printed = vec![
                 ("CDp", s.cdp, row.cdp, PRINTED_5),
                 ("Cpmin", s.cp_min, row.cp_min, PRINTED_4),
                 ("CD", s.cd, row.cd, PRINTED_5),
-            ] {
+            ];
+            if let Some(h) = row.hinge {
+                let ours = s.hinge.map_or(f64::NAN, |x| x.moment);
+                printed.push(("Chinge", ours, h, PRINTED_5));
+            }
+            for (name, a, b, tol) in printed {
                 if !close(a, b, tol, 0.0) {
                     failures.push(format!("{tag}: {name} {a:.6} vs XFOIL {b:.6}"));
                 }
@@ -363,15 +472,23 @@ pub fn check_viscous_case(case: &Case) -> (ViscousStats, Vec<String>) {
         // The single points, each from a fresh boundary layer.
         let mut dump = read_dump(&file("vpdump", "bin")).into_iter();
         let mut next = dump.next();
+        // A dump point is identified by its angle, or its lift coefficient.
+        let same = |d: &DumpPoint, value: f64| {
+            if run.prescribed_cl {
+                (d.cl - value).abs() < 1e-3
+            } else {
+                (d.alpha - value).abs() < 1e-9
+            }
+        };
         for &alpha in &run.points {
-            let s = solver.solve(alpha).unwrap();
-            let tag = format!("{} {} point a={alpha}", case.name, run.name);
+            let s = run.run_point(&mut solver.session(), alpha).unwrap();
+            let tag = format!("{} {} point {alpha}", case.name, run.name);
             match &next {
-                Some(d) if s.converged && (d.alpha - alpha).abs() < 1e-9 => {
+                Some(d) if s.converged && same(d, alpha) => {
                     compare_viscous(&s, d, &tag, &mut stats);
                     next = dump.next();
                 }
-                Some(d) if !s.converged && (d.alpha - alpha).abs() > 1e-9 => {}
+                Some(d) if !s.converged && !same(d, alpha) => {}
                 None if !s.converged => {}
                 _ => failures.push(format!(
                     "{tag}: converged {}, XFOIL's next converged point {:?}",
@@ -410,23 +527,16 @@ pub fn xfoil_log_lines(case: &Case, run: &ViscousRun) -> Vec<String> {
 /// the single points from a fresh boundary layer. The Reynolds number is
 /// multiplied by `1 + eps` (sensitivity checks).
 pub fn our_log_lines(case: &Case, run: &ViscousRun, eps: f64) -> Vec<String> {
-    let mut perturbed = ViscousRun {
-        name: run.name.clone(),
-        options: run.options,
-        polar: run.polar,
-        points: run.points.clone(),
-    };
+    let mut perturbed = run.clone();
     perturbed.options.reynolds *= 1.0 + eps;
     let solver = viscous_solver(case, &perturbed);
     let mut session = solver.session();
     session.record_log(true);
-    session
-        .sweep_with(&run.polar, |_, _| ControlFlow::Continue(()))
-        .unwrap();
+    run.run_polar(&mut session, |_, _| ControlFlow::Continue(()));
     for &alpha in &run.points {
         session.reset();
         // The log is kept whatever the outcome.
-        let _ = session.solve(alpha);
+        let _ = run.run_point(&mut session, alpha);
     }
     session
         .take_log()

@@ -21,7 +21,7 @@ use common::viscous::{
 #[test]
 fn viscous_cases_match_xfoil() {
     let cases = cases_in(&viscous_dir());
-    assert_eq!(cases.len(), 10);
+    assert_eq!(cases.len(), 16);
     let mut total = ViscousStats::default();
     let mut failures = Vec::new();
     for case in &cases {
@@ -80,5 +80,50 @@ fn console_logs_match_xfoil() {
                 other => panic!("{} {}: {other:?}", case.name, run.name),
             }
         }
+    }
+}
+
+#[test]
+fn inviscid_hinge_moments_match_xfoil() {
+    // Inviscid polar of the flap case, with XFOIL's Chinge column.
+    use aero_foil2d::inviscid::{AlphaSweep, InviscidOptions, InviscidSolver};
+    let case = cases_in(&viscous_dir())
+        .into_iter()
+        .find(|c| c.name == "naca2412_flap")
+        .unwrap();
+    let text = std::fs::read_to_string(case.dir.join("polar_M0.00.txt")).unwrap();
+    let rows = common::viscous::parse_viscous_polar(&text);
+    let solver = InviscidSolver::new(
+        &case.our_panels(),
+        &InviscidOptions {
+            flap_hinge: case.hinge(),
+            ..InviscidOptions::default()
+        },
+    )
+    .unwrap();
+    let polar = solver
+        .sweep(
+            &AlphaSweep {
+                start_deg: -4.0,
+                end_deg: 8.0,
+                step_deg: 2.0,
+            },
+            0.0,
+        )
+        .unwrap();
+    assert_eq!(polar.points.len(), rows.len());
+    for row in &rows {
+        let s = solver
+            .solve(aero_foil2d::inviscid::OperatingPoint::incompressible(
+                row.alpha,
+            ))
+            .unwrap();
+        let h = s.hinge.unwrap().moment;
+        assert!(
+            (h - row.hinge.unwrap()).abs() < 5.1e-6,
+            "a={}: {h} vs {:?}",
+            row.alpha,
+            row.hinge
+        );
     }
 }

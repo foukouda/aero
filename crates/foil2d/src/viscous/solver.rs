@@ -6,21 +6,56 @@ use aero_geometry::Airfoil;
 use serde::{Deserialize, Serialize};
 
 use super::error::{Result, ViscousError};
-use super::session::{Parameters, Session};
+use super::session::{Parameters, Session, Variation};
 use crate::inviscid::{
-    AlphaSweep, InviscidError, InviscidOptions, InviscidSolver, SweepFailure, sonic_cp,
+    AlphaSweep, ClSweep, HingeMoment, InviscidError, InviscidOptions, InviscidSolver, SweepFailure,
+    hinge_moment, sonic_cp,
 };
 
-/// Options of a viscous analysis (XFOIL `OPER`: `VISC`, `MACH`, `VPAR`,
-/// `ITER`).
+/// How the Mach and Reynolds numbers vary with the lift coefficient (XFOIL
+/// `TYPE`). With a variation, [`ViscousOptions::mach`] and
+/// [`ViscousOptions::reynolds`] are the values at CL = 1.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MachReynoldsVariation {
+    /// Fixed Mach and Reynolds numbers (type 1: fixed chord and speed).
+    #[default]
+    Fixed,
+    /// `M·√CL` and `Re·√CL` fixed (type 2: fixed chord and wing loading,
+    /// the speed varies).
+    InverseSqrtCl,
+    /// `M` and `Re·CL` fixed (type 3: fixed speed and lift, the chord
+    /// varies).
+    InverseCl,
+}
+
+/// Amplification rate of the eᴺ transition criterion.
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AmplificationModel {
+    /// Drela's envelope correlation (XFOIL `DAMPL`, the default).
+    #[default]
+    Original,
+    /// The modified correlation of XFOIL's `DAMP` command (`DAMPL2`).
+    Modified,
+}
+
+/// Options of a viscous analysis (XFOIL `OPER`: `VISC`, `MACH`, `TYPE`,
+/// `VPAR`, `DAMP`, `ITER`).
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ViscousOptions {
-    /// Reynolds number based on the chord and the freestream speed.
+    /// Reynolds number based on the chord and the freestream speed (at
+    /// CL = 1 with a [`MachReynoldsVariation`]).
     pub reynolds: f64,
-    /// Freestream Mach number, `0 ≤ M < 1`.
+    /// Freestream Mach number, `0 ≤ M < 1` (at CL = 1 with a
+    /// [`MachReynoldsVariation`]).
     pub mach: f64,
+    /// Dependence of the Mach and Reynolds numbers on the lift.
+    pub variation: MachReynoldsVariation,
     /// Critical amplification ratio `Ncrit` of the eᴺ transition criterion
     /// on the top and bottom surfaces (XFOIL default 9: average wind
     /// tunnel).
@@ -28,6 +63,8 @@ pub struct ViscousOptions {
     /// Trip (forced transition) locations x/c on the top and bottom
     /// surfaces; 1 or more means free transition only.
     pub xtr: [f64; 2],
+    /// Amplification rate correlation.
+    pub amplification: AmplificationModel,
     /// Newton iterations allowed for one operating point (XFOIL `ITER`,
     /// default 20). Points of a sweep get 5 more, as with XFOIL's `ASEQ`.
     pub max_iterations: usize,
@@ -41,8 +78,10 @@ impl Default for ViscousOptions {
         Self {
             reynolds: 1.0e6,
             mach: 0.0,
+            variation: MachReynoldsVariation::Fixed,
             ncrit: [9.0, 9.0],
             xtr: [1.0, 1.0],
+            amplification: AmplificationModel::Original,
             max_iterations: 20,
             vaccel: 0.01,
         }
@@ -128,7 +167,7 @@ pub struct BoundaryLayer {
     pub sqrt_ctau: Vec<Option<f64>>,
 }
 
-/// Solution of a viscous analysis at one angle of attack.
+/// Solution of a viscous analysis at one operating point.
 ///
 /// Coefficients are referred to a unit chord in airfoil coordinates, as
 /// for [`crate::inviscid::InviscidSolution`].
@@ -137,10 +176,12 @@ pub struct BoundaryLayer {
 pub struct ViscousSolution {
     /// Angle of attack, degrees.
     pub alpha_deg: f64,
-    /// Reynolds number.
+    /// Reynolds number of the solution.
     pub reynolds: f64,
-    /// Freestream Mach number.
+    /// Freestream Mach number of the solution.
     pub mach: f64,
+    /// Prescribed lift coefficient, for a prescribed-CL point.
+    pub cl_target: Option<f64>,
     /// Lift coefficient (pressure integration of the viscous `Cp`).
     pub cl: f64,
     /// Drag coefficient (Squire–Young formula at the end of the wake).
@@ -176,6 +217,9 @@ pub struct ViscousSolution {
     /// True if the local speed is too large somewhere for the Kármán–Tsien
     /// correction (XFOIL's "compressibility corrections invalid").
     pub compressibility_breakdown: bool,
+    /// Flap hinge moment from the viscous pressures, if a hinge is set
+    /// ([`InviscidOptions::flap_hinge`]).
+    pub hinge: Option<HingeMoment>,
     /// Transition on the top and bottom surfaces.
     pub transition: [Transition; 2],
     /// Top surface, from the stagnation point to the trailing edge.
@@ -208,6 +252,16 @@ pub struct ViscousPolarPoint {
     pub xtr_top: f64,
     /// Transition x/c on the bottom surface.
     pub xtr_bottom: f64,
+    /// Reynolds number of the point (varies with CL with a
+    /// [`MachReynoldsVariation`]).
+    #[serde(default)]
+    pub reynolds: f64,
+    /// Mach number of the point.
+    #[serde(default)]
+    pub mach: f64,
+    /// Flap hinge moment coefficient, if a hinge is set.
+    #[serde(default)]
+    pub hinge_moment: Option<f64>,
     /// Newton iterations.
     pub iterations: usize,
 }
@@ -224,24 +278,31 @@ impl From<&ViscousSolution> for ViscousPolarPoint {
             cp_min: s.cp_min,
             xtr_top: s.transition[0].x,
             xtr_bottom: s.transition[1].x,
+            reynolds: s.reynolds,
+            mach: s.mach,
+            hinge_moment: s.hinge.map(|h| h.moment),
             iterations: s.iterations,
         }
     }
 }
 
-/// Result of a viscous angle-of-attack sweep.
+/// Result of a viscous sweep.
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ViscousPolar {
     /// Options of the analysis.
     pub options: ViscousOptions,
+    /// True for a prescribed-CL sweep (XFOIL `CSEQ`), false for an
+    /// angle-of-attack sweep (`ASEQ`).
+    #[serde(default)]
+    pub prescribed_cl: bool,
     /// Converged points, in sweep order.
     pub points: Vec<ViscousPolarPoint>,
     /// Points that did not converge or were refused (critical Mach number
     /// exceeded).
     pub failures: Vec<SweepFailure>,
     /// True if the sweep stopped after 4 successive unconverged points, as
-    /// XFOIL's `ASEQ` does.
+    /// XFOIL's sequences do.
     pub stopped: bool,
     /// True if the sweep was cancelled by the caller.
     pub cancelled: bool,
@@ -257,19 +318,35 @@ pub struct ViscousSweepProgress {
     pub total: usize,
     /// Angle of attack of the point, degrees.
     pub alpha_deg: f64,
+    /// Prescribed lift coefficient, for a prescribed-CL sweep.
+    pub cl_target: Option<f64>,
     /// The point, if it converged.
     pub point: Option<ViscousPolarPoint>,
     /// Why the point is not part of the polar.
     pub error: Option<String>,
 }
 
+/// One operating-point command of an XFOIL session.
+#[derive(Debug, Clone, Copy)]
+enum Command {
+    /// `ALFA` (radians).
+    Alfa(f64),
+    /// A point of `ASEQ` (radians).
+    Aseq(f64),
+    /// `CL`.
+    Cl(f64),
+    /// A point of `CSEQ`.
+    Cseq(f64),
+}
+
 /// XFOIL's viscous–inviscid analysis of one geometry.
 ///
 /// The solver owns the inviscid solver (influence matrices and their
 /// factorization), is immutable and `Send + Sync`. Each call of
-/// [`Self::solve`] starts from a fresh boundary layer (XFOIL `INIT` then
-/// `ALFA`); [`Self::sweep`] reuses the boundary layer of each point as the
-/// initial guess of the next one, like XFOIL's `ASEQ`, and reproduces
+/// [`Self::solve`] or [`Self::solve_cl`] starts from a fresh boundary layer
+/// (XFOIL `INIT` then `ALFA` or `CL`); [`Self::sweep`] and
+/// [`Self::sweep_cl`] reuse the boundary layer of each point as the initial
+/// guess of the next one, like XFOIL's `ASEQ` and `CSEQ`, and reproduce
 /// XFOIL's sequences. [`Self::session`] gives full control over the warm
 /// starts.
 ///
@@ -283,6 +360,8 @@ pub struct ViscousSweepProgress {
 /// let s = solver.solve(4.0)?;
 /// assert!(s.converged);
 /// assert!((s.cl - 0.4278).abs() < 1e-4 && (s.cd - 0.00728).abs() < 1e-5);
+/// let t = solver.solve_cl(0.5)?; // angle of attack found by the solver
+/// assert!((t.cl - 0.5).abs() < 1e-3 && t.alpha_deg > 4.0);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Debug, Clone)]
@@ -301,7 +380,7 @@ impl ViscousSolver {
     }
 
     /// Builds the solver around an existing inviscid solver, whose options
-    /// (moment reference, `allow_supercritical`) apply.
+    /// (moment reference, `allow_supercritical`, flap hinge) apply.
     pub fn from_inviscid(inviscid: InviscidSolver, options: &ViscousOptions) -> Result<Self> {
         options.validate()?;
         Ok(Self {
@@ -333,9 +412,14 @@ impl ViscousSolver {
         Parameters {
             reynolds: o.reynolds,
             mach: o.mach,
+            variation: match o.variation {
+                MachReynoldsVariation::Fixed => Variation::Fixed,
+                MachReynoldsVariation::InverseSqrtCl => Variation::InverseSqrtCl,
+                MachReynoldsVariation::InverseCl => Variation::InverseCl,
+            },
             ncrit: o.ncrit,
             xtr: o.xtr,
-            damp2: false,
+            damp2: o.amplification == AmplificationModel::Modified,
             vaccel: o.vaccel,
             wake_length: 1.0,
             moment_reference: self.inviscid.options().moment_reference,
@@ -352,6 +436,13 @@ impl ViscousSolver {
     /// [`ViscousSolution::compressibility_breakdown`] set).
     pub fn solve(&self, alpha_deg: f64) -> Result<ViscousSolution> {
         self.session().solve(alpha_deg)
+    }
+
+    /// Solves for a prescribed lift coefficient from a fresh boundary layer
+    /// (XFOIL `CL`): the angle of attack is a Newton variable of the
+    /// viscous solution. Same outcomes as [`Self::solve`].
+    pub fn solve_cl(&self, cl: f64) -> Result<ViscousSolution> {
+        self.session().solve_cl(cl)
     }
 
     /// Runs an angle-of-attack sweep with XFOIL's `ASEQ` semantics.
@@ -374,11 +465,26 @@ impl ViscousSolver {
     ) -> Result<ViscousPolar> {
         self.session().sweep_with(sweep, on_progress)
     }
+
+    /// Runs a prescribed-CL sweep with XFOIL's `CSEQ` semantics.
+    pub fn sweep_cl(&self, sweep: &ClSweep) -> Result<ViscousPolar> {
+        self.sweep_cl_with(sweep, |_, _| ControlFlow::Continue(()))
+    }
+
+    /// Runs a prescribed-CL sweep, as [`Self::sweep_with`] does for angles.
+    pub fn sweep_cl_with(
+        &self,
+        sweep: &ClSweep,
+        on_progress: impl FnMut(&ViscousSweepProgress, Option<&ViscousSolution>) -> ControlFlow<()>,
+    ) -> Result<ViscousPolar> {
+        self.session().sweep_cl_with(sweep, on_progress)
+    }
 }
 
 /// A viscous analysis keeping its boundary layer between points, as an
-/// XFOIL session does: each [`Self::solve`] starts from the previous
-/// solution (XFOIL `ALFA`), [`Self::reset`] discards it (XFOIL `INIT`).
+/// XFOIL session does: each [`Self::solve`] or [`Self::solve_cl`] starts
+/// from the previous solution (XFOIL `ALFA`, `CL`), [`Self::reset`]
+/// discards it (XFOIL `INIT`).
 #[derive(Debug, Clone)]
 pub struct ViscousSession<'a> {
     solver: &'a ViscousSolver,
@@ -392,9 +498,21 @@ impl ViscousSession<'_> {
         if !alpha_deg.is_finite() {
             return Err(InviscidError::InvalidAlpha(alpha_deg).into());
         }
-        let mut s = self.run(alpha_deg.to_radians(), self.solver.options.max_iterations)?;
+        let mut s = self.run(
+            Command::Alfa(alpha_deg.to_radians()),
+            self.solver.options.max_iterations,
+        )?;
         s.alpha_deg = alpha_deg;
         Ok(s)
+    }
+
+    /// Solves for a prescribed lift coefficient starting from the current
+    /// boundary layer (XFOIL `CL`).
+    pub fn solve_cl(&mut self, cl: f64) -> Result<ViscousSolution> {
+        if !cl.is_finite() {
+            return Err(InviscidError::LiftNotReached(cl).into());
+        }
+        self.run(Command::Cl(cl), self.solver.options.max_iterations)
     }
 
     /// Discards the boundary layer: the next point starts from scratch.
@@ -407,19 +525,9 @@ impl ViscousSession<'_> {
     pub fn sweep_with(
         &mut self,
         sweep: &AlphaSweep,
-        mut on_progress: impl FnMut(&ViscousSweepProgress, Option<&ViscousSolution>) -> ControlFlow<()>,
+        on_progress: impl FnMut(&ViscousSweepProgress, Option<&ViscousSolution>) -> ControlFlow<()>,
     ) -> Result<ViscousPolar> {
-        const NSEQEX: usize = 4;
         let alphas = sweep.alphas()?;
-        let total = alphas.len();
-        let mut polar = ViscousPolar {
-            options: self.solver.options,
-            points: Vec::with_capacity(total),
-            failures: Vec::new(),
-            stopped: false,
-            cancelled: false,
-        };
-
         // XFOIL steps the angle in radians from the first one.
         let dtor = std::f64::consts::PI / 180.0;
         let daa = if sweep.end_deg < sweep.start_deg {
@@ -428,15 +536,70 @@ impl ViscousSession<'_> {
             sweep.step_deg.abs()
         };
         let (aa1, daa) = (sweep.start_deg * dtor, daa * dtor);
+        self.sequence(
+            &alphas,
+            false,
+            |k| Command::Aseq(aa1 + daa * k as f64),
+            on_progress,
+        )
+    }
 
+    /// Runs a prescribed-CL sweep from the current boundary layer, like
+    /// [`ViscousSolver::sweep_cl_with`] (XFOIL `CSEQ`).
+    pub fn sweep_cl_with(
+        &mut self,
+        sweep: &ClSweep,
+        on_progress: impl FnMut(&ViscousSweepProgress, Option<&ViscousSolution>) -> ControlFlow<()>,
+    ) -> Result<ViscousPolar> {
+        let values = sweep.values()?;
+        let dcl = if sweep.end < sweep.start {
+            -sweep.step.abs()
+        } else {
+            sweep.step.abs()
+        };
+        let cl1 = sweep.start;
+        self.sequence(
+            &values,
+            true,
+            |k| Command::Cseq(cl1 + dcl * k as f64),
+            on_progress,
+        )
+    }
+
+    /// The sequence loop of XFOIL's `ASEQ` and `CSEQ`.
+    fn sequence(
+        &mut self,
+        values: &[f64],
+        prescribed_cl: bool,
+        command: impl Fn(usize) -> Command,
+        mut on_progress: impl FnMut(&ViscousSweepProgress, Option<&ViscousSolution>) -> ControlFlow<()>,
+    ) -> Result<ViscousPolar> {
+        const NSEQEX: usize = 4;
+        let total = values.len();
+        let mut polar = ViscousPolar {
+            options: self.solver.options,
+            prescribed_cl,
+            points: Vec::with_capacity(total),
+            failures: Vec::new(),
+            stopped: false,
+            cancelled: false,
+        };
         let itmax = self.solver.options.max_iterations + 5;
         let mut unconverged = 0;
-        for (index, &alpha_deg) in alphas.iter().enumerate() {
-            let alfa = aa1 + daa * index as f64;
-            let result = self.run(alfa, itmax).map(|mut s| {
-                s.alpha_deg = alpha_deg;
+        for (index, &value) in values.iter().enumerate() {
+            let result = self.run(command(index), itmax).map(|mut s| {
+                if !prescribed_cl {
+                    // The nominal angle rather than its radian round trip.
+                    s.alpha_deg = value;
+                }
                 s
             });
+            let alpha_deg = match &result {
+                Ok(s) => s.alpha_deg,
+                Err(_) if prescribed_cl => self.state.alfa.to_degrees(),
+                Err(_) => value,
+            };
+            let cl_target = prescribed_cl.then_some(value);
             let (point, error) = match &result {
                 Ok(s) if s.converged => {
                     let p = ViscousPolarPoint::from(s);
@@ -455,6 +618,7 @@ impl ViscousSession<'_> {
             if let Some(message) = &error {
                 polar.failures.push(SweepFailure {
                     alpha_deg,
+                    cl: cl_target,
                     message: message.clone(),
                 });
             }
@@ -462,6 +626,7 @@ impl ViscousSession<'_> {
                 index,
                 total,
                 alpha_deg,
+                cl_target,
                 point,
                 error,
             };
@@ -503,13 +668,19 @@ impl ViscousSession<'_> {
         }
     }
 
-    fn run(&mut self, alfa: f64, itmax: usize) -> Result<ViscousSolution> {
+    fn run(&mut self, command: Command, itmax: usize) -> Result<ViscousSolution> {
         let st = &mut self.state;
-        st.set_alpha(alfa);
+        match command {
+            Command::Alfa(alfa) => st.alfa_command(alfa),
+            Command::Aseq(alfa) => st.aseq_point(alfa),
+            Command::Cl(cl) => st.cl_command(cl),
+            Command::Cseq(cl) => st.cseq_point(cl),
+        }
         let (iterations, converged) = st.viscal(itmax);
-        let solution = solution(st, iterations, converged);
+        let hinge = self.solver.inviscid.options().flap_hinge;
+        let solution = solution(st, iterations, converged, hinge);
 
-        let minf = st.par.mach;
+        let minf = st.minf;
         let allowed = self.solver.inviscid.options().allow_supercritical;
         if solution.compressibility_breakdown && !allowed {
             return Err(InviscidError::CompressibilityBreakdown { mach: minf }.into());
@@ -528,7 +699,12 @@ impl ViscousSession<'_> {
 }
 
 /// Builds the public solution from the session state.
-fn solution(st: &Session<'_>, iterations: usize, converged: bool) -> ViscousSolution {
+fn solution(
+    st: &Session<'_>,
+    iterations: usize,
+    converged: bool,
+    hinge: Option<[f64; 2]>,
+) -> ViscousSolution {
     let n = st.n;
     let cpv = st.cpv();
     let (imin, cp_min) =
@@ -537,7 +713,7 @@ fn solution(st: &Session<'_>, iterations: usize, converged: bool) -> ViscousSolu
             |best, (i, &v)| if v < best.1 { (i, v) } else { best },
         );
     let cp_min_x = st.pan.x[imin];
-    let mach = st.par.mach;
+    let mach = st.minf;
     let cp_star = (mach > 0.0).then(|| sonic_cp(mach));
     let supercritical = cp_star.is_some_and(|c| cp_min < c);
     let beta = (1.0 - mach * mach).sqrt();
@@ -582,8 +758,9 @@ fn solution(st: &Session<'_>, iterations: usize, converged: bool) -> ViscousSolu
 
     ViscousSolution {
         alpha_deg: st.alfa.to_degrees(),
-        reynolds: st.par.reynolds,
+        reynolds: st.reinf,
         mach,
+        cl_target: (!st.lalfa).then_some(st.clspec),
         cl: st.cl,
         cd: st.cd,
         cdp: st.cdp,
@@ -600,6 +777,7 @@ fn solution(st: &Session<'_>, iterations: usize, converged: bool) -> ViscousSolu
         cp_star,
         supercritical,
         compressibility_breakdown,
+        hinge: hinge.map(|h| hinge_moment(st.geo(), &cpv[..n], h)),
         transition: [transition(0), transition(1)],
         top: layer(0, 2..=top.iblte),
         bottom: layer(1, 2..=bot.iblte),
