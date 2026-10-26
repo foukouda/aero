@@ -20,6 +20,7 @@ version = "0.2.0"
 dependencies = [
  "aero-foil2d",
  "aero-geometry",
+ "aero-mission",
  "aero-optim",
  "serde",
  "serde_json",
@@ -62,6 +63,8 @@ dependencies = [
 name = "aero-mission"
 version = "0.2.0"
 dependencies = [
+ "aero-foil2d",
+ "aero-geometry",
  "serde",
  "serde_json",
  "specta",

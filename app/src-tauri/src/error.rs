@@ -4,6 +4,7 @@ use aero_foil2d::inverse::InverseError;
 use aero_foil2d::inviscid::InviscidError;
 use aero_foil2d::viscous::ViscousError;
 use aero_geometry::GeometryError;
+use aero_mission::MissionError;
 use aero_optim::OptimError;
 use serde::Serialize;
 use specta::Type;
@@ -108,6 +109,16 @@ impl From<OptimError> for AppError {
     fn from(e: OptimError) -> Self {
         match e {
             OptimError::Geometry(g) => g.into(),
+            _ => Self::new(ErrorKind::InvalidInput, e.to_string()),
+        }
+    }
+}
+
+impl From<MissionError> for AppError {
+    fn from(e: MissionError) -> Self {
+        match e {
+            MissionError::Geometry(g) => g.into(),
+            MissionError::Analysis(v) => v.into(),
             _ => Self::new(ErrorKind::InvalidInput, e.to_string()),
         }
     }

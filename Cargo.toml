@@ -48,5 +48,8 @@ opt-level = 2
 [profile.dev.package.aero-optim]
 opt-level = 2
 
+[profile.dev.package.aero-mission]
+opt-level = 2
+
 [profile.dev.package.faer]
 opt-level = 2

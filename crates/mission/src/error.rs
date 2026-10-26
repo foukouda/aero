@@ -1,5 +1,7 @@
 //! Error type of the mission calculations.
 
+use aero_foil2d::viscous::ViscousError;
+use aero_geometry::GeometryError;
 use thiserror::Error;
 
 /// Errors produced by the mission calculations.
@@ -10,6 +12,14 @@ pub enum MissionError {
     /// altitude beyond the model…).
     #[error("invalid input: {0}")]
     InvalidInput(String),
+
+    /// A candidate airfoil cannot be paneled.
+    #[error(transparent)]
+    Geometry(#[from] GeometryError),
+
+    /// The viscous analysis of a candidate cannot start.
+    #[error(transparent)]
+    Analysis(#[from] ViscousError),
 }
 
 /// Result type of the mission calculations.

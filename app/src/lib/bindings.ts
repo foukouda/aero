@@ -62,6 +62,17 @@ export const commands = {
 	getCatalogue: () => typedError<CatalogueEntry[], AppError>(__TAURI_INVOKE("get_catalogue")),
 	/**  Adds airfoils of the catalogue to the library. */
 	addFromCatalogue: (ids: string[]) => typedError<BatchResult, AppError>(__TAURI_INVOKE("add_from_catalogue", { ids })),
+	/**  What the wing and its airfoil meet in a level flight. */
+	missionConditions: (flight: Flight, wing: Wing) => typedError<Conditions, AppError>(__TAURI_INVOKE("mission_conditions", { flight, wing })),
+	/**  The wing that flies `flight` at the lift coefficient `cl`. */
+	sizeWing: (flight: Flight, cl: number | null, constraint: WingConstraint) => typedError<Wing, AppError>(__TAURI_INVOKE("size_wing", { flight, cl, constraint })),
+	/**
+	 *  Evaluates catalogue and library airfoils for a flight, streaming
+	 *  progress on `on_event`.
+	 */
+	recommendAirfoils: (request: RecommendRequest, onEvent: Channel<RecommendEvent>) => typedError<RecommendResult, AppError>(__TAURI_INVOKE("recommend_airfoils", { request, onEvent })),
+	/**  Cancels a running airfoil evaluation. */
+	cancelRecommendation: (jobId: string) => __TAURI_INVOKE<boolean>("cancel_recommendation", { jobId }),
 	/**  Shows or hides several airfoils. */
 	setAirfoilsVisible: (ids: number[], visible: boolean) => typedError<null, AppError>(__TAURI_INVOKE("set_airfoils_visible", { ids, visible })),
 	/**  Deletes several airfoils. */
@@ -113,6 +124,22 @@ export const commands = {
 };
 
 /* Types */
+/**  A candidate analysed for a flight. */
+export type AirfoilEvaluation = {
+	/**  Converged points of the polar, by increasing angle. */
+	polar: SectionPoint[],
+	/**  Maximum lift coefficient of the polar, and its angle. */
+	cl_max: SectionPoint | null,
+	/**  The airfoil at the required lift coefficient (interpolated). */
+	operating_point: SectionPoint | null,
+	/**  Wing estimate at the operating point. */
+	performance: Performance | null,
+	/**  How the flight suits the airfoil. */
+	fit: Fit,
+	/**  Shape features for the builder. */
+	buildability: Buildability,
+};
+
 /**  Where an airfoil comes from. */
 export type AirfoilOrigin = 
 /**  Generated NACA section. */
@@ -189,6 +216,23 @@ export type AnalysisRequest = {
 	flap_hinge: [(number | null), (number | null)] | null,
 };
 
+/**  How the candidates are analysed. */
+export type AnalysisSettings = {
+	/**
+	 *  Critical amplification exponent of the transition model: 9 for a
+	 *  clean wind tunnel or calm air, lower for turbulent air.
+	 */
+	ncrit?: number | null,
+	/**  Angle step of the polar, degrees. */
+	alpha_step?: number | null,
+	/**  Highest angle swept, degrees. */
+	alpha_max?: number | null,
+	/**  Lowest angle swept, degrees. */
+	alpha_min?: number | null,
+	/**  Paneling of every candidate. */
+	paneling?: PanelingOptions,
+};
+
 /**  Result of a single-point analysis. */
 export type AnalysisView = {
 	/**  Airfoil. */
@@ -251,6 +295,24 @@ export type AppInfo = {
 	xfoil_reference: string,
 	/**  Project file format version written by this build. */
 	project_format_version: number,
+};
+
+/**  State of the air at an altitude. */
+export type Atmosphere = {
+	/**  Geometric altitude, m. */
+	altitude: number | null,
+	/**  Temperature, K. */
+	temperature: number | null,
+	/**  Pressure, Pa. */
+	pressure: number | null,
+	/**  Density ρ, kg/m³. */
+	density: number | null,
+	/**  Dynamic viscosity μ, Pa·s. */
+	dynamic_viscosity: number | null,
+	/**  Kinematic viscosity ν = μ/ρ, m²/s. */
+	kinematic_viscosity: number | null,
+	/**  Speed of sound, m/s. */
+	speed_of_sound: number | null,
 };
 
 /**  An item of a batch operation that failed. */
@@ -323,6 +385,23 @@ export type BoundaryLayer = {
 	sqrt_ctau: (number | null)[],
 };
 
+/**  Features of the shape that matter to a builder. */
+export type Buildability = {
+	/**  Maximum thickness `t/c`. */
+	thickness: number | null,
+	/**
+	 *  Highest point of the lower surface between 30 % and 95 % of the
+	 *  chord, above the chord line (`y/c`): positive for an undercambered
+	 *  (hollow) lower surface.
+	 */
+	undercamber: number | null,
+	/**
+	 *  Thick enough (at least 8 %) and without a hollow lower surface:
+	 *  easy to build with ribs on a flat board, or from foam.
+	 */
+	easy: boolean,
+};
+
 /**
  *  Camber line and half-thickness distribution of an airfoil, as XFOIL's
  *  `GETCAM` builds them (vertical distances, sorted by x), with their
@@ -342,6 +421,29 @@ export type CamberThickness = {
 	/**  Its abscissa. */
 	max_camber_x: number | null,
 };
+
+/**  A candidate airfoil and its evaluation. */
+export type CandidateResult = {
+	/**  Origin. */
+	source: CandidateSource,
+	/**  Display name. */
+	name: string,
+	/**  Evaluation, when the analysis could run. */
+	evaluation: AirfoilEvaluation | null,
+	/**  Why the analysis could not run. */
+	error: string | null,
+};
+
+/**  Where a candidate comes from. */
+export type CandidateSource = 
+/**  The catalogue. */
+{ kind: "catalogue"; 
+/**  Catalogue identifier. */
+id: string } | 
+/**  The library. */
+{ kind: "library"; 
+/**  Library identifier. */
+id: number };
 
 /**  What an airfoil of the catalogue is good for. */
 export type CatalogueCategory = 
@@ -390,6 +492,30 @@ export type ClSweep = {
 	end: number | null,
 	/**  Increment; its sign is adjusted to go from start to end. */
 	step: number | null,
+};
+
+/**  What the wing and its airfoil meet in a level flight. */
+export type Conditions = {
+	/**  The air at the flight's altitude. */
+	atmosphere: Atmosphere,
+	/**  Airspeed, m/s. */
+	speed: number | null,
+	/**  Dynamic pressure ½ρV², Pa. */
+	dynamic_pressure: number | null,
+	/**  Reynolds number on the mean chord, V c / ν. */
+	reynolds: number | null,
+	/**  Mach number, V / a. */
+	mach: number | null,
+	/**  Weight, N; in level flight the wing lifts exactly this much. */
+	weight: number | null,
+	/**  Wing area, m². */
+	wing_area: number | null,
+	/**  Aspect ratio of the wing. */
+	aspect_ratio: number | null,
+	/**  Wing loading, weight / area, N/m². */
+	wing_loading: number | null,
+	/**  Lift coefficient the wing must fly at, weight / (q S). */
+	required_cl: number | null,
 };
 
 /**  Constraints of the design; `None` or empty disables one. */
@@ -608,6 +734,38 @@ export type Evaluation = {
 	points: PointResult[],
 	/**  Why the design could not be analyzed. */
 	failure: string | null,
+};
+
+/**  How the flight suits an airfoil. */
+export type Fit = 
+/**  The wing flies at most at 70 % of its maximum lift. */
+"comfortable" | 
+/**
+ *  Between 70 % and 85 % of the maximum lift: little margin for gusts
+ *  and turns.
+ */
+"tight" | 
+/**  Above 85 % of the maximum lift: too close to the stall. */
+"near_stall" | 
+/**  The wing cannot lift the aircraft at this speed. */
+"cannot_fly" | 
+/**
+ *  The polar does not reach the required lift coefficient without
+ *  stalling or converging (e.g. a very small lift coefficient below the
+ *  swept angles).
+ */
+"no_data";
+
+/**  A steady level flight. */
+export type Flight = {
+	/**  Airspeed, m/s. */
+	speed: number | null,
+	/**  Geometric altitude, m. */
+	altitude: number | null,
+	/**  Deviation from the standard temperature, K (0 for the standard day). */
+	temperature_offset?: number | null,
+	/**  Mass of the aircraft, kg. */
+	mass: number | null,
 };
 
 /**  Geometric properties of an airfoil. Lengths are divided by the chord. */
@@ -961,6 +1119,33 @@ export type PanelingOptions = {
 	bottom_refinement?: [(number | null), (number | null)],
 };
 
+/**  Estimated performance of the wing in level flight. */
+export type Performance = {
+	/**  Profile drag coefficient (the airfoil's). */
+	profile_cd: number | null,
+	/**  Induced drag coefficient `CL² / (π e AR)`. */
+	induced_cd: number | null,
+	/**  Wing drag coefficient, profile + induced. */
+	cd: number | null,
+	/**  Wing drag, N. */
+	drag: number | null,
+	/**  Power to overcome the wing drag, drag × speed, W. */
+	power: number | null,
+	/**  Lift-to-drag ratio of the wing; also its glide ratio. */
+	lift_to_drag: number | null,
+	/**  Sink rate in a glide at this speed, speed / (L/D), m/s. */
+	sink_rate: number | null,
+	/**  Maximum lift coefficient of the wing. */
+	wing_cl_max: number | null,
+	/**  Speed at which the wing stalls in level flight, m/s. */
+	stall_speed: number | null,
+	/**
+	 *  Required lift coefficient over the wing's maximum: above 1 the wing
+	 *  cannot fly this slowly.
+	 */
+	cl_fraction: number | null,
+};
+
 /**  Phase of an optimization. */
 export type Phase = 
 /**  Evaluation of the fitted initial airfoil. */
@@ -1066,6 +1251,83 @@ export type Problem = {
 	paneling?: PanelingOptions,
 	/**  Design space. */
 	design?: DesignOptions,
+};
+
+/**
+ *  The candidates ordered for each goal, best first (indices into the
+ *  candidates; those that could not be analysed come last).
+ */
+export type Rankings = {
+	/**  Least drag at the flight's speed. */
+	least_drag: number[],
+	/**  Largest maximum lift. */
+	slow_flight: number[],
+	/**  Least drag among the shapes easy to build. */
+	easy_to_build: number[],
+};
+
+/**  Progress of an evaluation, streamed over a channel. */
+export type RecommendEvent = 
+/**  The evaluation starts. */
+{ type: "started"; 
+/**  Number of candidates. */
+total: number } | 
+/**  A candidate is done. */
+{ type: "progress"; 
+/**  Candidates done so far. */
+done: number; 
+/**  Number of candidates. */
+total: number; 
+/**  Name of the candidate just done. */
+name: string } | 
+/**  The evaluation ended. */
+{ type: "finished"; 
+/**  True if it was cancelled. */
+cancelled: boolean };
+
+/**  Airfoils to evaluate for a flight. */
+export type RecommendRequest = {
+	/**  Identifier used to cancel the evaluation. */
+	job_id: string,
+	/**  The flight. */
+	flight: Flight,
+	/**  The wing. */
+	wing: Wing,
+	/**  Analysis of every candidate. */
+	settings: AnalysisSettings,
+	/**  Finite-wing estimate. */
+	model: WingModel,
+	/**  Catalogue airfoils to evaluate. */
+	catalogue_ids: string[],
+	/**  Library airfoils to evaluate. */
+	airfoil_ids: number[],
+};
+
+/**  Result of an evaluation. */
+export type RecommendResult = {
+	/**  Conditions of the flight. */
+	conditions: Conditions,
+	/**  Every candidate, in request order (catalogue, then library). */
+	candidates: CandidateResult[],
+	/**  Orders for each goal. */
+	rankings: Rankings,
+	/**
+	 *  True if the evaluation was cancelled (the candidates evaluated so
+	 *  far are returned).
+	 */
+	cancelled: boolean,
+};
+
+/**  A converged point of a candidate's polar. */
+export type SectionPoint = {
+	/**  Angle of attack, degrees. */
+	alpha_deg: number | null,
+	/**  Lift coefficient. */
+	cl: number | null,
+	/**  Drag coefficient. */
+	cd: number | null,
+	/**  Pitching moment coefficient about the quarter chord. */
+	cm: number | null,
 };
 
 /**  Whole session as shown by the user interface. */
@@ -1411,6 +1673,35 @@ export type ViscousView = {
 	bottom: BoundaryLayer,
 	/**  Wake. */
 	wake: BoundaryLayer,
+};
+
+/**  Size of a wing. */
+export type Wing = {
+	/**  Span, tip to tip, m. */
+	span: number | null,
+	/**  Mean chord, m: the wing area is span × chord. */
+	chord: number | null,
+};
+
+/**  What is kept when a wing is sized for an area. */
+export type WingConstraint = 
+/**  The span is given (m); the chord follows. */
+{ kind: "span"; value: number | null } | 
+/**  The aspect ratio is given; span and chord follow. */
+{ kind: "aspect_ratio"; value: number | null };
+
+/**  Coefficients of the finite-wing estimate. */
+export type WingModel = {
+	/**
+	 *  Span efficiency `e` of the induced drag `CL² / (π e AR)`: 1 for an
+	 *  elliptic loading, about 0.9 for a straight rectangular wing.
+	 */
+	span_efficiency?: number | null,
+	/**
+	 *  Wing maximum lift as a fraction of the airfoil's: the wing stalls
+	 *  a little before its section.
+	 */
+	cl_max_factor?: number | null,
 };
 
 /* Tauri Specta runtime */

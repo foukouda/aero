@@ -11,7 +11,11 @@
 //!   lift coefficient — and the wing size for a chosen lift coefficient;
 //! - [`wing`]: the wing's drag, power, glide ratio and stall speed
 //!   estimated from its airfoil polar with the classical finite-wing
-//!   formulas.
+//!   formulas;
+//! - [`recommend`]: each candidate airfoil analysed at the flight's
+//!   conditions (viscous polar, maximum lift, drag at the required lift
+//!   coefficient, stall margin, ease of building) and the candidates ranked
+//!   by the user's goal.
 //!
 //! All quantities are in SI units (m, m/s, kg, N, Pa, K).
 //!
@@ -35,9 +39,13 @@
 pub mod atmosphere;
 mod error;
 pub mod flight;
+pub mod recommend;
 pub mod wing;
 
 pub use atmosphere::{Atmosphere, isa};
 pub use error::{MissionError, Result};
 pub use flight::{Conditions, Flight};
+pub use recommend::{
+    AirfoilEvaluation, AnalysisSettings, Buildability, Fit, Goal, SectionPoint, evaluate, rank,
+};
 pub use wing::{Performance, SectionData, Wing, WingConstraint, WingModel, performance};

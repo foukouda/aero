@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use aero_geometry::{CamberThickness, HingeY, Normalization, PanelingOptions};
+use aero_mission::{Conditions, Flight, Wing, WingConstraint};
 use tauri::State;
 use tauri::ipc::Channel;
 
@@ -16,6 +17,7 @@ use crate::dto::{
 };
 use crate::engine::Engine;
 use crate::error::{AppError, ErrorKind};
+use crate::mission::{RecommendEvent, RecommendRequest, RecommendResult};
 use crate::model::{
     AirfoilId, Modification, OptimizationSetup, PROJECT_FORMAT_VERSION, Settings,
     StoredOptimization, StoredPolar,
@@ -207,6 +209,40 @@ pub fn add_examples(engine: Shared<'_>) -> Result<Vec<AirfoilSummary>, AppError>
 #[specta::specta]
 pub fn get_catalogue(engine: Shared<'_>) -> Result<Vec<CatalogueEntry>, AppError> {
     engine.catalogue()
+}
+
+/// What the wing and its airfoil meet in a level flight.
+#[tauri::command]
+#[specta::specta]
+pub fn mission_conditions(flight: Flight, wing: Wing) -> Result<Conditions, AppError> {
+    crate::mission::conditions(&flight, &wing)
+}
+
+/// The wing that flies `flight` at the lift coefficient `cl`.
+#[tauri::command]
+#[specta::specta]
+pub fn size_wing(flight: Flight, cl: f64, constraint: WingConstraint) -> Result<Wing, AppError> {
+    Ok(flight.size_wing(cl, &constraint)?)
+}
+
+/// Evaluates catalogue and library airfoils for a flight, streaming
+/// progress on `on_event`.
+#[tauri::command]
+#[specta::specta]
+pub async fn recommend_airfoils(
+    engine: Shared<'_>,
+    request: RecommendRequest,
+    on_event: Channel<RecommendEvent>,
+) -> Result<RecommendResult, AppError> {
+    let engine = engine.inner().clone();
+    blocking(move || engine.recommend(&request, |event| on_event.send(event).is_ok())).await
+}
+
+/// Cancels a running airfoil evaluation.
+#[tauri::command]
+#[specta::specta]
+pub fn cancel_recommendation(engine: Shared<'_>, job_id: String) -> bool {
+    engine.cancel(&job_id)
 }
 
 /// Adds airfoils of the catalogue to the library.

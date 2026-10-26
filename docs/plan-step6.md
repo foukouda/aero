@@ -100,9 +100,13 @@ required Cl, stall margin. Ranking by what the user wants, in plain words:
 | Goal | Criterion |
 |---|---|
 | Fly slowly / carry a load | highest Cl max (largest stall margin) |
-| Glide far | highest wing L/D at the required Cl (profile + induced) |
-| Stay up longest | highest Cl^1.5 / Cd |
+| Least drag at my speed (glide far, fly longest) | lowest Cd at the required Cl |
 | Easy to build | thickness ≥ 8 %, flat-ish lower surface |
+
+For a given flight (speed, mass and wing fixed) the required Cl is fixed, so
+"glide far" (best L/D) and "stay up longest" (best Cl^1.5/Cd) rank the
+airfoils the same way: both come down to the lowest drag at that Cl. They
+are one goal.
 
 Airfoils whose required Cl is above 80 % of their Cl max, or that do not
 converge there, are listed as "not suited" with the reason. Tested on cases
@@ -176,6 +180,29 @@ Glossary entries (dynamic pressure, standard atmosphere, wing loading,
 aspect ratio, induced drag, stall speed, wing area), README, release 0.3.0.
 
 ## Order and checks
+
+## Status
+
+- M1 done on 2026-10-26: crate `aero-mission` (atmosphere checked against
+  the 1976 tables, conditions, wing estimates, sizing; 16 injected bugs all
+  caught).
+- M2 done on 2026-10-26: catalogue of 20 airfoils in five categories (UIUC
+  coordinates bundled with attribution, decided with the user), tests that
+  the descriptions match the shapes (symmetry, thickness, camber, reflex
+  pitching moment). Four XFOIL references at Re = 5·10⁴ – 10⁵ (`e387_re6e4`,
+  `mh32_re5e4`, `s1223`, `sd7037_cl`); the SD7037 case turned out chaotic
+  (perturbing Re by 10⁻¹⁵ changes which points converge), accepted
+  explicitly and documented. E387 compared with the NASA Langley
+  measurements at Re = 10⁵ and 2·10⁵ (`tests/wind_tunnel`): Cl within 0.07,
+  Cd within 25 % before stall, Cl max over-predicted by about 10 %.
+- M3 done on 2026-10-26: `aero_mission::recommend` (polar from 0° up to
+  the stall and down only as far as needed, Cl max, interpolated operating
+  point, fit, buildability, ranking for three goals; 13 injected bugs all
+  caught) and the application commands (conditions, wing sizing, parallel
+  evaluation of catalogue and library airfoils with progress and
+  cancellation). At Re ≈ 10⁵ and Cl 0.56 the glider sections come first
+  (Cd ≈ 0.015) and the S1223 has three times their drag; at Cl 1.37 only
+  the S1223 can fly.
 
 Validated on 2026-10-26: the mission parts first, then the interface.
 M1 → M2 → M3 → M4 → U1 → U2 → U3 → U4 → D. Each part: tests green,

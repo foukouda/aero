@@ -37,6 +37,9 @@ use crate::dto::{
 };
 use crate::error::{AppError, ErrorKind};
 use crate::export;
+use crate::mission::{
+    self, Candidate, CandidateSource, RecommendEvent, RecommendRequest, RecommendResult,
+};
 use crate::model::{
     AirfoilEntry, AirfoilId, AirfoilOrigin, Modification, OperatingMode, OptimizationSetup,
     PolarData, Session, Settings, Shape, StoredOptimization, StoredPolar, load_project,
@@ -428,6 +431,56 @@ impl Engine {
     /// The airfoil catalogue, sorted by use.
     pub fn catalogue(&self) -> Result<Vec<CatalogueEntry>, AppError> {
         catalogue::entries()
+    }
+
+    /// Evaluates catalogue and library airfoils for a flight, calling
+    /// `on_event` with progress. `on_event` returning false (receiver gone)
+    /// cancels it, as does [`Engine::cancel`].
+    pub fn recommend(
+        &self,
+        request: &RecommendRequest,
+        mut on_event: impl FnMut(RecommendEvent) -> bool + Send,
+    ) -> Result<RecommendResult, AppError> {
+        let entries = catalogue::entries()?;
+        let mut candidates = Vec::new();
+        for id in &request.catalogue_ids {
+            let entry = entries.iter().find(|e| &e.id == id).ok_or_else(|| {
+                AppError::new(
+                    ErrorKind::NotFound,
+                    format!("no airfoil {id} in the catalogue"),
+                )
+            })?;
+            candidates.push(Candidate {
+                source: CandidateSource::Catalogue { id: id.clone() },
+                name: entry.name.clone(),
+                airfoil: entry.airfoil()?,
+            });
+        }
+        {
+            let session = lock(&self.session);
+            for &id in &request.airfoil_ids {
+                let entry = session.get(id)?;
+                candidates.push(Candidate {
+                    source: CandidateSource::Library { id },
+                    name: entry.name().to_string(),
+                    airfoil: entry.source.clone(),
+                });
+            }
+        }
+        let flag = Arc::new(AtomicBool::new(false));
+        lock(&self.jobs).insert(request.job_id.clone(), flag.clone());
+        let sink = Mutex::new(&mut on_event);
+        let emit = |event: RecommendEvent| {
+            let mut send = lock(&sink);
+            if !(*send)(event) {
+                flag.store(true, Ordering::Relaxed);
+            }
+        };
+        let result = mission::recommend(request, candidates, &flag, &emit);
+        lock(&self.jobs).remove(&request.job_id);
+        let cancelled = flag.load(Ordering::Relaxed);
+        on_event(RecommendEvent::Finished { cancelled });
+        result
     }
 
     /// Adds airfoils of the catalogue to the library.
@@ -1494,6 +1547,93 @@ mod tests {
         let examples = e.add_examples().unwrap();
         assert_eq!(examples.len(), 8);
         assert_eq!(examples[7].name, "Eppler 387");
+    }
+
+    fn recommend_request(job_id: &str, airfoil_ids: Vec<AirfoilId>) -> RecommendRequest {
+        // 450 g at 26.5 km/h with a 1.2 m × 20 cm wing: Cl ≈ 0.56, Re ≈ 1e5.
+        RecommendRequest {
+            job_id: job_id.to_string(),
+            flight: aero_mission::Flight {
+                speed: 7.36,
+                altitude: 100.0,
+                temperature_offset: 0.0,
+                mass: 0.45,
+            },
+            wing: aero_mission::Wing {
+                span: 1.2,
+                chord: 0.2,
+            },
+            settings: aero_mission::AnalysisSettings::default(),
+            model: aero_mission::WingModel::default(),
+            catalogue_ids: ["s1223", "sd7037", "naca0012"].map(String::from).to_vec(),
+            airfoil_ids,
+        }
+    }
+
+    #[test]
+    fn recommendations_for_a_flight() {
+        let e = Engine::new();
+        let clark_y = e.add_from_catalogue(&["clarky".to_string()]).unwrap().added[0].id;
+        let mut events = Vec::new();
+        let r = e
+            .recommend(&recommend_request("rec", vec![clark_y]), |ev| {
+                events.push(ev);
+                true
+            })
+            .unwrap();
+        assert!(!r.cancelled);
+        assert!((r.conditions.required_cl - 0.56).abs() < 0.01);
+        assert_eq!(r.candidates.len(), 4);
+        assert_eq!(r.candidates[3].name, "Clark Y");
+        assert!(matches!(r.candidates[3].source, CandidateSource::Library { id } if id == clark_y));
+        assert!(
+            r.candidates
+                .iter()
+                .all(|c| c.evaluation.is_some() && c.error.is_none())
+        );
+        // The low-drag glider section first, the high-lift section first
+        // for slow flight, the undercambered S1223 never "easy to build".
+        let name = |i: u32| r.candidates[i as usize].name.as_str();
+        assert_eq!(name(r.rankings.least_drag[0]), "Selig–Donovan SD7037");
+        assert_eq!(name(r.rankings.slow_flight[0]), "Selig S1223");
+        assert_ne!(name(r.rankings.easy_to_build[0]), "Selig S1223");
+        assert_eq!(events.first(), Some(&RecommendEvent::Started { total: 4 }));
+        assert_eq!(
+            events.last(),
+            Some(&RecommendEvent::Finished { cancelled: false })
+        );
+        assert_eq!(events.len(), 6);
+
+        // Unknown entries are errors before anything runs.
+        let mut bad = recommend_request("bad", Vec::new());
+        bad.catalogue_ids.push("nope".to_string());
+        assert_eq!(
+            e.recommend(&bad, |_| true).unwrap_err().kind,
+            ErrorKind::NotFound
+        );
+    }
+
+    #[test]
+    fn recommendations_can_be_cancelled() {
+        let e = Engine::new();
+        // The whole catalogue; the receiver goes away after the first
+        // candidate: the candidates already started finish, no new one
+        // starts.
+        let mut request = recommend_request("cancel", Vec::new());
+        request.catalogue_ids = e.catalogue().unwrap().into_iter().map(|c| c.id).collect();
+        let r = e
+            .recommend(&request, |ev| {
+                !matches!(ev, RecommendEvent::Progress { .. })
+            })
+            .unwrap();
+        assert!(r.cancelled);
+        assert!(
+            !r.candidates.is_empty() && r.candidates.len() < 20,
+            "{}",
+            r.candidates.len()
+        );
+        assert_eq!(r.rankings.least_drag.len(), r.candidates.len());
+        assert!(!e.cancel("cancel"), "the job is forgotten once finished");
     }
 
     #[test]
