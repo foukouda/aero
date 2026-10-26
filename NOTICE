@@ -6,8 +6,18 @@ This project contains Rust ports of algorithms from XFOIL 6.996
   - spline.f   (SPLIND, SEGSPL, SEVAL, DEVAL, D2VAL, CURV, SINVRT, SCALC, TRISOL)
   - naca.f     (NACA4, NACA5)
   - xgeom.f    (LEFIND, NORM, SOPPS, TCCALC, GEOPAR)
-  - xfoil.f    (PANGEN, TECALC, CPCALC, CLCALC, COMSET)
-  - xpanel.f   (APCALC, NCALC, PSILIN, GGCALC, QISET)
+  - xfoil.f    (PANGEN, TECALC, CPCALC, CLCALC, CDCALC, COMSET, MRCL,
+                MHINGE, GETXYF)
+  - xpanel.f   (APCALC, NCALC, PSILIN, PSWLIN, GGCALC, QISET, XYWAKE,
+                QDCALC, QWCALC, STFIND, IBLPAN, XICALC, UICALC, QVFUE,
+                GAMQV, STMOVE)
+  - xoper.f    (VISCAL, SPECAL, SPECCL and the ASEQ/CSEQ sequence logic)
+  - xbl.f      (SETBL, IBLSYS, MRCHUE, MRCHDU, XIFSET, UPDATE, DSLIM,
+                BLPINI)
+  - xblsys.f   (TRCHEK2, BLSYS, TESYS, BLPRV, BLKIN, BLVAR, BLMID, BLDIF,
+                TRDIF, DAMPL, DAMPL2, AXSET, HKIN, HSL, HST, CFL, CFT, HCT,
+                DIL)
+  - xsolve.f   (BLSOLV, GAUSS)
   - xutils.f   (ATANC)
 
 XFOIL is Copyright (C) 2000 Mark Drela and Harold Youngren, and is
@@ -16,3 +26,13 @@ option) any later version. Consequently, this project is distributed under
 the same terms: GPL-2.0-or-later. See the LICENSE file.
 
 Each ported Rust function documents the XFOIL routine it derives from.
+
+Airfoil coordinates of the UIUC Airfoil Coordinates Database (Michael
+Selig, University of Illinois at Urbana-Champaign,
+https://m-selig.ae.illinois.edu/ads/coord_database.html) are used as test
+data (tests/) and as two example airfoils of the application (Clark Y,
+Eppler 387; app/src-tauri/data).
+
+The reference results in tests/ were computed with XFOIL 6.996, built from
+the official sources by the xfoil-reference workflow; XFOIL itself is not
+distributed with this project.

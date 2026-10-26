@@ -59,12 +59,12 @@ export const TOUR_STEPS: TourStep[] = [
     text: {
       en: {
         title: "1. Create an airfoil",
-        body: "Type a NACA designation — 4 digits (e.g. 2412: 2% camber at 40% chord, 12% thick) or 5 digits (e.g. 23012) — and press Generate. Tick “Closed trailing edge” for a sharp trailing edge.",
+        body: "Type a NACA designation — 4 digits (e.g. 2412: 2% camber at 40% chord, 12% thick) or 5 digits (e.g. 23012) — and press Generate. Several at once: type a list such as 0012, 2412, 4415. Tick “Closed trailing edge” for a sharp trailing edge.",
         action: "Generate a NACA 2412 for me",
       },
       fr: {
         title: "1. Créer un profil",
-        body: "Tape une désignation NACA — 4 chiffres (ex. 2412 : cambrure 2 % à 40 % de la corde, épaisseur 12 %) ou 5 chiffres (ex. 23012) — puis clique sur Generate. Coche « Closed trailing edge » pour un bord de fuite aigu.",
+        body: "Tape une désignation NACA — 4 chiffres (ex. 2412 : cambrure 2 % à 40 % de la corde, épaisseur 12 %) ou 5 chiffres (ex. 23012) — puis clique sur Generate. Plusieurs d'un coup : tape une liste comme 0012, 2412, 4415. Coche « Closed trailing edge » pour un bord de fuite aigu.",
         action: "Génère un NACA 2412 pour moi",
       },
     },
@@ -74,12 +74,12 @@ export const TOUR_STEPS: TourStep[] = [
     target: "import",
     text: {
       en: {
-        title: "2. Or import a coordinate file",
-        body: "Import any .dat file in Selig or Lednicer format (the UIUC database uses both) with this button, or simply drop files onto the window. Aero detects the format, fixes the point order and tells you what it corrected.",
+        title: "2. Or import coordinate files",
+        body: "Import .dat files in Selig or Lednicer format (the UIUC database uses both) with this button, a whole folder of them with Folder…, or simply drop files or folders onto the window. Aero detects the format, fixes the point order and tells you what it corrected. Examples adds eight classic airfoils to compare (NACA sections, Clark Y, Eppler 387).",
       },
       fr: {
-        title: "2. Ou importer un fichier de coordonnées",
-        body: "Importe n'importe quel fichier .dat au format Selig ou Lednicer (la base UIUC utilise les deux) avec ce bouton, ou glisse simplement les fichiers sur la fenêtre. Aero détecte le format, remet les points dans le bon ordre et te signale ce qu'il a corrigé.",
+        title: "2. Ou importer des fichiers de coordonnées",
+        body: "Importe des fichiers .dat au format Selig ou Lednicer (la base UIUC utilise les deux) avec ce bouton, tout un dossier avec Folder…, ou glisse simplement fichiers ou dossiers sur la fenêtre. Aero détecte le format, remet les points dans le bon ordre et te signale ce qu'il a corrigé. Examples ajoute huit profils classiques à comparer (NACA, Clark Y, Eppler 387).",
       },
     },
   },
@@ -299,17 +299,33 @@ export const TOUR_STEPS: TourStep[] = [
     },
   },
   {
+    id: "polar-table",
+    target: "polar-view",
+    tab: "polars",
+    needsAirfoil: true,
+    text: {
+      en: {
+        title: "16. Compare many airfoils",
+        body: "With many airfoils, sweep them all at once (they are computed in parallel, one per core) and switch to Table: zero-lift angle, Cl max, Cd min, best L/D and their Cl, and the values at the Cl you choose, side by side. Click a column's ⇅ to rank the airfoils, a row to select one; the table exports as CSV. Viscous sweeps start near 0 and march outward, so that a range starting in separated flow still gives a full polar.",
+      },
+      fr: {
+        title: "16. Comparer beaucoup de profils",
+        body: "Avec beaucoup de profils, lance le balayage sur tous d'un coup (ils sont calculés en parallèle, un par cœur) et passe en Table : angle de portance nulle, Cl max, Cd min, meilleure finesse L/D et leurs Cl, et les valeurs au Cl de ton choix, côte à côte. Clique sur le ⇅ d'une colonne pour classer les profils, sur une ligne pour en sélectionner un ; le tableau s'exporte en CSV. Les balayages visqueux partent de 0 et vont vers l'extérieur, pour qu'une plage commençant en écoulement décollé donne quand même une polaire complète.",
+      },
+    },
+  },
+  {
     id: "optimize-setup",
     target: "optimize-setup",
     tab: "optimize",
     needsAirfoil: true,
     text: {
       en: {
-        title: "16. Optimize the shape",
+        title: "17. Optimize the shape",
         body: "The Optimize tab reshapes an airfoil for your operating points: each point prescribes Cl (or α) and has a weight; the objective is the weighted drag, or L/D. Constraints keep it buildable — minimum thickness (preset to the airfoil's own), thickness at a spar station, minimum Cm, trailing-edge angle. The shape is described by CST functions fitted to the airfoil, and every candidate is analyzed by the same viscous solver as elsewhere; a candidate that does not converge is rejected. The run is reproducible: the same seed gives the same result.",
       },
       fr: {
-        title: "16. Optimiser la forme",
+        title: "17. Optimiser la forme",
         body: "L'onglet Optimize remodèle un profil pour tes points de fonctionnement : chaque point impose Cl (ou α) et a un poids ; l'objectif est la traînée pondérée, ou L/D. Des contraintes le gardent réalisable — épaisseur minimale (préréglée sur celle du profil), épaisseur à l'emplacement d'un longeron, Cm minimal, angle de bord de fuite. La forme est décrite par des fonctions CST ajustées au profil, et chaque candidat est analysé par le même solveur visqueux qu'ailleurs ; un candidat qui ne converge pas est rejeté. Le calcul est reproductible : la même graine donne le même résultat.",
       },
     },
@@ -321,11 +337,11 @@ export const TOUR_STEPS: TourStep[] = [
     needsAirfoil: true,
     text: {
       en: {
-        title: "17. Follow and use the result",
+        title: "18. Follow and use the result",
         body: "During the run, the shape and the convergence plot update live (green: feasible designs, orange: designs violating a constraint, blue: best so far); Cancel keeps the best design found. The table compares the initial and optimized airfoils point by point. “Add to library” makes the optimized airfoil a regular one (analysis, export .dat), and “Compare polars” sweeps both at the optimization conditions — check the off-design behaviour there, a single-point optimum can be worse elsewhere.",
       },
       fr: {
-        title: "17. Suivre et utiliser le résultat",
+        title: "18. Suivre et utiliser le résultat",
         body: "Pendant le calcul, la forme et la courbe de convergence se mettent à jour en direct (vert : formes admissibles, orange : formes violant une contrainte, bleu : meilleure jusque-là) ; Cancel garde la meilleure forme trouvée. Le tableau compare le profil initial et le profil optimisé point par point. « Add to library » en fait un profil comme les autres (analyse, export .dat), et « Compare polars » calcule les polaires des deux aux conditions de l'optimisation — vérifie-y le comportement hors point de calcul : un optimum en un seul point peut être moins bon ailleurs.",
       },
     },
@@ -335,11 +351,11 @@ export const TOUR_STEPS: TourStep[] = [
     target: "project",
     text: {
       en: {
-        title: "18. Save your work",
+        title: "19. Save your work",
         body: "Save stores the airfoils, settings, results and the last optimization in a project file (Ctrl+S); Open restores it. The last button switches between light and dark themes.",
       },
       fr: {
-        title: "18. Enregistrer ton travail",
+        title: "19. Enregistrer ton travail",
         body: "Save enregistre les profils, les réglages, les résultats et la dernière optimisation dans un fichier projet (Ctrl+S) ; Open le rouvre. Le dernier bouton bascule entre thème clair et sombre.",
       },
     },

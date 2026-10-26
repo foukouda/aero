@@ -5,6 +5,10 @@ A modern rewrite of [XFOIL](https://web.mit.edu/drela/Public/web/xfoil/)
 parallel-friendly airfoil analysis and optimization toolkit that is usable as
 a library.
 
+New to airfoils? The [glossary](docs/glossary.md) ([en français](docs/glossaire.md))
+explains every quantity — Cl, Cd, L/D, Cm, Cp, Reynolds number, transition… —
+with orders of magnitude; the application shows the same explanations.
+
 > **Status:** step 3 — geometry, XFOIL-compatible inviscid and viscous
 > solvers (boundary layer, transition, drag, stall; prescribed angle or lift,
 > Mach and Reynolds numbers varying with the lift, flap hinge moments), shape
@@ -69,8 +73,13 @@ viscous and inviscid Cp; boundary-layer plots of δ*, θ, H, Cf, N and Ue on
 both surfaces and the wake), sweeps of the angle of attack or of the lift
 coefficient with progress and cancellation (Cl(α), drag polar Cl(Cd), Cm(α),
 hinge moments and transition points for several airfoils; viscous sweeps
-warm-start each point from the previous one, as XFOIL's `ASEQ` and `CSEQ`),
-shape optimization (see below) with live progress, exports (`.dat`, CSV of polars, Cp and boundary layer,
+warm-start each point from the previous one, as XFOIL's `ASEQ` and `CSEQ`,
+starting near zero and marching outward), many airfoils at once (a list of
+NACA designations, a whole folder of coordinate files, a set of classic
+examples, show all / hide all) swept in parallel on all cores and compared
+in a sortable table (zero-lift angle, Cl max, Cd min, L/D max, values at a
+chosen Cl), shape optimization (see below) with live progress, a bilingual
+glossary (hover or click the dotted labels), exports (`.dat`, CSV of polars, Cp and boundary layer,
 PNG, SVG), JSON project files with a format version (older projects are
 migrated), light and dark themes, and a guided tour in English and French.
 
