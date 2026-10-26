@@ -15,7 +15,10 @@
 //! - [`recommend`]: each candidate airfoil analysed at the flight's
 //!   conditions (viscous polar, maximum lift, drag at the required lift
 //!   coefficient, stall margin, ease of building) and the candidates ranked
-//!   by the user's goal.
+//!   by the user's goal;
+//! - [`analysis`]: how a whole aircraft flies — trim, stability, drag of
+//!   every part, stall — from its vortex lattice and the viscous polars of
+//!   its airfoils.
 //!
 //! All quantities are in SI units (m, m/s, kg, N, Pa, K).
 //!
@@ -36,12 +39,18 @@
 //! # Ok::<(), aero_mission::MissionError>(())
 //! ```
 
+pub mod analysis;
 pub mod atmosphere;
 mod error;
 pub mod flight;
 pub mod recommend;
 pub mod wing;
 
+pub use analysis::{
+    AircraftAnalysis, AnalysisWarning, DragBreakdown, PolarCache, PolarRequest, PolarSource,
+    PreparedAnalysis, SectionPolar, StabilityResult, StallResult, StripResult, TrimResult, analyze,
+    section_polar,
+};
 pub use atmosphere::{Atmosphere, isa};
 pub use error::{MissionError, Result};
 pub use flight::{Conditions, Flight};

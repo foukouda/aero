@@ -19,6 +19,7 @@ name = "aero-aircraft"
 version = "0.2.0"
 dependencies = [
  "aero-geometry",
+ "aero-vlm",
  "serde",
  "serde_json",
  "specta",
@@ -75,8 +76,10 @@ dependencies = [
 name = "aero-mission"
 version = "0.2.0"
 dependencies = [
+ "aero-aircraft",
  "aero-foil2d",
  "aero-geometry",
+ "aero-vlm",
  "serde",
  "serde_json",
  "specta",

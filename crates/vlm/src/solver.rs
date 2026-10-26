@@ -165,6 +165,20 @@ impl VortexLattice {
         self.lattice.strips.len()
     }
 
+    /// Corners of every strip, in the order of [`Solution::strips`]:
+    /// leading and trailing edge at its left end, then trailing and
+    /// leading edge at its right end (a quadrilateral, for drawing).
+    pub fn strip_corners(&self) -> Vec<[[f64; 3]; 4]> {
+        self.lattice
+            .strips
+            .iter()
+            .map(|s| {
+                let te = |le: V3, c: f64| [le[0] + c, le[1], le[2]];
+                [s.rle1, te(s.rle1, s.chord1), te(s.rle2, s.chord2), s.rle2]
+            })
+            .collect()
+    }
+
     /// Forces, moments and derivatives at `flow`.
     pub fn solve(&self, flow: &FlowCondition) -> Result<Solution> {
         let values = [

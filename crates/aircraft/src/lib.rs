@@ -9,6 +9,8 @@
 //!   coefficients and the position of the centre of gravity;
 //! - [`mesh`](mod@mesh): a triangle mesh of the aircraft, lofted from the real airfoil
 //!   coordinates, for a 3D view;
+//! - [`lattice`](mod@lattice): the aircraft as a vortex lattice for AVL's method
+//!   (`aero-vlm`), with a pitch control to trim it;
 //! - [`random`]: random aircraft to explore shapes, valid and reproducible.
 //!
 //! Axes as in AVL: x from the nose towards the tail, y towards the right
@@ -27,12 +29,14 @@
 //! ```
 
 mod error;
+pub mod lattice;
 pub mod mesh;
 pub mod params;
 pub mod planform;
 pub mod random;
 
 pub use error::{AircraftError, Result};
+pub use lattice::{AircraftLattice, ELEVATOR, LatticeOptions, StripOrigin, lattice};
 pub use mesh::{MeshOptions, MeshPart, PartKind, mesh};
 pub use params::{
     Aircraft, Fuselage, MAX_PANEL_ANGLE, MAX_SECTIONS, Preset, SectionParams, SurfaceParams,

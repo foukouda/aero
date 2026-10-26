@@ -262,3 +262,24 @@ fn derivatives_match_finite_differences() {
         "the test needs a reference point away from it"
     );
 }
+
+#[test]
+fn strip_corners_tile_the_surfaces() {
+    let lattice = VortexLattice::new(&model(swept_wing(), 4.5, 0.75, 6.0, true)).unwrap();
+    let corners = lattice.strip_corners();
+    assert_eq!(corners.len(), lattice.strip_count());
+    // Each strip's right edge is the next strip's left edge.
+    for w in corners.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        for k in 0..3 {
+            assert!((a[3][k] - b[0][k]).abs() < 1e-12 && (a[2][k] - b[1][k]).abs() < 1e-12);
+        }
+    }
+    // Together they cover the planform: trapezoids of the root and tip
+    // chords (1 and 0.5) over the 3 m of half span.
+    let area: f64 = corners
+        .iter()
+        .map(|c| (c[3][1] - c[0][1]).abs() * 0.5 * ((c[1][0] - c[0][0]) + (c[2][0] - c[3][0])))
+        .sum();
+    assert!((area - 3.0 * 0.75).abs() < 1e-12, "{area}");
+}

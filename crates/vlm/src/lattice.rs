@@ -38,6 +38,8 @@ pub(crate) struct Strip {
     /// Leading edge and chord at the left edge, right edge and middle.
     pub(crate) rle1: V3,
     pub(crate) rle2: V3,
+    pub(crate) chord1: f64,
+    pub(crate) chord2: f64,
     pub(crate) rle: V3,
     pub(crate) chord: f64,
     /// Width in the y–z plane.
@@ -365,6 +367,8 @@ impl Lattice {
                     surface: isurf,
                     rle1,
                     rle2,
+                    chord1,
+                    chord2,
                     rle,
                     chord: chordc,
                     width: (f2 - f1).abs() * width,
@@ -453,6 +457,8 @@ impl Lattice {
                 surface: isurf,
                 rle1: mirror(s.rle2),
                 rle2: mirror(s.rle1),
+                chord1: s.chord2,
+                chord2: s.chord1,
                 rle: mirror(s.rle),
                 first,
                 ..s

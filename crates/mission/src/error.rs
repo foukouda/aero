@@ -1,7 +1,9 @@
 //! Error type of the mission calculations.
 
+use aero_aircraft::AircraftError;
 use aero_foil2d::viscous::ViscousError;
 use aero_geometry::GeometryError;
+use aero_vlm::VlmError;
 use thiserror::Error;
 
 /// Errors produced by the mission calculations.
@@ -20,6 +22,14 @@ pub enum MissionError {
     /// The viscous analysis of a candidate cannot start.
     #[error(transparent)]
     Analysis(#[from] ViscousError),
+
+    /// The aircraft is not valid.
+    #[error(transparent)]
+    Aircraft(#[from] AircraftError),
+
+    /// The vortex lattice of the aircraft cannot be built or solved.
+    #[error(transparent)]
+    Lattice(#[from] VlmError),
 }
 
 /// Result type of the mission calculations.

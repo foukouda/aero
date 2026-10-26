@@ -13,13 +13,15 @@ name = "aero_mission"
 [dependencies]
 aero-geometry.workspace = true
 aero-foil2d.workspace = true
+aero-aircraft.workspace = true
+aero-vlm.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 specta = { workspace = true, optional = true }
 
 [features]
 # Derives `specta::Type` on the public data types (TypeScript bindings).
-specta = ["dep:specta", "aero-geometry/specta", "aero-foil2d/specta"]
+specta = ["dep:specta", "aero-geometry/specta", "aero-foil2d/specta", "aero-aircraft/specta"]
 
 [dev-dependencies]
 serde_json.workspace = true

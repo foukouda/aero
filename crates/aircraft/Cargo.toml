@@ -12,6 +12,7 @@ name = "aero_aircraft"
 
 [dependencies]
 aero-geometry.workspace = true
+aero-vlm.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 specta = { workspace = true, optional = true }
