@@ -54,6 +54,10 @@ pub fn validation_dir() -> PathBuf {
     repo_dir("validation")
 }
 
+pub fn inverse_dir() -> PathBuf {
+    repo_dir("inverse")
+}
+
 /// Cases of `tests/reference`.
 pub fn cases() -> Vec<Case> {
     cases_in(&reference_dir())

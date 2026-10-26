@@ -5,11 +5,14 @@
 //!
 //! - [`inviscid`]: XFOIL's inviscid panel method;
 //! - [`viscous`]: XFOIL's viscous–inviscid interaction (integral boundary
-//!   layer, eᴺ transition, wake, drag), at prescribed angle or lift.
+//!   layer, eᴺ transition, wake, drag), at prescribed angle or lift;
+//! - [`inverse`]: XFOIL's inverse design methods (shape from a prescribed
+//!   surface speed).
 //!
 //! The dense linear algebra uses [`faer`], re-exported for the users of the
 //! influence matrices.
 
+pub mod inverse;
 pub mod inviscid;
 pub mod viscous;
 
