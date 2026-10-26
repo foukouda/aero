@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -630,10 +630,15 @@ impl Engine {
     /// Runs a sweep on several airfoils, calling `on_event` with progress.
     /// `on_event` returning false (receiver gone) cancels the sweep, as does
     /// [`Engine::cancel`]. The polars are stored in the session.
+    ///
+    /// The airfoils are swept in parallel, one per core (one core is left
+    /// to the interface); each polar is the same as when swept alone.
+    /// Progress events of different airfoils interleave. If an airfoil
+    /// fails, the others are still stored and the first error is returned.
     pub fn sweep(
         &self,
         request: &SweepRequest,
-        mut on_event: impl FnMut(SweepEvent) -> bool,
+        mut on_event: impl FnMut(SweepEvent) -> bool + Send,
     ) -> Result<Vec<StoredPolar>, AppError> {
         let count = match request.mode {
             OperatingMode::Alpha => request.sweep.alphas()?.len(),
@@ -653,40 +658,78 @@ impl Engine {
         request: &SweepRequest,
         per_airfoil: usize,
         flag: &AtomicBool,
-        on_event: &mut impl FnMut(SweepEvent) -> bool,
+        on_event: &mut (impl FnMut(SweepEvent) -> bool + Send),
     ) -> Result<Vec<StoredPolar>, AppError> {
-        let total = u32::try_from(per_airfoil * request.airfoil_ids.len()).unwrap_or(u32::MAX);
+        let ids = &request.airfoil_ids;
+        let total = u32::try_from(per_airfoil * ids.len()).unwrap_or(u32::MAX);
         if !on_event(SweepEvent::Started { total }) {
             flag.store(true, Ordering::Relaxed);
         }
-        let mut done = 0_u32;
-        let mut results = Vec::new();
-        for &id in &request.airfoil_ids {
-            if flag.load(Ordering::Relaxed) {
-                break;
+        let sink = Mutex::new(on_event);
+        let emit = |event: SweepEvent| {
+            let mut send = lock(&sink);
+            if !(*send)(event) {
+                flag.store(true, Ordering::Relaxed);
             }
-            let polar = if request.viscous.enabled {
-                PolarData::Viscous(self.run_viscous_sweep(
-                    id,
-                    request,
-                    per_airfoil,
-                    total,
-                    &mut done,
-                    flag,
-                    on_event,
-                )?)
+        };
+        let done = AtomicU32::new(0);
+        let next = AtomicUsize::new(0);
+        let threads = std::thread::available_parallelism()
+            .map_or(1, |n| n.get().saturating_sub(1).max(1))
+            .min(ids.len().max(1));
+        let sweep_one = |id: AirfoilId| -> Result<PolarData, AppError> {
+            if request.viscous.enabled {
+                self.run_viscous_sweep(id, request, per_airfoil, total, &done, flag, &emit)
+                    .map(PolarData::Viscous)
             } else {
-                PolarData::Inviscid(
-                    self.run_inviscid_sweep(id, request, total, &mut done, flag, on_event)?,
-                )
-            };
-            let mut session = lock(&self.session);
-            session.store_polar(id, polar)?;
-            if let Some(stored) = session.polars.iter().find(|p| p.airfoil_id == id) {
-                results.push(stored.clone());
+                self.run_inviscid_sweep(id, request, total, &done, flag, &emit)
+                    .map(PolarData::Inviscid)
+            }
+        };
+        let mut polars: Vec<(usize, Result<PolarData, AppError>)> = std::thread::scope(|scope| {
+            let workers: Vec<_> = (0..threads)
+                .map(|_| {
+                    scope.spawn(|| {
+                        let mut out = Vec::new();
+                        loop {
+                            let i = next.fetch_add(1, Ordering::Relaxed);
+                            let Some(&id) = ids.get(i) else { break };
+                            if flag.load(Ordering::Relaxed) {
+                                break;
+                            }
+                            out.push((i, sweep_one(id)));
+                        }
+                        out
+                    })
+                })
+                .collect();
+            workers
+                .into_iter()
+                .flat_map(|w| w.join().unwrap_or_else(|e| std::panic::resume_unwind(e)))
+                .collect()
+        });
+        polars.sort_by_key(|(i, _)| *i);
+
+        let mut results = Vec::new();
+        let mut first_error = None;
+        let mut session = lock(&self.session);
+        for (i, polar) in polars {
+            let id = ids[i];
+            match polar.and_then(|p| session.store_polar(id, p)) {
+                Ok(()) => {
+                    if let Some(stored) = session.polars.iter().find(|p| p.airfoil_id == id) {
+                        results.push(stored.clone());
+                    }
+                }
+                Err(e) => {
+                    first_error.get_or_insert(e);
+                }
             }
         }
-        Ok(results)
+        match first_error {
+            Some(e) => Err(e),
+            None => Ok(results),
+        }
     }
 
     /// Inviscid sweep of one airfoil.
@@ -695,29 +738,26 @@ impl Engine {
         id: AirfoilId,
         request: &SweepRequest,
         total: u32,
-        done: &mut u32,
+        done: &AtomicU32,
         flag: &AtomicBool,
-        on_event: &mut impl FnMut(SweepEvent) -> bool,
+        emit: &(impl Fn(SweepEvent) + Sync),
     ) -> Result<Polar, AppError> {
         let (_, solver) = self.solver(id, request.flap_hinge)?;
         let mut points = Vec::new();
         let mut failures = Vec::new();
         let mut last_flush = Instant::now();
-        let mut flush = |points: &mut Vec<_>, failures: &mut Vec<_>, done: u32| {
-            let event = SweepEvent::Progress {
+        let flush = |points: &mut Vec<_>, failures: &mut Vec<_>| {
+            emit(SweepEvent::Progress {
                 airfoil_id: id,
                 points: std::mem::take(points),
                 failures: std::mem::take(failures),
-                done,
+                done: done.load(Ordering::Relaxed),
                 total,
-            };
-            if !on_event(event) {
-                flag.store(true, Ordering::Relaxed);
-            }
+            });
         };
         let cl_mode = request.mode == OperatingMode::Cl;
         let on_progress = |progress: &SweepProgress| {
-            *done += 1;
+            done.fetch_add(1, Ordering::Relaxed);
             match progress.point {
                 Some(point) => points.push(point),
                 None => failures.push(SweepFailure {
@@ -728,7 +768,7 @@ impl Engine {
             }
             let last = progress.index + 1 == progress.total;
             if last || last_flush.elapsed() >= PROGRESS_INTERVAL {
-                flush(&mut points, &mut failures, *done);
+                flush(&mut points, &mut failures);
                 last_flush = Instant::now();
             }
             if flag.load(Ordering::Relaxed) {
@@ -743,7 +783,7 @@ impl Engine {
             solver.sweep_with(&request.sweep, request.mach, on_progress)?
         };
         if !points.is_empty() || !failures.is_empty() {
-            flush(&mut points, &mut failures, *done);
+            flush(&mut points, &mut failures);
         }
         Ok(polar)
     }
@@ -757,30 +797,28 @@ impl Engine {
         request: &SweepRequest,
         per_airfoil: usize,
         total: u32,
-        done: &mut u32,
+        done: &AtomicU32,
         flag: &AtomicBool,
-        on_event: &mut impl FnMut(SweepEvent) -> bool,
+        emit: &(impl Fn(SweepEvent) + Sync),
     ) -> Result<ViscousPolar, AppError> {
         let options = request.viscous.options(request.mach);
         let solver = self.viscous_solver(id, request.flap_hinge, &options)?;
-        let start = *done;
+        let mut mine = 0_u32;
         let mut points = Vec::new();
         let mut failures = Vec::new();
         let mut last_flush = Instant::now();
-        let mut flush = |points: &mut Vec<_>, failures: &mut Vec<_>, done: u32| {
-            let event = SweepEvent::ViscousProgress {
+        let flush = |points: &mut Vec<_>, failures: &mut Vec<_>| {
+            emit(SweepEvent::ViscousProgress {
                 airfoil_id: id,
                 points: std::mem::take(points),
                 failures: std::mem::take(failures),
-                done,
+                done: done.load(Ordering::Relaxed),
                 total,
-            };
-            if !on_event(event) {
-                flag.store(true, Ordering::Relaxed);
-            }
+            });
         };
         let on_progress = |progress: &ViscousSweepProgress, _: Option<&ViscousSolution>| {
-            *done += 1;
+            mine += 1;
+            done.fetch_add(1, Ordering::Relaxed);
             match progress.point {
                 Some(point) => points.push(point),
                 None => failures.push(SweepFailure {
@@ -791,7 +829,7 @@ impl Engine {
             }
             let last = progress.index + 1 == progress.total;
             if last || last_flush.elapsed() >= PROGRESS_INTERVAL {
-                flush(&mut points, &mut failures, *done);
+                flush(&mut points, &mut failures);
                 last_flush = Instant::now();
             }
             if flag.load(Ordering::Relaxed) {
@@ -807,9 +845,9 @@ impl Engine {
         if polar.stopped {
             // The remaining points will not be computed.
             let count = u32::try_from(per_airfoil).unwrap_or(u32::MAX);
-            *done = start.saturating_add(count);
+            done.fetch_add(count.saturating_sub(mine), Ordering::Relaxed);
         }
-        flush(&mut points, &mut failures, *done);
+        flush(&mut points, &mut failures);
         Ok(polar)
     }
 
@@ -1190,11 +1228,11 @@ mod tests {
         let a = e.create_naca("0012", false).unwrap();
         let b = e.create_naca("2412", false).unwrap();
         let mut finished = None;
+        // Cancelled through the job flag before any airfoil starts.
         let polars = e
             .sweep(&sweep_request(vec![a.id, b.id], 0.0), |ev| {
                 match ev {
-                    // Cancel through the job flag after the first airfoil.
-                    SweepEvent::Progress { airfoil_id, .. } if airfoil_id == a.id => {
+                    SweepEvent::Started { .. } => {
                         e.cancel("job");
                     }
                     SweepEvent::Finished { cancelled } => finished = Some(cancelled),
@@ -1204,8 +1242,30 @@ mod tests {
             })
             .unwrap();
         assert_eq!(finished, Some(true));
-        assert_eq!(polars.len(), 1, "the second airfoil must not be analyzed");
+        assert!(polars.is_empty(), "no airfoil may start");
         assert!(!e.cancel("job"), "the job is no longer running");
+
+        // Cancelled while the (parallel) viscous sweeps run: every sweep
+        // under way stops, and its polar is marked cancelled.
+        let viscous = SweepRequest {
+            viscous: crate::model::ViscousSettings::default(),
+            ..sweep_request(vec![a.id, b.id], 0.0)
+        };
+        let polars = e
+            .sweep(&viscous, |ev| {
+                if matches!(ev, SweepEvent::ViscousProgress { .. }) {
+                    e.cancel("job");
+                }
+                true
+            })
+            .unwrap();
+        assert!(!polars.is_empty());
+        for p in &polars {
+            match &p.polar {
+                PolarData::Viscous(v) => assert!(v.cancelled && v.points.len() < 11),
+                PolarData::Inviscid(_) => panic!("viscous sweep expected"),
+            }
+        }
 
         // A receiver that disappears also stops the sweep.
         let polars = e
@@ -1557,5 +1617,64 @@ mod tests {
         e.delete_airfoils(&all[..10]).unwrap();
         assert_eq!(e.session_view().airfoils.len(), 3);
         assert!(e.delete_airfoils(&[999]).is_err());
+    }
+
+    #[test]
+    fn parallel_sweeps_equal_sweeps_one_by_one() {
+        let e = Engine::new();
+        let ids: Vec<AirfoilId> = e.add_examples().unwrap().iter().map(|a| a.id).collect();
+        for viscous in [INVISCID, crate::model::ViscousSettings::default()] {
+            let request = SweepRequest {
+                viscous,
+                sweep: AlphaSweep {
+                    start_deg: -2.0,
+                    end_deg: 12.0,
+                    step_deg: 1.0,
+                },
+                ..sweep_request(ids.clone(), 0.0)
+            };
+            let mut events = Vec::new();
+            let together = e
+                .sweep(&request, |event| {
+                    events.push(event);
+                    true
+                })
+                .unwrap();
+            assert_eq!(together.len(), ids.len());
+            for (stored, &id) in together.iter().zip(&ids) {
+                assert_eq!(stored.airfoil_id, id);
+                // The same airfoil swept alone (a single worker).
+                let single = e
+                    .sweep(
+                        &SweepRequest {
+                            airfoil_ids: vec![id],
+                            ..request.clone()
+                        },
+                        |_| true,
+                    )
+                    .unwrap();
+                assert_eq!(single[0].polar, stored.polar, "airfoil {id}");
+            }
+            // Every point is reported once, the last count is the total.
+            let mut streamed = 0;
+            let mut last_done = 0;
+            let mut total = 0;
+            for event in &events {
+                match event {
+                    SweepEvent::Started { total: t } => total = *t,
+                    SweepEvent::Progress { points, done, .. } => {
+                        streamed += points.len();
+                        last_done = last_done.max(*done);
+                    }
+                    SweepEvent::ViscousProgress { points, done, .. } => {
+                        streamed += points.len();
+                        last_done = last_done.max(*done);
+                    }
+                    SweepEvent::Finished { cancelled } => assert!(!cancelled),
+                }
+            }
+            assert_eq!(streamed, together.iter().map(points).sum::<usize>());
+            assert_eq!(last_done, total);
+        }
     }
 }

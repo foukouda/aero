@@ -568,7 +568,7 @@ class AppState {
           p.total = event.total;
           break;
         case "progress":
-          p.done = event.done;
+          p.done = Math.max(p.done, event.done);
           if (event.points.length) {
             const current = p.live[event.airfoil_id] ?? [];
             // Replace the array (one reactive update per batch).
@@ -577,7 +577,7 @@ class AppState {
           p.failures += event.failures.length;
           break;
         case "viscous_progress":
-          p.done = event.done;
+          p.done = Math.max(p.done, event.done);
           if (event.points.length) {
             const current = p.liveViscous[event.airfoil_id] ?? [];
             p.liveViscous[event.airfoil_id] = current.concat(event.points);
@@ -804,6 +804,20 @@ class AppState {
       await call(
         commands.exportBoundaryLayerCsv(id, request, path),
       );
+      this.notify("info", "Exported", baseName(path));
+    });
+  }
+
+  /** Saves a text file (CSV…) where the user chooses. */
+  async saveText(defaultName: string, text: string) {
+    const extension = defaultName.split(".").pop() ?? "txt";
+    const path = await dialogs.save({
+      defaultPath: defaultName,
+      filters: [{ name: extension.toUpperCase(), extensions: [extension] }],
+    });
+    if (!path) return;
+    await this.guard(async () => {
+      await call(commands.writeFile(path, Array.from(new TextEncoder().encode(text))));
       this.notify("info", "Exported", baseName(path));
     });
   }

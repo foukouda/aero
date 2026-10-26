@@ -3,6 +3,7 @@
   import type { PlotCurve } from "./Plot.svelte";
   import PlotPanel from "./PlotPanel.svelte";
   import ViscousControls from "./ViscousControls.svelte";
+  import ComparisonTable from "./ComparisonTable.svelte";
   import type { AlphaSweep, ClSweep, PolarPoint, ViscousPolarPoint } from "../lib/bindings";
   import { app } from "../lib/state.svelte";
   import { compactExp, numbers } from "../lib/format";
@@ -12,6 +13,7 @@
   const clSweep = $derived(s?.cl_sweep ?? { start: 0, end: 1.2, step: 0.1 });
   const mode = $derived(s?.mode ?? "alpha");
   const running = $derived(app.sweep !== null);
+  let view = $state<"plots" | "table">("plots");
 
   /** A point of either kind of polar, with the viscous columns optional. */
   interface Point {
@@ -158,6 +160,14 @@
           Run sweep
         </button>
         <button onclick={() => app.exportPolarsCsv()} disabled={!app.session?.polars.length}>Export CSV</button>
+        <div class="segmented" role="group" aria-label="View" data-tour="polar-view">
+          <button class:active={view === "plots"} onclick={() => (view = "plots")}>Plots</button>
+          <button
+            class:active={view === "table"}
+            title="Key figures of every polar side by side: Cl max, Cd min, L/D max…"
+            onclick={() => (view = "table")}>Table</button
+          >
+        </div>
         <span class="muted">
           Visible airfoils are analyzed; results are kept in the project.
           {#if app.viscous.enabled}
@@ -168,6 +178,9 @@
     </div>
   </section>
 
+  {#if view === "table" && !running}
+    <ComparisonTable />
+  {:else}
   <div class="plots" data-tour="polar-plots">
     <PlotPanel
       title={`Lift coefficient${machTag}`}
@@ -203,6 +216,7 @@
       emptyMessage="Run a viscous sweep to plot the transition points"
     />
   </div>
+  {/if}
 </div>
 
 <style>
