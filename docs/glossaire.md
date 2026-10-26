@@ -232,6 +232,22 @@ La charnière est donnée par sa position x et soit son ordonnée y, soit sa hau
 
 Chaque outil crée un nouveau profil dans la bibliothèque et garde l'original, pour pouvoir comparer les deux. L'épaisseur et la cambrure peuvent être multipliées ou fixées (la ligne de cambrure et l'épaisseur sont mesurées verticalement, comme dans XFOIL) ; les points hauts font glisser le maximum d'épaisseur ou de cambrure le long de la corde ; l'épaisseur de bord de fuite ouvre ou ferme le bord de fuite sur une distance de raccord ; le rayon de bord d'attaque est modifié près du nez ; le mélange interpole deux profils point par point (une fraction hors de 0–1 extrapole). Ce sont des portages des commandes GDES de XFOIL (FLAP, TFAC, TSET, HIGH, TGAP, LERA) et de INTE, vérifiés contre XFOIL.
 
+### Conception inverse
+
+**Au lieu de calculer l'écoulement autour d'une forme donnée, on calcule la forme à partir de la vitesse (ou de la pression) voulue sur sa surface.**
+
+Dans une analyse, la forme est connue et la vitesse le long de la surface est le résultat ; la conception inverse fait le chemin inverse. Tu dessines la répartition de vitesse que tu veux — par exemple un pic de dépression plus faible, un extrados plus plat pour un écoulement laminaire plus long, une recompression plus douce vers le bord de fuite — et le profil qui la produit est calculé.
+
+La méthode mixte (QDES de XFOIL) ne remodèle que le segment de surface où la cible a changé et garde le reste ; quelques paramètres libres permettent à la vitesse de se raccorder aux parties inchangées, donc la vitesse obtenue est celle dessinée plus un petit décalage régulier le long du segment, et la vitesse ailleurs change un peu aussi. La méthode complète (MDES de XFOIL) génère tout le profil par transformation conforme d'un cercle (méthode de Lighthill) : la cible est ajustée à la plus proche qu'un profil puisse produire, avec l'épaisseur et l'angle de bord de fuite choisis. Toute cible ne donne pas un profil raisonnable : dessine des changements doux, utilise Smooth ou Filter, et vérifie la nouvelle forme et son analyse.
+
+### Vitesse de surface et vitesse cible
+
+**q/V∞ : la vitesse de l'écoulement juste au-dessus de la surface divisée par la vitesse de l'écoulement amont ; Cp = 1 − (q/V∞)².**
+
+La vitesse de surface est la vitesse de l'écoulement non visqueux le long de la surface du profil, divisée par la vitesse amont V∞. C'est une autre façon de voir la pression : là où la vitesse est grande la pression est basse, Cp = 1 − (q/V∞)² à faible Mach. Elle est nulle au point d'arrêt près du bord d'attaque, monte jusqu'à un pic (le pic de dépression) sur l'extrados, puis diminue vers le bord de fuite — ce ralentissement est le gradient de pression adverse que la couche limite doit supporter.
+
+En conception inverse, la vitesse cible est la répartition que tu veux. Elle est tracée pour les deux faces en fonction de x ; l'extrados a en général les vitesses les plus grandes quand le profil porte.
+
 ### Panneaux et maillage
 
 **Le contour du profil est découpé en segments droits (panneaux) sur lesquels on calcule l'écoulement ; 160 est un bon défaut.**

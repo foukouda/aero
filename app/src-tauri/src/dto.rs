@@ -341,3 +341,125 @@ pub struct ModificationPreview {
     /// Short description, used in the new airfoil's name.
     pub description: String,
 }
+
+/// Inverse design method.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum DesignMethod {
+    /// Mixed inverse (XFOIL `QDES`): a segment of the surface is reshaped
+    /// for a target speed there, the rest of the airfoil is kept.
+    Mixed,
+    /// Full inverse (XFOIL `MDES`): the whole airfoil is generated from a
+    /// target speed distribution by conformal mapping.
+    Full,
+}
+
+/// A change of the inverse design session.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DesignEdit {
+    /// Design angle of attack, degrees. The mixed inverse keeps its target;
+    /// the full inverse recomputes it for the new angle (`AQ`).
+    Alpha {
+        /// Angle of attack, degrees.
+        alpha_deg: f64,
+    },
+    /// Design lift coefficient of the full inverse (`CQ`).
+    Lift {
+        /// Lift coefficient.
+        cl: f64,
+    },
+    /// New target speed (signed as `target`) on the points `first` to
+    /// `first + speed.len() − 1` (a curve drawn over the plot, `MODI`).
+    Target {
+        /// First point.
+        first: u32,
+        /// New values.
+        speed: Vec<f64>,
+    },
+    /// Smooths the target (`SMOO`): the segment for the mixed inverse,
+    /// the whole airfoil for the full inverse.
+    Smooth,
+    /// Hanning filter of the full-inverse mapping (`FILT`).
+    Filter,
+    /// Symmetric airfoil (full inverse, `SYMM`).
+    Symmetric {
+        /// On or off.
+        on: bool,
+    },
+    /// Keeps the speed curvature at the segment ends (mixed, `CPXX`).
+    Curvature {
+        /// On or off.
+        on: bool,
+    },
+    /// Trailing-edge gap of the full-inverse airfoil (`TGAP`).
+    TeGap {
+        /// Gap along x.
+        dx: f64,
+        /// Gap along y.
+        dy: f64,
+    },
+    /// Trailing-edge angle of the full-inverse airfoil, degrees (`TANG`).
+    TeAngle {
+        /// Angle, degrees.
+        angle_deg: f64,
+    },
+    /// Target back to the speed of the original airfoil.
+    Reset,
+}
+
+/// State of the inverse design session.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+pub struct DesignView {
+    /// Airfoil being redesigned.
+    pub id: AirfoilId,
+    /// Method.
+    pub method: DesignMethod,
+    /// Design angle of attack, degrees.
+    pub alpha_deg: f64,
+    /// Lift coefficient of the target (full inverse).
+    pub cl: Option<f64>,
+    /// True if the full inverse is designed for a lift coefficient.
+    pub by_lift: bool,
+    /// Abscissas of the original airfoil's panel nodes.
+    pub current_x: Vec<f64>,
+    /// Surface speed of the original airfoil at the design angle, signed
+    /// as XFOIL's `γ` (positive from the upper trailing edge to the
+    /// stagnation point, negative after).
+    pub current_speed: Vec<f64>,
+    /// Abscissas of the target points on the original airfoil (the panel
+    /// nodes, or the circle points of the full inverse).
+    pub target_x: Vec<f64>,
+    /// Target speed, signed as `current_speed`.
+    pub target: Vec<f64>,
+    /// First and last target points of the mixed-inverse segment.
+    pub segment: Option<[u32; 2]>,
+    /// Curvature constraints at the segment ends (mixed).
+    pub curvature_constraints: bool,
+    /// Symmetric airfoil (full).
+    pub symmetric: bool,
+    /// Trailing-edge gap (dx, dy) of the new airfoil (full).
+    pub te_gap: [f64; 2],
+    /// Trailing-edge angle of the new airfoil, degrees (full).
+    pub te_angle_deg: f64,
+}
+
+/// The airfoil the inverse design would create.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+pub struct DesignPreview {
+    /// Coordinates of the new airfoil.
+    pub x: Vec<f64>,
+    /// Ordinates.
+    pub y: Vec<f64>,
+    /// Its geometric properties.
+    pub properties: GeometricProperties,
+    /// Surface speed of the new airfoil at the design angle (mixed inverse:
+    /// the target plus XFOIL's end corrections), at the points `x`.
+    pub speed: Option<Vec<f64>>,
+    /// True if the Newton iterations converged.
+    pub converged: bool,
+    /// Iterations used.
+    pub iterations: u32,
+    /// Short description, used in the new airfoil's name.
+    pub description: String,
+}

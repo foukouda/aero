@@ -13,9 +13,12 @@
     emptyMessage?: string;
     /** Anchor for the guided tour. */
     tour?: string;
+    /** Freehand drawing instead of zooming (see Plot). */
+    draw?: boolean;
+    onDraw?: (points: [number, number][]) => void;
   }
 
-  let { title, fileName, curves, xLabel, yLabel, equal, yInverted, emptyMessage, tour }: Props =
+  let { title, fileName, curves, xLabel, yLabel, equal, yInverted, emptyMessage, tour, draw, onDraw }: Props =
     $props();
 
   let plot: Plot | undefined = $state();
@@ -47,6 +50,8 @@
       {equal}
       {yInverted}
       {emptyMessage}
+      {draw}
+      {onDraw}
       title={title}
       styleKey={app.theme}
     />

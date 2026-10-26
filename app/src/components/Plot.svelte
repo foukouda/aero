@@ -33,6 +33,10 @@
     /** Redraw key: changing it (e.g. the theme) rebuilds the chart. */
     styleKey?: string;
     emptyMessage?: string;
+    /** Freehand drawing with the pointer instead of zooming. */
+    draw?: boolean;
+    /** Receives each drawn stroke, in data coordinates. */
+    onDraw?: (points: [number, number][]) => void;
   }
 
   let {
@@ -44,6 +48,8 @@
     yInverted = false,
     styleKey = "",
     emptyMessage = "No data",
+    draw = false,
+    onDraw,
   }: Props = $props();
 
   let container: HTMLDivElement | undefined = $state();
@@ -100,7 +106,7 @@
     return {
       width: w,
       height: h,
-      cursor: { drag: { x: !equal, y: false } },
+      cursor: { drag: { x: !equal && !draw, y: false } },
       legend: { show: true, live: false },
       scales: {
         x: equal ? { time: false, auto: false, range: equalRange("x") } : { time: false },
@@ -139,6 +145,7 @@
       yLabel,
       equal,
       yInverted,
+      draw,
       drawn.map((c) => [c.label, c.color, c.dash, c.points, c.line, c.hideInLegend]),
     ]);
   }
@@ -165,6 +172,45 @@
     chart = new uPlot(options(width, height), data(), container);
     structure = signature();
     fit(width, height);
+    if (draw) attachDrawing(chart);
+  }
+
+  /** Records pointer strokes over the plotting area, showing them while
+   * they are drawn. */
+  function attachDrawing(u: uPlot) {
+    const over = u.over;
+    const svgNs = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNs, "svg");
+    svg.classList.add("stroke");
+    const line = document.createElementNS(svgNs, "polyline");
+    svg.appendChild(line);
+    over.appendChild(svg);
+    over.style.cursor = "crosshair";
+    let stroke: [number, number][] | null = null;
+    const show = () => line.setAttribute("points", (stroke ?? []).map((p) => p.join(",")).join(" "));
+    over.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      stroke = [[e.offsetX, e.offsetY]];
+      over.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      show();
+    });
+    over.addEventListener("pointermove", (e) => {
+      if (!stroke) return;
+      stroke.push([e.offsetX, e.offsetY]);
+      show();
+    });
+    over.addEventListener("pointerup", () => {
+      if (!stroke) return;
+      const points = stroke.map(([px, py]): [number, number] => [u.posToVal(px, "x"), u.posToVal(py, "y")]);
+      stroke = null;
+      show();
+      if (points.length > 1) onDraw?.(points);
+    });
+    over.addEventListener("pointercancel", () => {
+      stroke = null;
+      show();
+    });
   }
 
   // Data or structure changes.
@@ -302,5 +348,18 @@
   }
   .plot :global(.u-legend .no-legend) {
     display: none;
+  }
+  .plot :global(svg.stroke) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+  }
+  .plot :global(svg.stroke polyline) {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2;
   }
 </style>

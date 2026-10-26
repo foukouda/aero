@@ -232,6 +232,22 @@ The hinge is given by its x position and either its y or its height as a fractio
 
 Each tool creates a new airfoil in the library and keeps the original, so both can be compared. Thickness and camber can be scaled or set (camber line and thickness are measured vertically, as XFOIL does); the high points slide the maximum thickness or camber along the chord; the trailing-edge gap opens or closes the trailing edge over a blending distance; the leading-edge radius is scaled near the nose; blending interpolates between two airfoils point by point (a fraction outside 0–1 extrapolates). They are ports of XFOIL's GDES commands (FLAP, TFAC, TSET, HIGH, TGAP, LERA) and of INTE, checked against XFOIL.
 
+### Inverse design
+
+**Instead of computing the flow around a given shape, the shape is computed from the surface speed (or pressure) you want.**
+
+In an analysis the shape is known and the speed along the surface is the result; inverse design turns this around. You draw the speed distribution you want — for example a lower suction peak, a flatter upper surface for longer laminar flow, a gentler pressure recovery toward the trailing edge — and the airfoil that produces it is computed.
+
+The mixed inverse (XFOIL's QDES) reshapes only the segment of the surface where the target was changed, keeping the rest; a few free parameters let the speed join the unchanged parts, so the reached speed is the drawn one plus a small smooth offset along the segment, and the speed elsewhere changes a little too. The full inverse (XFOIL's MDES) generates the whole airfoil by conformal mapping of a circle (Lighthill's method): the target is adjusted to the nearest one an airfoil can produce, with the trailing-edge gap and angle you set. Not every target makes a sensible airfoil: draw smooth changes, use Smooth or Filter, and check the new shape and its analysis.
+
+### Surface speed and target speed
+
+**q/V∞: the flow speed just outside the surface divided by the freestream speed; Cp = 1 − (q/V∞)².**
+
+The surface speed is the speed of the inviscid flow along the airfoil surface, divided by the freestream speed V∞. It is another way of looking at the pressure: where the speed is high the pressure is low, Cp = 1 − (q/V∞)² at low Mach number. It is zero at the stagnation point near the leading edge, rises to a peak (the suction peak) on the upper surface, then decreases toward the trailing edge — that deceleration is the adverse pressure gradient that the boundary layer must survive.
+
+In inverse design the target speed is the distribution you want. It is plotted for both surfaces against x; the upper surface usually has the higher speeds when the airfoil lifts.
+
 ### Panels and paneling
 
 **The airfoil contour is cut into straight segments (panels) on which the flow is solved; 160 is a good default.**

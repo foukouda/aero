@@ -6,6 +6,7 @@
   import AnalysisTab from "./components/AnalysisTab.svelte";
   import PolarsTab from "./components/PolarsTab.svelte";
   import OptimizeTab from "./components/OptimizeTab.svelte";
+  import DesignTab from "./components/DesignTab.svelte";
   import Toasts from "./components/Toasts.svelte";
   import Tour from "./components/Tour.svelte";
   import Glossary from "./components/Glossary.svelte";
@@ -18,6 +19,7 @@
     { id: "analysis", label: "Analysis" },
     { id: "polars", label: "Polars" },
     { id: "optimize", label: "Optimize" },
+    { id: "design", label: "Inverse design" },
   ];
 
   onMount(() => {
@@ -109,8 +111,10 @@
         <AnalysisTab />
       {:else if app.tab === "polars"}
         <PolarsTab />
-      {:else}
+      {:else if app.tab === "optimize"}
         <OptimizeTab />
+      {:else}
+        <DesignTab />
       {/if}
     </main>
   </div>

@@ -24,6 +24,34 @@ export const commands = {
 	applyModification: (id: number, modification: Modification, name: string | null) => typedError<AirfoilSummary, AppError>(__TAURI_INVOKE("apply_modification", { id, modification, name })),
 	/**  Adds copies of an airfoil with its flap deflected by each deflection. */
 	flapSeries: (id: number, hingeX: number | null, hingeY: HingeY, deflections: (number | null)[]) => typedError<BatchResult, AppError>(__TAURI_INVOKE("flap_series", { id, hingeX, hingeY, deflections })),
+	/**  Starts an inverse design of an airfoil (mixed or full inverse). */
+	designStart: (id: number, method: DesignMethod, alphaDeg: number | null) => typedError<DesignView, AppError>(__TAURI_INVOKE("design_start", { id, method, alphaDeg })),
+	/**  Changes the inverse design in progress (target, angle, options). */
+	designEdit: (edit: DesignEdit) => typedError<DesignView, AppError>(__TAURI_INVOKE("design_edit", { edit })),
+	/**  The airfoil the inverse design would create. */
+	designPreview: () => typedError<{
+	/**  Coordinates of the new airfoil. */
+	x: (number | null)[],
+	/**  Ordinates. */
+	y: (number | null)[],
+	/**  Its geometric properties. */
+	properties: GeometricProperties,
+	/**
+	 *  Surface speed of the new airfoil at the design angle (mixed inverse:
+	 *  the target plus XFOIL's end corrections), at the points `x`.
+	 */
+	speed: (number | null)[] | null,
+	/**  True if the Newton iterations converged. */
+	converged: boolean,
+	/**  Iterations used. */
+	iterations: number,
+	/**  Short description, used in the new airfoil's name. */
+	description: string,
+} | null, AppError>(__TAURI_INVOKE("design_preview")),
+	/**  Adds the airfoil of the inverse design to the library. */
+	designApply: (name: string | null) => typedError<AirfoilSummary, AppError>(__TAURI_INVOKE("design_apply", { name })),
+	/**  Ends the inverse design in progress. */
+	designClose: () => __TAURI_INVOKE<void>("design_close"),
 	/**  Camber line and thickness distribution of an airfoil, with their maxima. */
 	getCamberThickness: (id: number) => typedError<CamberThickness, AppError>(__TAURI_INVOKE("get_camber_thickness", { id })),
 	/**  Imports coordinate files and whole folders of them. */
@@ -352,6 +380,69 @@ export type DatFormat =
 /**  MSES/ISES file (domain line skipped). */
 "Mses";
 
+/**  A change of the inverse design session. */
+export type DesignEdit = 
+/**
+ *  Design angle of attack, degrees. The mixed inverse keeps its target;
+ *  the full inverse recomputes it for the new angle (`AQ`).
+ */
+{ kind: "alpha"; 
+/**  Angle of attack, degrees. */
+alpha_deg: number | null } | 
+/**  Design lift coefficient of the full inverse (`CQ`). */
+{ kind: "lift"; 
+/**  Lift coefficient. */
+cl: number | null } | 
+/**
+ *  New target speed (signed as `target`) on the points `first` to
+ *  `first + speed.len() − 1` (a curve drawn over the plot, `MODI`).
+ */
+{ kind: "target"; 
+/**  First point. */
+first: number; 
+/**  New values. */
+speed: (number | null)[] } | 
+/**
+ *  Smooths the target (`SMOO`): the segment for the mixed inverse,
+ *  the whole airfoil for the full inverse.
+ */
+{ kind: "smooth" } | 
+/**  Hanning filter of the full-inverse mapping (`FILT`). */
+{ kind: "filter" } | 
+/**  Symmetric airfoil (full inverse, `SYMM`). */
+{ kind: "symmetric"; 
+/**  On or off. */
+on: boolean } | 
+/**  Keeps the speed curvature at the segment ends (mixed, `CPXX`). */
+{ kind: "curvature"; 
+/**  On or off. */
+on: boolean } | 
+/**  Trailing-edge gap of the full-inverse airfoil (`TGAP`). */
+{ kind: "te_gap"; 
+/**  Gap along x. */
+dx: number | null; 
+/**  Gap along y. */
+dy: number | null } | 
+/**  Trailing-edge angle of the full-inverse airfoil, degrees (`TANG`). */
+{ kind: "te_angle"; 
+/**  Angle, degrees. */
+angle_deg: number | null } | 
+/**  Target back to the speed of the original airfoil. */
+{ kind: "reset" };
+
+/**  Inverse design method. */
+export type DesignMethod = 
+/**
+ *  Mixed inverse (XFOIL `QDES`): a segment of the surface is reshaped
+ *  for a target speed there, the rest of the airfoil is kept.
+ */
+"mixed" | 
+/**
+ *  Full inverse (XFOIL `MDES`): the whole airfoil is generated from a
+ *  target speed distribution by conformal mapping.
+ */
+"full";
+
 /**  Options of the design space. */
 export type DesignOptions = {
 	/**
@@ -372,6 +463,66 @@ export type DesignPoint = {
 	target: Target,
 	/**  Weight of the point in the objective (positive). */
 	weight: number | null,
+};
+
+/**  The airfoil the inverse design would create. */
+export type DesignPreview = {
+	/**  Coordinates of the new airfoil. */
+	x: (number | null)[],
+	/**  Ordinates. */
+	y: (number | null)[],
+	/**  Its geometric properties. */
+	properties: GeometricProperties,
+	/**
+	 *  Surface speed of the new airfoil at the design angle (mixed inverse:
+	 *  the target plus XFOIL's end corrections), at the points `x`.
+	 */
+	speed: (number | null)[] | null,
+	/**  True if the Newton iterations converged. */
+	converged: boolean,
+	/**  Iterations used. */
+	iterations: number,
+	/**  Short description, used in the new airfoil's name. */
+	description: string,
+};
+
+/**  State of the inverse design session. */
+export type DesignView = {
+	/**  Airfoil being redesigned. */
+	id: number,
+	/**  Method. */
+	method: DesignMethod,
+	/**  Design angle of attack, degrees. */
+	alpha_deg: number | null,
+	/**  Lift coefficient of the target (full inverse). */
+	cl: number | null,
+	/**  True if the full inverse is designed for a lift coefficient. */
+	by_lift: boolean,
+	/**  Abscissas of the original airfoil's panel nodes. */
+	current_x: (number | null)[],
+	/**
+	 *  Surface speed of the original airfoil at the design angle, signed
+	 *  as XFOIL's `γ` (positive from the upper trailing edge to the
+	 *  stagnation point, negative after).
+	 */
+	current_speed: (number | null)[],
+	/**
+	 *  Abscissas of the target points on the original airfoil (the panel
+	 *  nodes, or the circle points of the full inverse).
+	 */
+	target_x: (number | null)[],
+	/**  Target speed, signed as `current_speed`. */
+	target: (number | null)[],
+	/**  First and last target points of the mixed-inverse segment. */
+	segment: [number, number] | null,
+	/**  Curvature constraints at the segment ends (mixed). */
+	curvature_constraints: boolean,
+	/**  Symmetric airfoil (full). */
+	symmetric: boolean,
+	/**  Trailing-edge gap (dx, dy) of the new airfoil (full). */
+	te_gap: [(number | null), (number | null)],
+	/**  Trailing-edge angle of the new airfoil, degrees (full). */
+	te_angle_deg: number | null,
 };
 
 /**  Category of an error, for the user interface. */

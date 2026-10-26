@@ -1,5 +1,6 @@
 //! Errors returned to the user interface.
 
+use aero_foil2d::inverse::InverseError;
 use aero_foil2d::inviscid::InviscidError;
 use aero_foil2d::viscous::ViscousError;
 use aero_geometry::GeometryError;
@@ -84,6 +85,20 @@ impl From<ViscousError> for AppError {
         match e {
             ViscousError::Inviscid(e) => e.into(),
             ViscousError::InvalidOption(_) => Self::new(ErrorKind::InvalidInput, e.to_string()),
+            _ => Self::new(ErrorKind::Solver, e.to_string()),
+        }
+    }
+}
+
+impl From<InverseError> for AppError {
+    fn from(e: InverseError) -> Self {
+        match e {
+            InverseError::Inviscid(e) => e.into(),
+            InverseError::Geometry(g) => g.into(),
+            InverseError::InvalidSegment { .. }
+            | InverseError::StagnationInSegment
+            | InverseError::NoStagnationPoint
+            | InverseError::InvalidOption(_) => Self::new(ErrorKind::InvalidInput, e.to_string()),
             _ => Self::new(ErrorKind::Solver, e.to_string()),
         }
     }

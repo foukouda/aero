@@ -27,10 +27,12 @@ use aero_geometry::{
 
 use aero_optim::{DesignSpace, Phase, Stop};
 
+use crate::design::DesignSession;
 use crate::dto::{
     AirfoilSummary, AnalysisRequest, AnalysisView, BatchFailure, BatchImport, BatchResult,
-    BestDesign, GeometryView, ImportResult, ModificationPreview, OptimizationEvent,
-    OptimizeRequest, SessionView, SweepEvent, SweepRequest, ViscousView,
+    BestDesign, DesignEdit, DesignMethod, DesignPreview, DesignView, GeometryView, ImportResult,
+    ModificationPreview, OptimizationEvent, OptimizeRequest, SessionView, SweepEvent, SweepRequest,
+    ViscousView,
 };
 use crate::error::{AppError, ErrorKind};
 use crate::export;
@@ -126,6 +128,8 @@ pub struct Engine {
     project_path: Mutex<Option<PathBuf>>,
     solvers: Mutex<HashMap<AirfoilId, CachedSolver>>,
     jobs: Mutex<HashMap<String, Arc<AtomicBool>>>,
+    /// Inverse design in progress.
+    design: Mutex<Option<DesignSession>>,
 }
 
 /// Locks a mutex, recovering the data if another thread panicked.
@@ -559,6 +563,83 @@ impl Engine {
             }
         }
         Ok(out)
+    }
+
+    /// Starts an inverse design of an airfoil at `alpha_deg` (its paneled
+    /// geometry, current speed distribution as the target), replacing any
+    /// design in progress.
+    pub fn design_start(
+        &self,
+        id: AirfoilId,
+        method: DesignMethod,
+        alpha_deg: f64,
+    ) -> Result<DesignView, AppError> {
+        let paneled = lock(&self.session).get(id)?.paneled()?;
+        let design = DesignSession::new(id, paneled, method, alpha_deg)?;
+        let view = design.view();
+        *lock(&self.design) = Some(design);
+        Ok(view)
+    }
+
+    fn with_design<T>(
+        &self,
+        f: impl FnOnce(&mut DesignSession) -> Result<T, AppError>,
+    ) -> Result<T, AppError> {
+        let mut design = lock(&self.design);
+        let design = design.as_mut().ok_or_else(|| {
+            AppError::new(ErrorKind::InvalidInput, "no inverse design in progress")
+        })?;
+        f(design)
+    }
+
+    /// Changes the inverse design in progress.
+    pub fn design_edit(&self, edit: DesignEdit) -> Result<DesignView, AppError> {
+        self.with_design(|d| {
+            d.edit(edit)?;
+            Ok(d.view())
+        })
+    }
+
+    /// The airfoil the inverse design would create (`None` while there is
+    /// nothing to change).
+    pub fn design_preview(&self) -> Result<Option<DesignPreview>, AppError> {
+        self.with_design(|d| Ok(d.preview()?.map(|(_, p)| p)))
+    }
+
+    /// Adds the airfoil of the inverse design to the library, named `name`
+    /// or "<original> (<method>)", with the original's paneling.
+    pub fn design_apply(&self, name: Option<&str>) -> Result<AirfoilSummary, AppError> {
+        let (id, airfoil, change) = self.with_design(|d| {
+            let (a, p) = d.preview()?.ok_or_else(|| {
+                AppError::new(
+                    ErrorKind::InvalidInput,
+                    "draw a new target speed over part of the surface first",
+                )
+            })?;
+            Ok((d.id, a, p.description))
+        })?;
+        let mut session = lock(&self.session);
+        let original = session.get(id)?.clone();
+        let name = name
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .map_or_else(|| format!("{} ({change})", original.name()), str::to_string);
+        let new_id = session
+            .add(
+                airfoil.with_name(name),
+                AirfoilOrigin::Modified {
+                    of: original.name().to_string(),
+                    change,
+                },
+            )
+            .id;
+        session.set_paneling(new_id, original.paneling)?;
+        session.get(new_id).map(summary)
+    }
+
+    /// Ends the inverse design in progress.
+    pub fn design_close(&self) {
+        *lock(&self.design) = None;
     }
 
     /// Camber line, thickness and their maxima, as XFOIL's thickness and

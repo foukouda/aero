@@ -9,9 +9,9 @@ use tauri::State;
 use tauri::ipc::Channel;
 
 use crate::dto::{
-    AirfoilSummary, AnalysisRequest, AnalysisView, AppInfo, BatchImport, BatchResult, GeometryView,
-    ImportResult, ModificationPreview, OptimizationEvent, OptimizeRequest, SessionView, SweepEvent,
-    SweepRequest,
+    AirfoilSummary, AnalysisRequest, AnalysisView, AppInfo, BatchImport, BatchResult, DesignEdit,
+    DesignMethod, DesignPreview, DesignView, GeometryView, ImportResult, ModificationPreview,
+    OptimizationEvent, OptimizeRequest, SessionView, SweepEvent, SweepRequest,
 };
 use crate::engine::Engine;
 use crate::error::{AppError, ErrorKind};
@@ -98,6 +98,53 @@ pub async fn apply_modification(
 ) -> Result<AirfoilSummary, AppError> {
     let engine = engine.inner().clone();
     blocking(move || engine.apply_modification(id, &modification, name.as_deref())).await
+}
+
+/// Starts an inverse design of an airfoil (mixed or full inverse).
+#[tauri::command]
+#[specta::specta]
+pub async fn design_start(
+    engine: Shared<'_>,
+    id: AirfoilId,
+    method: DesignMethod,
+    alpha_deg: f64,
+) -> Result<DesignView, AppError> {
+    let engine = engine.inner().clone();
+    blocking(move || engine.design_start(id, method, alpha_deg)).await
+}
+
+/// Changes the inverse design in progress (target, angle, options).
+#[tauri::command]
+#[specta::specta]
+pub async fn design_edit(engine: Shared<'_>, edit: DesignEdit) -> Result<DesignView, AppError> {
+    let engine = engine.inner().clone();
+    blocking(move || engine.design_edit(edit)).await
+}
+
+/// The airfoil the inverse design would create.
+#[tauri::command]
+#[specta::specta]
+pub async fn design_preview(engine: Shared<'_>) -> Result<Option<DesignPreview>, AppError> {
+    let engine = engine.inner().clone();
+    blocking(move || engine.design_preview()).await
+}
+
+/// Adds the airfoil of the inverse design to the library.
+#[tauri::command]
+#[specta::specta]
+pub async fn design_apply(
+    engine: Shared<'_>,
+    name: Option<String>,
+) -> Result<AirfoilSummary, AppError> {
+    let engine = engine.inner().clone();
+    blocking(move || engine.design_apply(name.as_deref())).await
+}
+
+/// Ends the inverse design in progress.
+#[tauri::command]
+#[specta::specta]
+pub fn design_close(engine: Shared<'_>) {
+    engine.design_close();
 }
 
 /// Adds copies of an airfoil with its flap deflected by each deflection.

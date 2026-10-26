@@ -543,6 +543,38 @@ export const GLOSSARY: GlossaryEntry[] = [
     },
   },
   {
+    id: "inverse-design",
+    category: "geometry",
+    text: {
+      en: {
+        term: "Inverse design",
+        short: "Instead of computing the flow around a given shape, the shape is computed from the surface speed (or pressure) you want.",
+        long: "In an analysis the shape is known and the speed along the surface is the result; inverse design turns this around. You draw the speed distribution you want — for example a lower suction peak, a flatter upper surface for longer laminar flow, a gentler pressure recovery toward the trailing edge — and the airfoil that produces it is computed.\n\nThe mixed inverse (XFOIL's QDES) reshapes only the segment of the surface where the target was changed, keeping the rest; a few free parameters let the speed join the unchanged parts, so the reached speed is the drawn one plus a small smooth offset along the segment, and the speed elsewhere changes a little too. The full inverse (XFOIL's MDES) generates the whole airfoil by conformal mapping of a circle (Lighthill's method): the target is adjusted to the nearest one an airfoil can produce, with the trailing-edge gap and angle you set. Not every target makes a sensible airfoil: draw smooth changes, use Smooth or Filter, and check the new shape and its analysis.",
+      },
+      fr: {
+        term: "Conception inverse",
+        short: "Au lieu de calculer l'écoulement autour d'une forme donnée, on calcule la forme à partir de la vitesse (ou de la pression) voulue sur sa surface.",
+        long: "Dans une analyse, la forme est connue et la vitesse le long de la surface est le résultat ; la conception inverse fait le chemin inverse. Tu dessines la répartition de vitesse que tu veux — par exemple un pic de dépression plus faible, un extrados plus plat pour un écoulement laminaire plus long, une recompression plus douce vers le bord de fuite — et le profil qui la produit est calculé.\n\nLa méthode mixte (QDES de XFOIL) ne remodèle que le segment de surface où la cible a changé et garde le reste ; quelques paramètres libres permettent à la vitesse de se raccorder aux parties inchangées, donc la vitesse obtenue est celle dessinée plus un petit décalage régulier le long du segment, et la vitesse ailleurs change un peu aussi. La méthode complète (MDES de XFOIL) génère tout le profil par transformation conforme d'un cercle (méthode de Lighthill) : la cible est ajustée à la plus proche qu'un profil puisse produire, avec l'épaisseur et l'angle de bord de fuite choisis. Toute cible ne donne pas un profil raisonnable : dessine des changements doux, utilise Smooth ou Filter, et vérifie la nouvelle forme et son analyse.",
+      },
+    },
+  },
+  {
+    id: "target-speed",
+    category: "geometry",
+    text: {
+      en: {
+        term: "Surface speed and target speed",
+        short: "q/V∞: the flow speed just outside the surface divided by the freestream speed; Cp = 1 − (q/V∞)².",
+        long: "The surface speed is the speed of the inviscid flow along the airfoil surface, divided by the freestream speed V∞. It is another way of looking at the pressure: where the speed is high the pressure is low, Cp = 1 − (q/V∞)² at low Mach number. It is zero at the stagnation point near the leading edge, rises to a peak (the suction peak) on the upper surface, then decreases toward the trailing edge — that deceleration is the adverse pressure gradient that the boundary layer must survive.\n\nIn inverse design the target speed is the distribution you want. It is plotted for both surfaces against x; the upper surface usually has the higher speeds when the airfoil lifts.",
+      },
+      fr: {
+        term: "Vitesse de surface et vitesse cible",
+        short: "q/V∞ : la vitesse de l'écoulement juste au-dessus de la surface divisée par la vitesse de l'écoulement amont ; Cp = 1 − (q/V∞)².",
+        long: "La vitesse de surface est la vitesse de l'écoulement non visqueux le long de la surface du profil, divisée par la vitesse amont V∞. C'est une autre façon de voir la pression : là où la vitesse est grande la pression est basse, Cp = 1 − (q/V∞)² à faible Mach. Elle est nulle au point d'arrêt près du bord d'attaque, monte jusqu'à un pic (le pic de dépression) sur l'extrados, puis diminue vers le bord de fuite — ce ralentissement est le gradient de pression adverse que la couche limite doit supporter.\n\nEn conception inverse, la vitesse cible est la répartition que tu veux. Elle est tracée pour les deux faces en fonction de x ; l'extrados a en général les vitesses les plus grandes quand le profil porte.",
+      },
+    },
+  },
+  {
     id: "paneling",
     category: "geometry",
     text: {

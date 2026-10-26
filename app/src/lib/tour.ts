@@ -2,7 +2,7 @@
 // components/Tour.svelte. Targets are `data-tour` attributes in the UI.
 
 export type TourLang = "en" | "fr";
-export type TourTab = "geometry" | "analysis" | "polars" | "optimize";
+export type TourTab = "geometry" | "analysis" | "polars" | "optimize" | "design";
 export type TourAction = "generate-naca" | "show-nodes" | "set-alpha" | "enable-viscous" | "run-sweep";
 
 export interface TourText {
@@ -103,12 +103,12 @@ export const TOUR_STEPS: TourStep[] = [
     target: "tabs",
     text: {
       en: {
-        title: "4. Three views",
-        body: "Geometry shows the shape and the paneling, Analysis computes one angle of attack, Polars sweeps a range of angles. The library on the left stays available in all of them.",
+        title: "4. The views",
+        body: "Geometry shows the shape and the paneling, Analysis computes one angle of attack, Polars sweeps a range of angles; Optimize and Inverse design create new shapes. The library on the left stays available in all of them.",
       },
       fr: {
-        title: "4. Trois vues",
-        body: "Geometry montre la forme et la panélisation, Analysis calcule un angle d'attaque, Polars balaie une plage d'angles. La bibliothèque à gauche reste disponible partout.",
+        title: "4. Les vues",
+        body: "Geometry montre la forme et la panélisation, Analysis calcule un angle d'attaque, Polars balaie une plage d'angles ; Optimize et Inverse design créent de nouvelles formes. La bibliothèque à gauche reste disponible partout.",
       },
     },
   },
@@ -164,6 +164,22 @@ export const TOUR_STEPS: TourStep[] = [
     },
   },
   {
+    id: "modify",
+    target: "modify",
+    tab: "geometry",
+    needsAirfoil: true,
+    text: {
+      en: {
+        title: "8. Modify the airfoil",
+        body: "XFOIL's geometry tools: deflect a flap, scale or set thickness and camber, move their high points, change the trailing-edge gap or the leading-edge radius, blend two airfoils. The dashed curve previews the result; Create adds it to the library and keeps the original. “Create series” makes several flap deflections at once, ready to be swept together.",
+      },
+      fr: {
+        title: "8. Modifier le profil",
+        body: "Les outils géométriques de XFOIL : braquer un volet, multiplier ou fixer l'épaisseur et la cambrure, déplacer leurs points hauts, changer l'épaisseur du bord de fuite ou le rayon du bord d'attaque, mélanger deux profils. La courbe en pointillés montre le résultat ; Create l'ajoute à la bibliothèque et garde l'original. « Create series » crée plusieurs braquages de volet d'un coup, prêts à être balayés ensemble.",
+      },
+    },
+  },
+  {
     id: "alpha",
     target: "alpha",
     tab: "analysis",
@@ -171,12 +187,12 @@ export const TOUR_STEPS: TourStep[] = [
     action: "set-alpha",
     text: {
       en: {
-        title: "8. Angle of attack",
+        title: "9. Angle of attack",
         body: "Drag the slider: the pressure distribution and the coefficients update as you move it. An inviscid point costs a few microseconds; a viscous point takes a few Newton iterations of the coupled boundary layer (a fraction of a second). You can also type a value. Switch α / Cl to prescribe the lift coefficient instead: the solver then finds the angle of attack (XFOIL's CL command), handy to compare airfoils at the same lift.",
         action: "Set α = 5°",
       },
       fr: {
-        title: "8. Angle d'attaque",
+        title: "9. Angle d'attaque",
         body: "Fais glisser le curseur : la répartition de pression et les coefficients suivent le mouvement. Un point non visqueux coûte quelques microsecondes ; un point visqueux demande quelques itérations de Newton de la couche limite couplée (une fraction de seconde). Tu peux aussi taper une valeur. Bascule α / Cl pour imposer plutôt le coefficient de portance : le solveur trouve alors l'angle d'attaque (commande CL de XFOIL), pratique pour comparer des profils à portance égale.",
         action: "Mets α = 5°",
       },
@@ -188,11 +204,11 @@ export const TOUR_STEPS: TourStep[] = [
     tab: "analysis",
     text: {
       en: {
-        title: "9. Mach number",
+        title: "10. Mach number",
         body: "0 means incompressible flow. Above 0, the Kármán–Tsien compressibility correction is applied. If the flow becomes locally supersonic (critical Mach number exceeded), Aero reports an error instead of a doubtful result; tick “allow supercritical” to get XFOIL's behaviour.",
       },
       fr: {
-        title: "9. Nombre de Mach",
+        title: "10. Nombre de Mach",
         body: "0 correspond à un écoulement incompressible. Au-dessus, la correction de compressibilité de Kármán–Tsien est appliquée. Si l'écoulement devient localement supersonique (Mach critique dépassé), Aero signale une erreur plutôt qu'un résultat douteux ; coche « allow supercritical » pour retrouver le comportement de XFOIL.",
       },
     },
@@ -204,12 +220,12 @@ export const TOUR_STEPS: TourStep[] = [
     action: "enable-viscous",
     text: {
       en: {
-        title: "10. Viscous analysis",
+        title: "11. Viscous analysis",
         body: "With Viscous ticked, Aero solves the boundary layer coupled with the panel method, exactly like XFOIL's VISC mode: friction, drag, laminar-to-turbulent transition and stall. Re is the chord Reynolds number (type 1e6, 500k…). Ncrit sets the transition sensitivity (top / bottom): 9 for an average wind tunnel, 4–6 for a turbulent free stream, 11–12 for a very quiet one. A trip x/c below 1 forces transition there, like a turbulator strip. “M, Re” lets the Mach and Reynolds numbers vary with the lift as for an aircraft of fixed wing loading (XFOIL TYPE 2: the values entered are then those at Cl = 1), and “Ampl.” selects XFOIL's modified amplification rate (DAMP).",
         action: "Enable it with Re = 1e6",
       },
       fr: {
-        title: "10. Analyse visqueuse",
+        title: "11. Analyse visqueuse",
         body: "Avec Viscous coché, Aero résout la couche limite couplée à la méthode de panneaux, exactement comme le mode VISC de XFOIL : frottement, traînée, transition laminaire-turbulent et décrochage. Re est le nombre de Reynolds sur la corde (tape 1e6, 500k…). Ncrit règle la sensibilité de la transition (extrados / intrados) : 9 pour une soufflerie moyenne, 4–6 pour un écoulement turbulent, 11–12 pour un écoulement très calme. Un trip x/c inférieur à 1 force la transition à cet endroit, comme une bande de turbulateur. « M, Re » fait varier les nombres de Mach et de Reynolds avec la portance, comme pour un avion à charge alaire fixe (TYPE 2 de XFOIL : les valeurs saisies sont alors celles à Cl = 1), et « Ampl. » choisit le taux d'amplification modifié de XFOIL (DAMP).",
         action: "Active-la avec Re = 1e6",
       },
@@ -222,11 +238,11 @@ export const TOUR_STEPS: TourStep[] = [
     needsAirfoil: true,
     text: {
       en: {
-        title: "11. Coefficients",
+        title: "12. Coefficients",
         body: "Cl is the lift coefficient, Cd the drag coefficient and L/D the lift-to-drag ratio, Cm the pitching moment about the quarter chord. Xtr gives where the boundary layer becomes turbulent on each surface (ᵗ when forced by a trip); Cdp / Cdf split the drag into pressure and friction. “not converged” flags a point (often beyond stall) whose values are approximate. In inviscid mode only Cl, Cm and a near-zero Cdp are available. The CSV buttons export the Cp distribution and the boundary layer. Tick “Flap hinge” and give the hinge point to get the hinge moment Ch of the flap aft of it (XFOIL FMOM).",
       },
       fr: {
-        title: "11. Coefficients",
+        title: "12. Coefficients",
         body: "Cl est le coefficient de portance, Cd celui de traînée et L/D la finesse, Cm le moment de tangage au quart de corde. Xtr indique où la couche limite devient turbulente sur chaque face (ᵗ si elle est forcée par un trip) ; Cdp / Cdf séparent la traînée de pression et de frottement. « not converged » signale un point (souvent au-delà du décrochage) dont les valeurs sont approximatives. En non visqueux, seuls Cl, Cm et un Cdp quasi nul sont disponibles. Les boutons CSV exportent la répartition de Cp et la couche limite. Coche « Flap hinge » et donne le point de charnière pour obtenir le moment de charnière Ch du volet situé en arrière (FMOM de XFOIL).",
       },
     },
@@ -238,11 +254,11 @@ export const TOUR_STEPS: TourStep[] = [
     needsAirfoil: true,
     text: {
       en: {
-        title: "12. Pressure distribution",
+        title: "13. Pressure distribution",
         body: "Cp along the chord, upper surface solid, lower surface dashed. By aerodynamic convention negative Cp (suction) is plotted upwards; the area between the curves is the lift. In viscous mode the thin dotted lines are the inviscid Cp: the gap shows the effect of the boundary layer (a plateau marks a laminar separation bubble). With a Mach number, the grey line is the sonic Cp*. PNG and SVG export the chart.",
       },
       fr: {
-        title: "12. Répartition de pression",
+        title: "13. Répartition de pression",
         body: "Cp le long de la corde, extrados en trait plein, intrados en tirets. Par convention aérodynamique, le Cp négatif (dépression) est tracé vers le haut ; l'aire entre les courbes correspond à la portance. En visqueux, les fines lignes pointillées sont le Cp non visqueux : l'écart montre l'effet de la couche limite (un plateau signale un bulbe de décollement laminaire). Avec un Mach, la ligne grise est le Cp* sonique. PNG et SVG exportent le graphique.",
       },
     },
@@ -254,11 +270,11 @@ export const TOUR_STEPS: TourStep[] = [
     needsAirfoil: true,
     text: {
       en: {
-        title: "13. Boundary layer",
+        title: "14. Boundary layer",
         body: "Choose a quantity: displacement and momentum thicknesses δ* and θ, shape factor H (above about 3.5–4 the laminar layer separates), skin friction Cf (negative where the flow is separated), amplification N (transition where it reaches Ncrit) or edge velocity. Top surface solid, bottom dashed, wake dotted.",
       },
       fr: {
-        title: "13. Couche limite",
+        title: "14. Couche limite",
         body: "Choisis une grandeur : épaisseurs de déplacement et de quantité de mouvement δ* et θ, facteur de forme H (au-delà de 3,5–4 environ, la couche laminaire décolle), frottement Cf (négatif là où l'écoulement est décollé), amplification N (la transition a lieu quand elle atteint Ncrit) ou vitesse extérieure. Extrados en trait plein, intrados en tirets, sillage en pointillés.",
       },
     },
@@ -271,12 +287,12 @@ export const TOUR_STEPS: TourStep[] = [
     action: "run-sweep",
     text: {
       en: {
-        title: "14. Angle-of-attack sweep",
+        title: "15. Angle-of-attack sweep",
         body: "Choose the first and last angles and the step, then Run sweep: every visible airfoil is analyzed, viscous or not according to the settings (the same as in the Analysis tab). As in XFOIL, each viscous point starts from the previous one, so start near zero lift and use small steps (0.5° to 1°) to follow the polar through stall. Progress is shown and a sweep can be cancelled at any time.",
         action: "Run the sweep for me",
       },
       fr: {
-        title: "14. Balayage en angle d'attaque",
+        title: "15. Balayage en angle d'attaque",
         body: "Choisis les angles de début et de fin et le pas, puis Run sweep : chaque profil visible est analysé, en visqueux ou non selon les réglages (les mêmes que dans l'onglet Analysis). Comme dans XFOIL, chaque point visqueux part du précédent : commence près de la portance nulle et utilise de petits pas (0,5° à 1°) pour suivre la polaire jusqu'au décrochage. La progression s'affiche et un balayage peut être annulé à tout moment.",
         action: "Lance le balayage pour moi",
       },
@@ -289,11 +305,11 @@ export const TOUR_STEPS: TourStep[] = [
     needsAirfoil: true,
     text: {
       en: {
-        title: "15. Polars",
+        title: "16. Polars",
         body: "Cl(α), Cm(α) and, for viscous polars, the drag polar Cl(Cd) and the transition points, for every visible airfoil (inviscid polars are dashed). The lift curve bends over at stall, the drag polar shows the laminar “bucket” and the transition curves explain it. Points that do not converge are left out, as in XFOIL. Export CSV saves all the points.",
       },
       fr: {
-        title: "15. Polaires",
+        title: "16. Polaires",
         body: "Cl(α), Cm(α) et, pour les polaires visqueuses, la polaire de traînée Cl(Cd) et les points de transition, pour chaque profil visible (les polaires non visqueuses sont en tirets). La courbe de portance s'infléchit au décrochage, la polaire de traînée montre le « baquet » laminaire et les courbes de transition l'expliquent. Les points non convergés sont écartés, comme dans XFOIL. Export CSV enregistre tous les points.",
       },
     },
@@ -305,11 +321,11 @@ export const TOUR_STEPS: TourStep[] = [
     needsAirfoil: true,
     text: {
       en: {
-        title: "16. Compare many airfoils",
+        title: "17. Compare many airfoils",
         body: "With many airfoils, sweep them all at once (they are computed in parallel, one per core) and switch to Table: zero-lift angle, Cl max, Cd min, best L/D and their Cl, and the values at the Cl you choose, side by side. Click a column's ⇅ to rank the airfoils, a row to select one; the table exports as CSV. Viscous sweeps start near 0 and march outward, so that a range starting in separated flow still gives a full polar.",
       },
       fr: {
-        title: "16. Comparer beaucoup de profils",
+        title: "17. Comparer beaucoup de profils",
         body: "Avec beaucoup de profils, lance le balayage sur tous d'un coup (ils sont calculés en parallèle, un par cœur) et passe en Table : angle de portance nulle, Cl max, Cd min, meilleure finesse L/D et leurs Cl, et les valeurs au Cl de ton choix, côte à côte. Clique sur le ⇅ d'une colonne pour classer les profils, sur une ligne pour en sélectionner un ; le tableau s'exporte en CSV. Les balayages visqueux partent de 0 et vont vers l'extérieur, pour qu'une plage commençant en écoulement décollé donne quand même une polaire complète.",
       },
     },
@@ -321,11 +337,11 @@ export const TOUR_STEPS: TourStep[] = [
     needsAirfoil: true,
     text: {
       en: {
-        title: "17. Optimize the shape",
+        title: "18. Optimize the shape",
         body: "The Optimize tab reshapes an airfoil for your operating points: each point prescribes Cl (or α) and has a weight; the objective is the weighted drag, or L/D. Constraints keep it buildable — minimum thickness (preset to the airfoil's own), thickness at a spar station, minimum Cm, trailing-edge angle. The shape is described by CST functions fitted to the airfoil, and every candidate is analyzed by the same viscous solver as elsewhere; a candidate that does not converge is rejected. The run is reproducible: the same seed gives the same result.",
       },
       fr: {
-        title: "17. Optimiser la forme",
+        title: "18. Optimiser la forme",
         body: "L'onglet Optimize remodèle un profil pour tes points de fonctionnement : chaque point impose Cl (ou α) et a un poids ; l'objectif est la traînée pondérée, ou L/D. Des contraintes le gardent réalisable — épaisseur minimale (préréglée sur celle du profil), épaisseur à l'emplacement d'un longeron, Cm minimal, angle de bord de fuite. La forme est décrite par des fonctions CST ajustées au profil, et chaque candidat est analysé par le même solveur visqueux qu'ailleurs ; un candidat qui ne converge pas est rejeté. Le calcul est reproductible : la même graine donne le même résultat.",
       },
     },
@@ -337,12 +353,28 @@ export const TOUR_STEPS: TourStep[] = [
     needsAirfoil: true,
     text: {
       en: {
-        title: "18. Follow and use the result",
+        title: "19. Follow and use the result",
         body: "During the run, the shape and the convergence plot update live (green: feasible designs, orange: designs violating a constraint, blue: best so far); Cancel keeps the best design found. The table compares the initial and optimized airfoils point by point. “Add to library” makes the optimized airfoil a regular one (analysis, export .dat), and “Compare polars” sweeps both at the optimization conditions — check the off-design behaviour there, a single-point optimum can be worse elsewhere.",
       },
       fr: {
-        title: "18. Suivre et utiliser le résultat",
+        title: "19. Suivre et utiliser le résultat",
         body: "Pendant le calcul, la forme et la courbe de convergence se mettent à jour en direct (vert : formes admissibles, orange : formes violant une contrainte, bleu : meilleure jusque-là) ; Cancel garde la meilleure forme trouvée. Le tableau compare le profil initial et le profil optimisé point par point. « Add to library » en fait un profil comme les autres (analyse, export .dat), et « Compare polars » calcule les polaires des deux aux conditions de l'optimisation — vérifie-y le comportement hors point de calcul : un optimum en un seul point peut être moins bon ailleurs.",
+      },
+    },
+  },
+  {
+    id: "inverse",
+    target: "design",
+    tab: "design",
+    needsAirfoil: true,
+    text: {
+      en: {
+        title: "20. Inverse design",
+        body: "Here the shape comes from the flow: the plot shows the surface speed of the airfoil (grey) and the target (blue). With ✎ Draw on, drag near the upper or lower curve to draw the speed you want there — a lower suction peak, a flatter upper surface… Mixed reshapes only that segment (XFOIL's QDES); Full regenerates the whole airfoil (MDES), with Filter to smooth it and the trailing-edge gap and angle to keep it buildable. The new airfoil appears dashed below; Create adds it to the library, where you can analyze it.",
+      },
+      fr: {
+        title: "20. Conception inverse",
+        body: "Ici, la forme vient de l'écoulement : le graphe montre la vitesse de surface du profil (gris) et la cible (bleu). Avec ✎ Draw activé, glisse près de la courbe de l'extrados ou de l'intrados pour dessiner la vitesse voulue à cet endroit — un pic de dépression plus faible, un extrados plus plat… Mixed ne remodèle que ce segment (QDES de XFOIL) ; Full régénère tout le profil (MDES), avec Filter pour le lisser et l'épaisseur et l'angle du bord de fuite pour qu'il reste réalisable. Le nouveau profil apparaît en pointillés en dessous ; Create l'ajoute à la bibliothèque, où tu peux l'analyser.",
       },
     },
   },
@@ -351,11 +383,11 @@ export const TOUR_STEPS: TourStep[] = [
     target: "project",
     text: {
       en: {
-        title: "19. Save your work",
+        title: "21. Save your work",
         body: "Save stores the airfoils, settings, results and the last optimization in a project file (Ctrl+S); Open restores it. The last button switches between light and dark themes.",
       },
       fr: {
-        title: "19. Enregistrer ton travail",
+        title: "21. Enregistrer ton travail",
         body: "Save enregistre les profils, les réglages, les résultats et la dernière optimisation dans un fichier projet (Ctrl+S) ; Open le rouvre. Le dernier bouton bascule entre thème clair et sombre.",
       },
     },

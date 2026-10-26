@@ -9,6 +9,10 @@ import type {
   BatchFailure,
   AnalysisView,
   BestDesign,
+  DesignEdit,
+  DesignMethod,
+  DesignPreview,
+  DesignView,
   Evaluation,
   GeometryView,
   HingeY,
@@ -33,7 +37,7 @@ import { improvement, objectiveName } from "./optimize";
 import { latestRunner } from "./latest";
 import { TOUR_STEPS, defaultTourLang, type TourAction, type TourLang } from "./tour";
 
-export type Tab = "geometry" | "analysis" | "polars" | "optimize";
+export type Tab = "geometry" | "analysis" | "polars" | "optimize" | "design";
 export type Theme = "light" | "dark";
 
 export interface Toast {
@@ -150,6 +154,10 @@ class AppState {
   /** Preview of an airfoil modification (Geometry tab). */
   modificationPreview = $state<{ id: number; preview: ModificationPreview } | null>(null);
   modificationError = $state<string | null>(null);
+  /** Inverse design in progress (Inverse design tab) and its new airfoil. */
+  design = $state<DesignView | null>(null);
+  designPreview = $state<DesignPreview | null>(null);
+  designError = $state<string | null>(null);
   /** Library entry made from the last optimization result. */
   optimizedAirfoilId = $state<number | null>(null);
   toasts = $state<Toast[]>([]);
@@ -534,6 +542,75 @@ class AppState {
       }
       if (r.failed.length) this.notify("error", "Not created", failureList(r.failed));
       await this.refresh();
+    });
+  }
+
+  // -------------------------------------------------------- inverse design
+
+  #designQueue: Promise<void> = Promise.resolve();
+
+  /** Starts an inverse design of an airfoil (its current speed as target). */
+  startDesign(id: number, method: DesignMethod, alphaDeg: number) {
+    this.#designQueue = this.#designQueue.then(async () => {
+      const r = await commands.designStart(id, method, alphaDeg);
+      if (r.status === "ok") {
+        this.design = r.data;
+        this.designError = null;
+        this.designPreview = null;
+        void this.#designPreview(null);
+      } else {
+        this.design = null;
+        this.designPreview = null;
+        this.designError = r.error.message;
+      }
+    });
+    return this.#designQueue;
+  }
+
+  /** Changes the inverse design; every change is applied, in order. */
+  editDesign(edit: DesignEdit) {
+    this.#designQueue = this.#designQueue.then(async () => {
+      if (!this.design) return;
+      const r = await commands.designEdit(edit);
+      if (r.status === "ok") {
+        this.design = r.data;
+        this.designError = null;
+        void this.#designPreview(null);
+      } else {
+        this.designError = r.error.message;
+      }
+    });
+    return this.#designQueue;
+  }
+
+  #designPreview = latestRunner(async (_: null) => {
+    const r = await commands.designPreview();
+    if (r.status === "ok") {
+      this.designPreview = r.data;
+    } else {
+      this.designPreview = null;
+      this.designError = r.error.message;
+    }
+  });
+
+  /** Adds the airfoil of the inverse design to the library. */
+  async applyDesign(name: string) {
+    await this.#designQueue;
+    await this.guard(async () => {
+      const a = await call(commands.designApply(name.trim() || null));
+      this.dirty = true;
+      await this.refresh();
+      this.notify("info", "Airfoil created", a.name);
+    });
+  }
+
+  /** Ends the inverse design. */
+  closeDesign() {
+    this.#designQueue = this.#designQueue.then(async () => {
+      await commands.designClose();
+      this.design = null;
+      this.designPreview = null;
+      this.designError = null;
     });
   }
 
