@@ -18,10 +18,12 @@ installation is there too. The files are not code-signed: if Windows
 SmartScreen warns, click *More info* → *Run anyway*. Other systems: build
 from source (below).
 
-> **Status:** version 0.1.0 — geometry, XFOIL-compatible inviscid and
+> **Status:** version 0.2.0 — geometry, XFOIL-compatible inviscid and
 > viscous solvers (boundary layer, transition, drag, stall; prescribed angle
 > or lift, Mach and Reynolds numbers varying with the lift, flap hinge
-> moments), comparison of many airfoils, shape optimization and desktop
+> moments), XFOIL's geometry tools (flap deflection, thickness and camber,
+> trailing-edge gap, leading-edge radius, blending), mixed and full inverse
+> design, comparison of many airfoils, shape optimization and desktop
 > application. 3D methods, Python bindings and
 > WebAssembly come later; the architecture is prepared for them.
 
@@ -30,13 +32,15 @@ from source (below).
 ```
 crates/
   geometry/       aero-geometry: airfoils, splines, .dat I/O, NACA/CST, PANGEN paneling
-  foil2d/         aero-foil2d:   2D solvers (XFOIL panel method and viscous-inviscid interaction)
+  foil2d/         aero-foil2d:   2D solvers (XFOIL panel method, viscous-inviscid interaction, inverse design)
   optim/          aero-optim:    shape optimization (CST design space, CMA-ES, Nelder-Mead)
 app/
   src-tauri/      aero-app: thin Tauri layer (commands -> Tauri-free engine -> crates)
   src/            Svelte 5 + TypeScript frontend (uPlot charts)
 tests/reference/  XFOIL 6.996 inviscid reference results (tests/validation: random set)
 tests/viscous/    XFOIL 6.996 viscous reference results (tests/viscous_validation: random set)
+tests/geometry/   XFOIL 6.996 geometry edits (GDES, INTE)
+tests/inverse/    XFOIL 6.996 inverse design sessions (QDES, MDES)
 docs/             specifications and design notes
 ```
 
@@ -71,7 +75,13 @@ Features: airfoil library (NACA 4/5-digit generator with open or closed
 trailing edge, `.dat` import in Selig or Lednicer format by button or drag
 and drop, duplicate, rename, delete), true-scale shape view with optional
 panel nodes and overlays, geometric properties, XFOIL `PANGEN` paneling
-controls with immediate preview, single-point analysis driven by a live slider,
+controls with immediate preview, airfoil modifications with a dashed preview
+(flap deflection and series of deflections, thickness and camber scaled or
+set, their high points moved, trailing-edge gap, leading-edge radius,
+blending of two airfoils — XFOIL's `GDES` and `INTE`), inverse design (draw
+the surface speed you want over the plot; mixed inverse reshapes that
+segment, full inverse regenerates the whole airfoil for an angle or a lift
+coefficient — XFOIL's `QDES` and `MDES`), single-point analysis driven by a live slider,
 at a prescribed angle of attack or lift coefficient (Cp with −Cp up, Cl, Cm,
 Cp min, optional Mach number with the Kármán–Tsien correction and a clear
 error beyond the critical Mach number, optional flap hinge moment),
@@ -128,6 +138,25 @@ let polar = viscous.sweep(&AlphaSweep { start_deg: -4.0, end_deg: 14.0, step_deg
 `ALFA` without `INIT`) and can record XFOIL's console messages (iteration
 history, transition points) for diagnosis. `solve_cl` and `sweep_cl`
 prescribe the lift instead of the angle (XFOIL `CL`, `CSEQ`).
+
+```rust
+use aero_foil2d::inverse::{FullInverse, MixedInverseOptions, SpeedTarget, mixed_inverse};
+use aero_geometry::{HingeY, deflect_flap};
+
+// Geometry tools (XFOIL GDES): a 25 % chord flap deflected by 10°.
+let flapped = deflect_flap(&airfoil, 0.75, HingeY::Relative(0.5), 10.0)?;
+
+// Mixed inverse (QDES): the speed at 2° prescribed at 4° on nodes 20 to 60.
+let target = SpeedTarget::from_airfoil(&airfoil, 2.0)?;
+let options = MixedInverseOptions { first: 20, last: 60, curvature_constraints: false, max_iterations: 10 };
+let reshaped = mixed_inverse(&airfoil, 4.0, &target.speed, &options)?.airfoil;
+
+// Full inverse (MDES): the target for CL = 0.6, filtered.
+let mut design = FullInverse::new(&airfoil, 3.0)?;
+design.set_lift_coefficients(&[0.6])?;
+design.filter();
+let generated = design.execute()?.airfoil;
+```
 
 ```rust
 use std::ops::ControlFlow;
@@ -195,15 +224,16 @@ system and block solver, with the same relaxations, limits and sequence
 semantics, including the prescribed-lift mode (`CL`, `CSEQ`: the angle of
 attack is a Newton variable), the Mach and Reynolds numbers varying with the
 lift (`TYPE 2`, `3`), the modified amplification rate (`DAMP`) and the flap
-hinge moments (`FNEW`, `FMOM`). It is checked against XFOIL 6.996 on 17
+hinge moments (`FNEW`, `FMOM`). It is checked against XFOIL 6.996 on 18
 reference cases (`tests/viscous`, `crates/foil2d/tests/xfoil_viscous.rs`):
 NACA 0012 (blunt and sharp TE, trips, 240 nodes, `DAMP`), NACA 2412 (Mach
-0.3, different Ncrit on each side, prescribed CL, flap hinge), 4415
+0.3, different Ncrit on each side, prescribed CL, flap hinge, flap deflected
+by 10°), 4415
 (prescribed CL, `TYPE 2`), 23012 (`TYPE 3`), Clark Y and Eppler 387 (laminar
 separation bubbles, also at prescribed CL), at Reynolds numbers from 2·10⁵ to
 6·10⁶, as polars (warm-started sequences) and single points:
 
-- the same points converge and fail to converge as in XFOIL (253 converged
+- the same points converge and fail to converge as in XFOIL (263 converged
   points). One case is a point XFOIL cannot converge: NACA 4415 at Re = 10⁶
   and CL = 0.8, where the bottom transition jumps between x/c = 0.99 and the
   trailing edge at every Newton iteration; ours reproduces the same limit
@@ -213,8 +243,8 @@ separation bubbles, also at prescribed CL), at Reynolds numbers from 2·10⁵ to
   10⁻¹⁰ on most points (10⁻⁵ at worst, on a point that needs all its Newton
   iterations);
 - XFOIL's console output — the rms change of every Newton iteration, the
-  transition points, the marching failures — is reproduced line by line: 14
-  of the 19 sessions are identical over their whole length (thousands of
+  transition points, the marching failures — is reproduced line by line: 15
+  of the 20 sessions are identical over their whole length (thousands of
   lines), the five others until a last printed digit late in a sequence;
 - the hinge moments agree with XFOIL's to its printed precision.
 
@@ -236,6 +266,29 @@ limits, a sign in the Newton system, the block-solver threshold, wake
 geometry and sources, the drag formula, the NaN handling — confirmed that
 every one of them makes the validation fail (two are caught only by the
 random set).
+
+### Geometry tools and inverse design
+
+The geometry tools and the inverse design methods are ports of XFOIL
+6.996's `GDES` (`FLAP`, `TGAP`, `LERA`, `TFAC`, `TSET`, `HIGH`), `INTE`,
+`QDES` and `MDES` routines, checked against XFOIL sessions applying the same
+commands and saving the airfoil (7 significant digits):
+
+- 17 geometry edits on NACA 0012, 2412, 4415, the Clark Y and the Eppler 387
+  (`tests/geometry`, `crates/geometry/tests/xfoil_edits.rs`) give the same
+  points to 8·10⁻⁸, including the points XFOIL adds or removes at the flap
+  breaks; the polars of a flapped airfoil (inviscid and viscous) match as
+  above;
+- 7 mixed-inverse sessions (`MARK`, `SMOO`, `SLOP`, `CPXX`, `EXEC`; upper
+  and lower surface, nose, sharp trailing edge) and 6 full-inverse sessions
+  (`FILT`, `SMOO`, `SYMM`, `TGAP`, `TANG`, `AQ`, `CQ`, `EXEC`)
+  (`tests/inverse`, `crates/foil2d/tests/xfoil_inverse.rs`) give the same
+  airfoil to the precision of XFOIL's output, after the same number of
+  Newton iterations; the trailing-edge corrections of the conformal mapping
+  agree with those XFOIL prints to 2·10⁻¹⁵. XFOIL marks the mixed-inverse
+  segment with the mouse only: the reference build gets a three-line patch
+  reading its two node indices from the keyboard
+  (`tests/inverse/patch_iqsget.py`; the computation is untouched).
 
 ## Shape optimization
 

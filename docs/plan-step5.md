@@ -65,3 +65,11 @@ Cp; "Add to library".
 
 Glossary entries (flap, inverse design, target distribution), guided tour,
 README, release 0.2.0.
+
+## Status
+
+Done on 2026-10-26: G1 (17 XFOIL geometry edits matched to 8·10⁻⁸, flapped
+polars), G2, I1 (7 `QDES` sessions), I2 (6 `MDES` sessions; the reference
+patch of `IQSGET` is in `tests/inverse/patch_iqsget.py`), I3 (Inverse
+design tab, curves drawn with the mouse), D (glossary, tour, README,
+release 0.2.0).

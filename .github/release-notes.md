@@ -28,7 +28,10 @@ complémentaires**, puis **Exécuter quand même**.
 
 ## In the application
 
-Geometry (NACA generator, `.dat` import, PANGEN paneling), inviscid and
-viscous analysis at prescribed α or Cl, polars of many airfoils computed in
-parallel and compared in a table, shape optimization, a guided tour and a
-glossary in English and French. See the [README](https://github.com/foukouda/aero#readme).
+Geometry (NACA generator, `.dat` import, PANGEN paneling), XFOIL's
+geometry tools (flap deflection and series, thickness and camber, their high
+points, trailing-edge gap, leading-edge radius, blending of two airfoils),
+inviscid and viscous analysis at prescribed α or Cl, polars of many airfoils
+computed in parallel and compared in a table, shape optimization, inverse
+design (draw the surface speed you want: mixed inverse QDES or full inverse
+MDES), a guided tour and a glossary in English and French. See the [README](https://github.com/foukouda/aero#readme).

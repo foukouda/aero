@@ -16,7 +16,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "aero-app"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aero-foil2d",
  "aero-geometry",
@@ -34,7 +34,7 @@ dependencies = [
 
 [[package]]
 name = "aero-foil2d"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aero-geometry",
  "criterion",
@@ -48,7 +48,7 @@ dependencies = [
 
 [[package]]
 name = "aero-geometry"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "faer",
  "serde",
@@ -60,7 +60,7 @@ dependencies = [
 
 [[package]]
 name = "aero-optim"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aero-foil2d",
  "aero-geometry",
