@@ -23,6 +23,7 @@ aero-geometry = { workspace = true, features = ["specta"] }
 aero-foil2d = { workspace = true, features = ["specta"] }
 aero-optim = { workspace = true, features = ["specta"] }
 aero-mission = { workspace = true, features = ["specta"] }
+aero-aircraft = { workspace = true, features = ["specta"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

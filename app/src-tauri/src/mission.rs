@@ -5,15 +5,17 @@
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
+use aero_aircraft::{Aircraft, Layout, MeshOptions, MeshPart, layout, mesh};
 use aero_geometry::Airfoil;
 use aero_mission::{
-    AirfoilEvaluation, AnalysisSettings, Conditions, Flight, Goal, Wing, WingModel, evaluate, rank,
+    AirfoilEvaluation, AnalysisSettings, Conditions, Flight, Goal, Wing, WingConstraint, WingModel,
+    evaluate, rank,
 };
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::error::AppError;
-use crate::model::AirfoilId;
+use crate::model::{AirfoilId, MissionSetup};
 
 /// Airfoils to evaluate for a flight.
 #[derive(Debug, Clone, PartialEq, Deserialize, Type)]
@@ -147,9 +149,52 @@ fn outline(airfoil: &Airfoil) -> (Vec<f64>, Vec<f64>) {
     )
 }
 
-/// Conditions of `flight` on `wing`.
-pub fn conditions(flight: &Flight, wing: &Wing) -> Result<Conditions, AppError> {
-    Ok(flight.conditions(wing)?)
+/// What the My aircraft tab shows for a setup.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+pub struct MissionView {
+    /// The aircraft, its wing sized when the setup asks for it.
+    pub aircraft: Aircraft,
+    /// The wing as the flight sees it: its span and mean geometric chord
+    /// (area ÷ span).
+    pub wing: Wing,
+    /// The flight's conditions on that wing.
+    pub conditions: Conditions,
+    /// Areas, mean aerodynamic chords, tail volumes, centre of gravity.
+    pub layout: Layout,
+    /// Surfaces of the aircraft for the 3D view.
+    pub parts: Vec<MeshPart>,
+}
+
+/// The view of `setup`; `airfoil` resolves the airfoil keys of the
+/// aircraft.
+pub fn mission_view(
+    setup: &MissionSetup,
+    airfoil: &dyn Fn(&str) -> Option<Airfoil>,
+) -> Result<MissionView, AppError> {
+    let mut aircraft = setup.aircraft.clone();
+    if let Some(cl) = setup.sizing_cl {
+        // Same span and taper, chords scaled to the area flying at `cl`.
+        let target = setup
+            .flight
+            .size_wing(cl, &WingConstraint::Span(aircraft.wing.span))?;
+        let k = target.span * target.chord / layout(&aircraft)?.wing.area;
+        aircraft.wing.root_chord *= k;
+        aircraft.wing.tip_chord *= k;
+    }
+    let layout = layout(&aircraft)?;
+    let wing = Wing {
+        span: layout.wing.span,
+        chord: layout.wing.area / layout.wing.span,
+    };
+    let conditions = setup.flight.conditions(&wing)?;
+    let parts = mesh(&aircraft, airfoil, &MeshOptions::default())?;
+    Ok(MissionView {
+        aircraft,
+        wing,
+        conditions,
+        layout,
+        parts,
+    })
 }
 
 /// Evaluates `candidates` in parallel (one per core, one core left to the

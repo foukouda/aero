@@ -3,12 +3,13 @@
 //! This module does not depend on Tauri: it is plain data plus pure
 //! operations, so that it can be reused by a CLI later.
 
+use aero_aircraft::{Aircraft, Preset};
 use aero_foil2d::inviscid::{AlphaSweep, ClSweep, Polar};
 use aero_foil2d::viscous::{
     AmplificationModel, MachReynoldsVariation, ViscousOptions, ViscousPolar,
 };
 use aero_geometry::{Airfoil, HingeY, Normalization, PanelingOptions, panel};
-use aero_mission::{Flight, Goal, Wing, WingModel};
+use aero_mission::{Flight, Goal, WingModel};
 use aero_optim::{
     Constraints, DesignPoint, Evaluation, HistoryEntry, Objective, OptimizeOptions, Problem, Stop,
     Target,
@@ -27,7 +28,8 @@ pub type AirfoilId = u32;
 /// - 2: viscous settings; stored polars are tagged `inviscid` or `viscous`.
 /// - 3: shape optimization setup and last result.
 /// - 4: the flight of the "My aircraft" tab.
-pub const PROJECT_FORMAT_VERSION: u32 = 4;
+/// - 5: the aircraft of that tab replaces its rectangular wing.
+pub const PROJECT_FORMAT_VERSION: u32 = 5;
 
 /// Magic string identifying project files.
 pub const PROJECT_FORMAT: &str = "aero-project";
@@ -394,14 +396,14 @@ pub struct StoredOptimization {
 
 /// The flight of the "My aircraft" tab, from which airfoils are
 /// recommended.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct MissionSetup {
     /// Speed, altitude and mass.
     pub flight: Flight,
-    /// The wing (as given, or as last sized).
-    pub wing: Wing,
+    /// The aircraft (its wing as given, or as last sized).
+    pub aircraft: Aircraft,
     /// When set, the wing is sized to fly at this lift coefficient, keeping
-    /// its span.
+    /// its span and taper.
     pub sizing_cl: Option<f64>,
     /// What matters most.
     pub goal: Goal,
@@ -412,7 +414,8 @@ pub struct MissionSetup {
 }
 
 impl Default for MissionSetup {
-    /// A 300 g model at 20 km/h, 100 m high, with a 1.2 m × 20 cm wing.
+    /// A 300 g model at 20 km/h, 100 m high: the trainer example, whose
+    /// 1.2 m wing has 0.24 m² as the former 1.2 m × 20 cm default.
     fn default() -> Self {
         Self {
             flight: Flight {
@@ -421,10 +424,7 @@ impl Default for MissionSetup {
                 temperature_offset: 0.0,
                 mass: 0.3,
             },
-            wing: Wing {
-                span: 1.2,
-                chord: 0.2,
-            },
+            aircraft: Preset::Trainer.aircraft(),
             sizing_cl: None,
             goal: Goal::LeastDrag,
             ncrit: 9.0,
@@ -661,6 +661,31 @@ pub fn load_project(text: &str) -> Result<Session, AppError> {
     }
     // Format migrations, keyed on `version`.
     let mut value = value;
+    if version < 5 {
+        // Format 4 described the aircraft by a rectangular wing: the trainer
+        // example scaled to its span, with that wing.
+        if let Some(mission) = value
+            .pointer_mut("/session/mission")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            let dimension = |key: &str| {
+                mission
+                    .get("wing")
+                    .and_then(|w| w.get(key))
+                    .and_then(serde_json::Value::as_f64)
+                    .filter(|v| v.is_finite() && *v > 0.0)
+            };
+            if let (Some(span), Some(chord)) = (dimension("span"), dimension("chord")) {
+                let mut aircraft = Preset::Trainer.aircraft().scaled(span / 1.2);
+                aircraft.wing.root_chord = chord;
+                aircraft.wing.tip_chord = chord;
+                let aircraft = serde_json::to_value(aircraft).map_err(|e| {
+                    AppError::new(ErrorKind::Project, format!("cannot convert the wing: {e}"))
+                })?;
+                mission.insert("aircraft".into(), aircraft);
+            }
+        }
+    }
     if version < 2 {
         // Format 1 stored inviscid polars only, untagged.
         if let Some(polars) = value
@@ -858,6 +883,23 @@ mod tests {
         assert_eq!(s.settings.viscous.reynolds, 4.0e5);
         assert_eq!(s.optimization.problem.points[0].target, Target::Cl(0.7));
         assert_eq!(s.mission, MissionSetup::default());
+    }
+
+    #[test]
+    fn version_4_fixture_still_loads() {
+        // Frozen file of format version 4: a flight with a 1.5 m × 25 cm
+        // rectangular wing becomes the trainer scaled to 1.5 m with that wing.
+        let text = include_str!("../tests/fixtures/project_v4.json");
+        let s = load_project(text).unwrap();
+        assert_eq!(s.mission.flight.speed, 12.0);
+        assert_eq!(s.mission.goal, Goal::SlowFlight);
+        let wing = &s.mission.aircraft.wing;
+        assert_eq!(
+            (wing.span, wing.root_chord, wing.tip_chord),
+            (1.5, 0.25, 0.25)
+        );
+        let tail = s.mission.aircraft.tail.as_ref().unwrap();
+        assert!((tail.span - 0.42 * 1.25).abs() < 1e-12);
     }
 
     #[test]

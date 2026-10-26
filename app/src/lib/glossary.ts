@@ -822,6 +822,22 @@ export const GLOSSARY: GlossaryEntry[] = [
       },
     },
   },
+  {
+    id: "tail-volume",
+    category: "aircraft",
+    text: {
+      en: {
+        term: "Tail volume",
+        short: "How big the tail is for the wing it balances: tail area times its distance from the wing, over the wing's area and chord.",
+        long: "The horizontal tail volume is Vh = Sh·lh ÷ (S·c̄): the tail area Sh times its distance lh behind the wing (between the quarter points of their mean chords), divided by the wing area S times its mean chord c̄. A small tail far behind does the same job as a large tail close by. Usual values are 0.35 to 0.8: below about 0.3 the aircraft tends to be twitchy in pitch.\n\nThe fin's volume is Vv = Sv·lv ÷ (S·b), with the wing span b; usual values are 0.02 to 0.06. These are rules of thumb from existing aircraft; the 3D analysis gives the real stability.",
+      },
+      fr: {
+        term: "Volume d'empennage",
+        short: "La taille de l'empennage par rapport à l'aile qu'il équilibre : sa surface fois sa distance à l'aile, rapportées à la surface et à la corde de l'aile.",
+        long: "Le volume d'empennage horizontal vaut Vh = Sh·lh ÷ (S·c̄) : la surface Sh de l'empennage fois sa distance lh derrière l'aile (entre les quarts avant de leurs cordes moyennes), divisées par la surface S de l'aile fois sa corde moyenne c̄. Un petit empennage loin derrière fait le même travail qu'un grand empennage proche. Les valeurs habituelles vont de 0,35 à 0,8 : en dessous de 0,3 environ, l'avion a tendance à être nerveux en tangage.\n\nLe volume de dérive vaut Vv = Sv·lv ÷ (S·b), avec b l'envergure de l'aile ; valeurs habituelles 0,02 à 0,06. Ce sont des règles tirées des avions existants ; l'analyse 3D donnera la stabilité réelle.",
+      },
+    },
+  },
 ];
 
 /** The entry with this id. */

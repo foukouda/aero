@@ -11,6 +11,7 @@ import type {
   CatalogueEntry,
   Conditions,
   MissionSetup,
+  MissionView,
   RecommendEvent,
   RecommendResult,
   AnalysisView,
@@ -43,7 +44,7 @@ import { improvement, objectiveName } from "./optimize";
 import { latestRunner } from "./latest";
 import { TOUR_STEPS, defaultTourLang, type TourAction, type TourLang } from "./tour";
 import { translate, type MessageKey } from "./i18n";
-import { sig } from "./mission";
+import { applyPreset, sig, type Preset } from "./mission";
 
 export type Tab = "mission" | "geometry" | "analysis" | "polars" | "optimize" | "design";
 export type Theme = "light" | "dark";
@@ -144,6 +145,11 @@ function initialTourLang(): TourLang {
   return defaultTourLang(navigator.language);
 }
 
+/** The wing chords of a computed aircraft. */
+function chords(view: MissionView): { root_chord: number | null; tip_chord: number | null } {
+  return { root_chord: view.aircraft.wing.root_chord, tip_chord: view.aircraft.wing.tip_chord };
+}
+
 function baseName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
 }
@@ -185,9 +191,9 @@ class AppState {
   glossaryTerm = $state<string | null>(null);
   /** Airfoil catalogue (My aircraft tab). */
   catalogue = $state<CatalogueEntry[]>([]);
-  /** Conditions of the flight of the My aircraft tab, or why they cannot
-   * be computed. */
-  missionConditions = $state<Conditions | null>(null);
+  /** The aircraft of the My aircraft tab as computed (sized wing, flight
+   * conditions, layout, 3D surfaces), or why it cannot be. */
+  missionView = $state<MissionView | null>(null);
   missionError = $state<string | null>(null);
   /** Last airfoil evaluation for the flight, and the one in progress. */
   recommendation = $state<RecommendResult | null>(null);
@@ -220,6 +226,10 @@ class AppState {
 
   get mission(): MissionSetup | null {
     return this.session?.mission ?? null;
+  }
+
+  get missionConditions(): Conditions | null {
+    return this.missionView?.conditions ?? null;
   }
 
   get viscous(): ViscousSettings {
@@ -1047,26 +1057,51 @@ class AppState {
     await commands.updateMissionSetup(setup);
   });
 
-  /** Conditions of a flight; sizes the wing first when asked. */
+  /** The aircraft as computed by the backend; a sized wing is kept in the
+   * setup so that it is saved and shown. */
   #computeMission = latestRunner(async (setup: MissionSetup) => {
     try {
-      let wing = setup.wing;
-      if (setup.sizing_cl !== null) {
-        wing = await call(
-          commands.sizeWing(setup.flight, setup.sizing_cl, { kind: "span", value: setup.wing.span }),
-        );
-        if (this.session && wing.chord !== this.session.mission.wing.chord) {
-          this.session.mission = { ...this.session.mission, wing };
-          void this.#saveMission($state.snapshot(this.session.mission) as MissionSetup);
-        }
-      }
-      this.missionConditions = await call(commands.missionConditions(setup.flight, wing));
+      const view = await call(commands.missionView(setup));
+      this.missionView = view;
       this.missionError = null;
+      const current = this.session?.mission;
+      if (
+        current &&
+        setup.sizing_cl !== null &&
+        (view.aircraft.wing.root_chord !== current.aircraft.wing.root_chord ||
+          view.aircraft.wing.tip_chord !== current.aircraft.wing.tip_chord)
+      ) {
+        this.session!.mission = {
+          ...current,
+          aircraft: { ...current.aircraft, wing: { ...current.aircraft.wing, ...chords(view) } },
+        };
+        void this.#saveMission($state.snapshot(this.session!.mission) as MissionSetup);
+      }
     } catch (e) {
-      this.missionConditions = null;
+      this.missionView = null;
       this.missionError = e instanceof Error ? e.message : String(e);
     }
   });
+
+  /** Starts from an example aircraft and its typical flight. */
+  async applyPreset(preset: Preset) {
+    const setup = this.mission;
+    if (!setup) return;
+    const aircraft = await commands.aircraftPreset(preset.aircraft);
+    this.updateMission(applyPreset($state.snapshot(setup) as MissionSetup, preset, aircraft));
+  }
+
+  /** Puts a recommended airfoil on the wing (root and tip). */
+  putOnWing(c: CandidateResult) {
+    const setup = this.mission;
+    if (!setup) return;
+    const key = c.source.kind === "library" ? `library:${c.source.id}` : `catalogue:${c.source.id}`;
+    const s = $state.snapshot(setup) as MissionSetup;
+    s.aircraft.wing.root_airfoil = key;
+    s.aircraft.wing.tip_airfoil = key;
+    this.updateMission(s);
+    this.notify("info", this.t("toast.wing.title"), this.t("toast.wing", { name: c.name }));
+  }
 
   /** Changes the flight of the My aircraft tab. */
   updateMission(setup: MissionSetup) {
@@ -1081,7 +1116,8 @@ class AppState {
   /** Evaluates the catalogue (and the library) for the flight. */
   async runRecommendation() {
     const setup = this.mission;
-    if (!setup || this.recommending) return;
+    const view = this.missionView;
+    if (!setup || !view || this.recommending) return;
     const jobId = `recommend-${Date.now()}`;
     const catalogueIds = this.catalogue.map((c) => c.id);
     const airfoilIds = this.includeLibrary ? this.airfoils.map((a) => a.id) : [];
@@ -1098,7 +1134,7 @@ class AppState {
           {
             job_id: jobId,
             flight: plain.flight,
-            wing: plain.wing,
+            wing: $state.snapshot(view.wing),
             settings: { ncrit: plain.ncrit },
             model: plain.model,
             catalogue_ids: catalogueIds,

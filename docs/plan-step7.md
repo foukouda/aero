@@ -90,6 +90,25 @@ the viewer, README, NOTICE (three.js, AVL references), release.
   wing; V-tail and canard later.
 - The 3D comes first; the rest of step 6 (U1–U4, D) follows.
 
+## Status
+
+- P1 done on 2026-10-26: crate `aero-aircraft` — parametric surfaces and
+  fuselage, four example aircraft, planform properties checked against
+  the trapezoid formulas, tail volumes in the usual ranges for the
+  examples, a closed and consistently oriented mesh (a degenerate
+  leading-edge triangle found by the closedness test and fixed); 20
+  injected bugs all caught.
+- P2 done on 2026-10-26: the 3D view in the middle of "My aircraft"
+  (three.js 0.186.1, orbit, standard views, grid in round lengths, centre
+  of gravity and mean chord markers, click a part to open its panel), the
+  aircraft built part by part in the form (wing, tail, fin, fuselage,
+  centre of gravity, airfoil per surface), "Start from" with four example
+  aircraft and their typical flights, a "Tail sizes" card, "Put it on my
+  wing" on the recommendations. The flight uses the aircraft's wing (area,
+  mean geometric chord); "size the chords for me" keeps span and taper.
+  Project format 5 (a frozen format-4 project opens with the trainer scaled
+  to its wing).
+
 ## Order and checks
 
 P1 → P2 (the visible part: build the aircraft in 3D) → P3 → P4 → P5. Each

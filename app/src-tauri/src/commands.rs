@@ -5,9 +5,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use aero_geometry::{CamberThickness, HingeY, Normalization, PanelingOptions};
-use aero_mission::{Conditions, Flight, Wing, WingConstraint};
 use tauri::State;
 use tauri::ipc::Channel;
+
+use aero_aircraft::{Aircraft, Preset};
 
 use crate::catalogue::CatalogueEntry;
 use crate::dto::{
@@ -17,7 +18,7 @@ use crate::dto::{
 };
 use crate::engine::Engine;
 use crate::error::{AppError, ErrorKind};
-use crate::mission::{RecommendEvent, RecommendRequest, RecommendResult};
+use crate::mission::{MissionView, RecommendEvent, RecommendRequest, RecommendResult};
 use crate::model::{
     AirfoilId, MissionSetup, Modification, OptimizationSetup, PROJECT_FORMAT_VERSION, Settings,
     StoredOptimization, StoredPolar,
@@ -211,18 +212,19 @@ pub fn get_catalogue(engine: Shared<'_>) -> Result<Vec<CatalogueEntry>, AppError
     engine.catalogue()
 }
 
-/// What the wing and its airfoil meet in a level flight.
+/// An example aircraft.
 #[tauri::command]
 #[specta::specta]
-pub fn mission_conditions(flight: Flight, wing: Wing) -> Result<Conditions, AppError> {
-    crate::mission::conditions(&flight, &wing)
+pub fn aircraft_preset(preset: Preset) -> Aircraft {
+    preset.aircraft()
 }
 
-/// The wing that flies `flight` at the lift coefficient `cl`.
+/// The aircraft of the "My aircraft" tab: its sized wing, the flight's
+/// conditions, its layout and its 3D surfaces.
 #[tauri::command]
 #[specta::specta]
-pub fn size_wing(flight: Flight, cl: f64, constraint: WingConstraint) -> Result<Wing, AppError> {
-    Ok(flight.size_wing(cl, &constraint)?)
+pub fn mission_view(engine: Shared<'_>, setup: MissionSetup) -> Result<MissionView, AppError> {
+    engine.mission_view(&setup)
 }
 
 /// Evaluates catalogue and library airfoils for a flight, streaming

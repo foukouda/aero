@@ -63,6 +63,19 @@ impl SurfaceParams {
     pub fn taper(&self) -> f64 {
         self.tip_chord / self.root_chord
     }
+
+    /// The same surface with every length multiplied by `k` (angles and
+    /// airfoils kept).
+    pub fn scaled(&self, k: f64) -> Self {
+        Self {
+            span: k * self.span,
+            root_chord: k * self.root_chord,
+            tip_chord: k * self.tip_chord,
+            x: k * self.x,
+            z: k * self.z,
+            ..self.clone()
+        }
+    }
 }
 
 /// A fuselage: a body of revolution along the x axis, starting at the nose.
@@ -141,6 +154,20 @@ impl Aircraft {
     /// No horizontal tail.
     pub fn is_flying_wing(&self) -> bool {
         self.tail.is_none()
+    }
+
+    /// The same aircraft with every length multiplied by `k`.
+    pub fn scaled(&self, k: f64) -> Self {
+        Self {
+            wing: self.wing.scaled(k),
+            tail: self.tail.as_ref().map(|t| t.scaled(k)),
+            fin: self.fin.as_ref().map(|f| f.scaled(k)),
+            fuselage: self.fuselage.map(|f| Fuselage {
+                length: k * f.length,
+                diameter: k * f.diameter,
+            }),
+            cg_mac_fraction: self.cg_mac_fraction,
+        }
     }
 }
 
@@ -356,6 +383,21 @@ mod tests {
             diameter: -0.1,
         });
         assert!(a.validate().is_err());
+    }
+
+    #[test]
+    fn scaling_keeps_the_proportions() {
+        let a = Preset::Glider.aircraft();
+        let b = a.scaled(2.0);
+        assert_eq!(b.wing.span, 2.0 * a.wing.span);
+        assert_eq!(b.wing.tip_chord, 2.0 * a.wing.tip_chord);
+        assert_eq!(b.wing.sweep_deg, a.wing.sweep_deg);
+        assert_eq!(b.tail.as_ref().unwrap().x, 2.0 * a.tail.as_ref().unwrap().x);
+        assert_eq!(
+            b.fuselage.unwrap().diameter,
+            2.0 * a.fuselage.unwrap().diameter
+        );
+        assert_eq!(b.cg_mac_fraction, a.cg_mac_fraction);
     }
 
     #[test]

@@ -29,6 +29,7 @@ dependencies = [
 name = "aero-app"
 version = "0.2.0"
 dependencies = [
+ "aero-aircraft",
  "aero-foil2d",
  "aero-geometry",
  "aero-mission",

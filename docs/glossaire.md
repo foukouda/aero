@@ -90,6 +90,14 @@ En dessous de cette vitesse, l'aile aurait besoin de plus que son coefficient de
 
 Vole confortablement au-dessus : 1,2 à 1,3 fois la vitesse de décrochage est une marge habituelle.
 
+### Volume d'empennage
+
+**La taille de l'empennage par rapport à l'aile qu'il équilibre : sa surface fois sa distance à l'aile, rapportées à la surface et à la corde de l'aile.**
+
+Le volume d'empennage horizontal vaut Vh = Sh·lh ÷ (S·c̄) : la surface Sh de l'empennage fois sa distance lh derrière l'aile (entre les quarts avant de leurs cordes moyennes), divisées par la surface S de l'aile fois sa corde moyenne c̄. Un petit empennage loin derrière fait le même travail qu'un grand empennage proche. Les valeurs habituelles vont de 0,35 à 0,8 : en dessous de 0,3 environ, l'avion a tendance à être nerveux en tangage.
+
+Le volume de dérive vaut Vv = Sv·lv ÷ (S·b), avec b l'envergure de l'aile ; valeurs habituelles 0,02 à 0,06. Ce sont des règles tirées des avions existants ; l'analyse 3D donnera la stabilité réelle.
+
 ## Forces et coefficients
 
 ### Coefficient sans dimension

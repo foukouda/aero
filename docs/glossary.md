@@ -90,6 +90,14 @@ Below this speed the wing would need more than its maximum lift coefficient: it 
 
 Fly comfortably above it: 1.2 to 1.3 times the stall speed is a usual margin.
 
+### Tail volume
+
+**How big the tail is for the wing it balances: tail area times its distance from the wing, over the wing's area and chord.**
+
+The horizontal tail volume is Vh = Sh·lh ÷ (S·c̄): the tail area Sh times its distance lh behind the wing (between the quarter points of their mean chords), divided by the wing area S times its mean chord c̄. A small tail far behind does the same job as a large tail close by. Usual values are 0.35 to 0.8: below about 0.3 the aircraft tends to be twitchy in pitch.
+
+The fin's volume is Vv = Sv·lv ÷ (S·b), with the wing span b; usual values are 0.02 to 0.06. These are rules of thumb from existing aircraft; the 3D analysis gives the real stability.
+
 ## Forces and coefficients
 
 ### Dimensionless coefficient

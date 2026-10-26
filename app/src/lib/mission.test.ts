@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CandidateResult, Fit, RecommendResult } from "./bindings";
+import type { Aircraft, CandidateResult, Fit, RecommendResult } from "./bindings";
 import { MESSAGES, placeholders, translate } from "./i18n";
 import {
   G0,
@@ -11,7 +11,9 @@ import {
   num,
   power,
   readCl,
+  readFinVolume,
   readReynolds,
+  readTailVolume,
   readWingLoading,
   ranked,
   sig,
@@ -30,36 +32,34 @@ function air(h: number): { rho: number; nu: number } {
 describe("example flights", () => {
   it("are typical of their kind of aircraft", () => {
     const expected: Record<string, string> = {
-      parkflyer: "loading.light",
+      trainer: "loading.medium",
       glider: "loading.light",
-      trainer: "loading.light",
-      drone: "loading.medium",
-      cessna: "loading.fullSize",
+      flying_wing: "loading.light",
+      light_aircraft: "loading.fullSize",
     };
     for (const p of PRESETS) {
-      const { rho, nu } = air(p.altitude);
+      const { rho } = air(p.altitude);
       const v = p.speedKmh / 3.6;
-      const area = p.span * p.chord;
-      const cl = (p.mass * G0) / (0.5 * rho * v * v * area);
-      expect(readCl(cl).level, p.id).toBe("ok");
-      expect(readWingLoading((p.mass / area) * 10), p.id).toBe(expected[p.id]);
-      expect(v * p.chord / nu, p.id).toBeGreaterThan(5e4);
+      const cl = (p.mass * G0) / (0.5 * rho * v * v * p.wingArea);
+      expect(readCl(cl).level, p.aircraft).toBe("ok");
+      expect(readWingLoading((p.mass / p.wingArea) * 10), p.aircraft).toBe(expected[p.aircraft]);
     }
   });
 
-  it("replace the flight and give the wing", () => {
+  it("replace the flight and the aircraft", () => {
     const setup = {
       flight: { speed: 1, altitude: 0, temperature_offset: 5, mass: 1 },
-      wing: { span: 1, chord: 0.1 },
+      aircraft: {} as Aircraft,
       sizing_cl: 0.6,
       goal: "slow_flight" as const,
       ncrit: 7,
       model: { span_efficiency: 0.9, cl_max_factor: 0.9 },
     };
-    const s = applyPreset(setup, PRESETS[1]);
+    const glider = { cg_mac_fraction: 0.33 } as Aircraft;
+    const s = applyPreset(setup, PRESETS[1], glider);
     expect(s.flight.speed).toBeCloseTo(30 / 3.6, 12);
     expect(s.flight.temperature_offset).toBe(5);
-    expect(s.wing).toEqual({ span: 1.5, chord: 0.17 });
+    expect(s.aircraft).toBe(glider);
     expect(s.sizing_cl).toBeNull();
     expect(s.goal).toBe("slow_flight");
     expect(s.ncrit).toBe(7);
@@ -72,6 +72,17 @@ describe("readings", () => {
     expect(readCl(0.6).level).toBe("ok");
     expect(readCl(0.95).level).toBe("warning");
     expect(readCl(1.3).level).toBe("danger");
+  });
+
+  it("grade the tail sizes", () => {
+    expect(readTailVolume(null).text).toBe("tail.none");
+    expect(readTailVolume(0.2).level).toBe("warning");
+    expect(readTailVolume(0.55).text).toBe("tail.ok");
+    expect(readTailVolume(1.0).text).toBe("tail.large");
+    expect(readFinVolume(0.01).level).toBe("warning");
+    expect(readFinVolume(0.005, true).text).toBe("fin.flyingWing");
+    expect(readFinVolume(0.035).text).toBe("fin.ok");
+    expect(readFinVolume(undefined).text).toBe("fin.none");
   });
 
   it("grade the Reynolds number", () => {

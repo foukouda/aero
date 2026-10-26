@@ -37,6 +37,7 @@ use crate::dto::{
 };
 use crate::error::{AppError, ErrorKind};
 use crate::export;
+use crate::mission::MissionView;
 use crate::mission::{
     self, Candidate, CandidateSource, RecommendEvent, RecommendRequest, RecommendResult,
 };
@@ -264,7 +265,7 @@ impl Engine {
                 .map(|p| p.display().to_string()),
             optimization: session.optimization.clone(),
             last_optimization: session.last_optimization.clone(),
-            mission: session.mission,
+            mission: session.mission.clone(),
         }
     }
 
@@ -1385,6 +1386,26 @@ impl Engine {
         lock(&self.session).mission = setup;
     }
 
+    /// Coordinates of an airfoil key: `naca:2412`, `catalogue:sd7037` or
+    /// `library:3` (an airfoil of the library).
+    pub fn airfoil_by_key(&self, key: &str) -> Option<Airfoil> {
+        let (kind, id) = key.split_once(':')?;
+        match kind {
+            "naca" => naca(id, &NacaOptions::default()).ok(),
+            "catalogue" => catalogue::entry(id).ok()?.airfoil().ok(),
+            "library" => {
+                let id: AirfoilId = id.parse().ok()?;
+                lock(&self.session).get(id).ok().map(|e| e.source.clone())
+            }
+            _ => None,
+        }
+    }
+
+    /// What the "My aircraft" tab shows for `setup`.
+    pub fn mission_view(&self, setup: &MissionSetup) -> Result<MissionView, AppError> {
+        crate::mission::mission_view(setup, &|key| self.airfoil_by_key(key))
+    }
+
     /// Adds the best design of the last optimization to the library.
     pub fn add_optimized_airfoil(&self) -> Result<AirfoilSummary, AppError> {
         let mut session = lock(&self.session);
@@ -1691,6 +1712,43 @@ mod tests {
         assert!(err.message.contains("bad.dat"));
         let missing = e.import_file(Path::new("does/not/exist.dat")).unwrap_err();
         assert_eq!(missing.kind, ErrorKind::Io);
+    }
+
+    #[test]
+    fn the_aircraft_of_my_aircraft() {
+        let e = Engine::new();
+        let setup = MissionSetup::default();
+        let v = e.mission_view(&setup).unwrap();
+        assert_eq!(v.parts.len(), 4, "wing, tail, fin, fuselage");
+        // The trainer's 1.2 m wing has the 0.24 m² of the former default.
+        assert!((v.wing.span - 1.2).abs() < 1e-12 && (v.wing.chord - 0.2).abs() < 1e-12);
+        assert!((v.conditions.required_cl - 0.6547).abs() < 1e-3);
+        assert!(v.layout.tail_volume.is_some());
+
+        // Sized for Cl 0.5: same span and taper, larger chords.
+        let sized = e
+            .mission_view(&MissionSetup {
+                sizing_cl: Some(0.5),
+                ..setup.clone()
+            })
+            .unwrap();
+        assert!((sized.conditions.required_cl - 0.5).abs() < 1e-9);
+        assert_eq!(sized.aircraft.wing.span, 1.2);
+        assert!((sized.aircraft.wing.taper() - setup.aircraft.wing.taper()).abs() < 1e-12);
+        assert!(sized.aircraft.wing.root_chord > setup.aircraft.wing.root_chord);
+
+        // Airfoils of the library, and unknown ones.
+        let id = e.create_naca("4412", false).unwrap().id;
+        let mut s = setup.clone();
+        s.aircraft.wing.root_airfoil = format!("library:{id}");
+        assert!(e.mission_view(&s).is_ok());
+        s.aircraft.wing.tip_airfoil = "library:999".into();
+        let err = e.mission_view(&s).unwrap_err();
+        assert!(err.message.contains("library:999"), "{}", err.message);
+        assert!(e.airfoil_by_key("naca:0012").is_some());
+        assert!(e.airfoil_by_key("catalogue:s1223").is_some());
+        assert!(e.airfoil_by_key("catalogue:nope").is_none());
+        assert!(e.airfoil_by_key("nonsense").is_none());
     }
 
     #[test]

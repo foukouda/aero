@@ -41,3 +41,9 @@ of their designers.
 The reference results in tests/ were computed with XFOIL 6.996, built from
 the official sources by the xfoil-reference workflow; XFOIL itself is not
 distributed with this project.
+
+The wind-tunnel measurements in tests/wind_tunnel come from NASA TM-4062
+(McGhee, Walker and Millard, 1988), a work of the United States Government.
+
+The application bundles three.js (https://threejs.org, MIT license) for its
+3D view, along with its other npm dependencies listed in app/package.json.

@@ -62,10 +62,13 @@ export const commands = {
 	getCatalogue: () => typedError<CatalogueEntry[], AppError>(__TAURI_INVOKE("get_catalogue")),
 	/**  Adds airfoils of the catalogue to the library. */
 	addFromCatalogue: (ids: string[]) => typedError<BatchResult, AppError>(__TAURI_INVOKE("add_from_catalogue", { ids })),
-	/**  What the wing and its airfoil meet in a level flight. */
-	missionConditions: (flight: Flight, wing: Wing) => typedError<Conditions, AppError>(__TAURI_INVOKE("mission_conditions", { flight, wing })),
-	/**  The wing that flies `flight` at the lift coefficient `cl`. */
-	sizeWing: (flight: Flight, cl: number | null, constraint: WingConstraint) => typedError<Wing, AppError>(__TAURI_INVOKE("size_wing", { flight, cl, constraint })),
+	/**
+	 *  The aircraft of the "My aircraft" tab: its sized wing, the flight's
+	 *  conditions, its layout and its 3D surfaces.
+	 */
+	missionView: (setup: MissionSetup) => typedError<MissionView, AppError>(__TAURI_INVOKE("mission_view", { setup })),
+	/**  An example aircraft. */
+	aircraftPreset: (preset: Preset) => __TAURI_INVOKE<Aircraft>("aircraft_preset", { preset }),
 	/**
 	 *  Evaluates catalogue and library airfoils for a flight, streaming
 	 *  progress on `on_event`.
@@ -126,6 +129,24 @@ export const commands = {
 };
 
 /* Types */
+/**  A simplified aircraft. */
+export type Aircraft = {
+	/**  The wing. */
+	wing: SurfaceParams,
+	/**  Horizontal tail; none for a flying wing. */
+	tail: SurfaceParams | null,
+	/**  Vertical fin (its span is its height). */
+	fin: SurfaceParams | null,
+	/**  Fuselage; none for a pure flying wing. */
+	fuselage: Fuselage | null,
+	/**
+	 *  Centre of gravity, as a fraction of the wing's mean aerodynamic chord
+	 *  behind its leading edge (0.25 to 0.33 is usual with a tail, 0.15 to
+	 *  0.25 for a flying wing).
+	 */
+	cg_mac_fraction: number | null,
+};
+
 /**  A candidate analysed for a flight. */
 export type AirfoilEvaluation = {
 	/**  Converged points of the polar, by increasing angle. */
@@ -777,6 +798,14 @@ export type Flight = {
 	mass: number | null,
 };
 
+/**  A fuselage: a body of revolution along the x axis, starting at the nose. */
+export type Fuselage = {
+	/**  Length, m. */
+	length: number | null,
+	/**  Largest diameter, m. */
+	diameter: number | null,
+};
+
 /**  Geometric properties of an airfoil. Lengths are divided by the chord. */
 export type GeometricProperties = {
 	/**  Chord (leading edge to trailing edge midpoint), in input units. */
@@ -919,6 +948,27 @@ export type ImportResult = {
 	warnings: string[],
 };
 
+/**  What a designer reads from the aircraft's layout. */
+export type Layout = {
+	/**  The wing. */
+	wing: Planform,
+	/**  The horizontal tail. */
+	tail: Planform | null,
+	/**  The fin. */
+	fin: Planform | null,
+	/**
+	 *  Horizontal tail volume coefficient Sh·lh / (S·c̄), lh between the
+	 *  quarter points of the MACs.
+	 */
+	tail_volume: number | null,
+	/**  Vertical tail volume coefficient Sv·lv / (S·b). */
+	fin_volume: number | null,
+	/**  Centre of gravity: distance behind the nose, m. */
+	cg_x: number | null,
+	/**  Overall length (nose to the rearmost point), m. */
+	length: number | null,
+};
+
 /**  A text in the languages of the interface. */
 export type LocalizedText = {
 	/**  English. */
@@ -946,6 +996,16 @@ export type MachReynoldsVariation =
  */
 "inverse_cl";
 
+/**  A closed triangle mesh. */
+export type MeshPart = {
+	/**  Which part. */
+	kind: PartKind,
+	/**  Vertex coordinates `x, y, z, x, y, z, …`, m. */
+	positions: (number | null)[],
+	/**  Triangles, three vertex indices each. */
+	indices: number[],
+};
+
 /**  Search method. */
 export type Method = 
 /**  CMA-ES, then Nelder–Mead from the best design. */
@@ -962,11 +1022,11 @@ export type Method =
 export type MissionSetup = {
 	/**  Speed, altitude and mass. */
 	flight: Flight,
-	/**  The wing (as given, or as last sized). */
-	wing: Wing,
+	/**  The aircraft (its wing as given, or as last sized). */
+	aircraft: Aircraft,
 	/**
 	 *  When set, the wing is sized to fly at this lift coefficient, keeping
-	 *  its span.
+	 *  its span and taper.
 	 */
 	sizing_cl: number | null,
 	/**  What matters most. */
@@ -975,6 +1035,23 @@ export type MissionSetup = {
 	ncrit: number | null,
 	/**  Finite-wing estimate. */
 	model: WingModel,
+};
+
+/**  What the My aircraft tab shows for a setup. */
+export type MissionView = {
+	/**  The aircraft, its wing sized when the setup asks for it. */
+	aircraft: Aircraft,
+	/**
+	 *  The wing as the flight sees it: its span and mean geometric chord
+	 *  (area ÷ span).
+	 */
+	wing: Wing,
+	/**  The flight's conditions on that wing. */
+	conditions: Conditions,
+	/**  Areas, mean aerodynamic chords, tail volumes, centre of gravity. */
+	layout: Layout,
+	/**  Surfaces of the aircraft for the 3D view. */
+	parts: MeshPart[],
 };
 
 /**  A modification of an airfoil (XFOIL `GDES` commands and `INTE`). */
@@ -1163,6 +1240,17 @@ export type PanelingOptions = {
 	bottom_refinement?: [(number | null), (number | null)],
 };
 
+/**  Which part a mesh is. */
+export type PartKind = 
+/**  Main wing. */
+"wing" | 
+/**  Horizontal tail. */
+"tail" | 
+/**  Vertical fin. */
+"fin" | 
+/**  Fuselage. */
+"fuselage";
+
 /**  Estimated performance of the wing in level flight. */
 export type Performance = {
 	/**  Profile drag coefficient (the airfoil's). */
@@ -1198,6 +1286,27 @@ export type Phase =
 "global" | 
 /**  Nelder–Mead. */
 "local";
+
+/**  Planform properties of a surface. */
+export type Planform = {
+	/**  Span (height for a fin), m. */
+	span: number | null,
+	/**  Projected area, both halves for a mirrored surface, m². */
+	area: number | null,
+	/**  Aspect ratio, span² / area. */
+	aspect_ratio: number | null,
+	/**  Mean aerodynamic chord (MAC), m. */
+	mac: number | null,
+	/**  Leading edge of the MAC: distance behind the nose, m. */
+	mac_x: number | null,
+	/**  Spanwise position of the MAC (y, or z for a fin), m. */
+	mac_span: number | null,
+	/**
+	 *  Quarter point of the MAC, m behind the nose: where the surface's
+	 *  lift acts, roughly.
+	 */
+	quarter_mac_x: number | null,
+};
 
 /**  Analysis of one operating point. */
 export type PointResult = {
@@ -1274,6 +1383,17 @@ export type PolarPoint = {
 	/**  Flap hinge moment coefficient, if a hinge is set. */
 	hinge_moment?: number | null,
 };
+
+/**  Example aircraft. */
+export type Preset = 
+/**  A 1.2 m high-wing trainer. */
+"trainer" | 
+/**  A 1.5 m sailplane. */
+"glider" | 
+/**  A 1 m swept flying wing. */
+"flying_wing" | 
+/**  A light aircraft close to the Cessna 172 (11 m, 16.2 m²). */
+"light_aircraft";
 
 /**
  *  An airfoil optimization problem.
@@ -1473,6 +1593,44 @@ export type StoredPolar = {
 	airfoil_name: string,
 	/**  The polar. */
 	polar: PolarData,
+};
+
+/**
+ *  A straight-tapered lifting surface: a wing or horizontal tail, mirrored
+ *  about the plane of symmetry, or a single vertical fin on that plane.
+ */
+export type SurfaceParams = {
+	/**  Span, tip to tip, seen from above, m. For a fin: its height. */
+	span: number | null,
+	/**  Chord at the root (plane of symmetry), m. */
+	root_chord: number | null,
+	/**  Chord at the tip, m. */
+	tip_chord: number | null,
+	/**  Sweep of the leading edge, degrees, positive backwards. */
+	sweep_deg: number | null,
+	/**  Dihedral, degrees, positive tips up (not used by a fin). */
+	dihedral_deg: number | null,
+	/**
+	 *  Incidence of the root section relative to the fuselage axis,
+	 *  degrees, positive nose up (not used by a fin).
+	 */
+	incidence_deg: number | null,
+	/**
+	 *  Twist of the tip relative to the root, degrees; negative is washout
+	 *  (tips at a lower angle, which stall later).
+	 */
+	twist_deg: number | null,
+	/**  Root leading edge: distance behind the nose, m. */
+	x: number | null,
+	/**  Root leading edge: height above the fuselage axis, m. */
+	z: number | null,
+	/**
+	 *  Airfoil of the root section (a key the caller resolves, such as
+	 *  `naca:2412` or `catalogue:sd7037`).
+	 */
+	root_airfoil: string,
+	/**  Airfoil of the tip section. */
+	tip_airfoil: string,
 };
 
 /**  Progress of a sweep, streamed over a channel. */
@@ -1733,13 +1891,6 @@ export type Wing = {
 	/**  Mean chord, m: the wing area is span × chord. */
 	chord: number | null,
 };
-
-/**  What is kept when a wing is sized for an area. */
-export type WingConstraint = 
-/**  The span is given (m); the chord follows. */
-{ kind: "span"; value: number | null } | 
-/**  The aspect ratio is given; span and chord follow. */
-{ kind: "aspect_ratio"; value: number | null };
 
 /**  Coefficients of the finite-wing estimate. */
 export type WingModel = {

@@ -1,33 +1,41 @@
 <script lang="ts">
-  // "My aircraft": the flight in everyday units, what its numbers mean,
-  // and the recommended airfoils (MissionResults).
+  // "My aircraft": the flight in everyday units, the aircraft built part by
+  // part and shown in 3D, what its numbers mean, and the recommended
+  // airfoils (MissionResults).
   import Term from "./Term.svelte";
-  import WingSketch from "./WingSketch.svelte";
+  import NumberField from "./NumberField.svelte";
+  import AircraftViewer from "./AircraftViewer.svelte";
   import MissionResults from "./MissionResults.svelte";
-  import type { MissionSetup } from "../lib/bindings";
+  import type { MissionSetup, PartKind, SurfaceParams } from "../lib/bindings";
   import { app } from "../lib/state.svelte";
   import type { MessageKey } from "../lib/i18n";
   import {
     GOALS,
     PRESETS,
     TURBULENCE,
-    applyPreset,
     length,
     num,
     readCl,
+    readFinVolume,
     readMach,
     readReynolds,
+    readTailVolume,
     readWingLoading,
     sig,
     wingLoadingGdm2,
     type Level,
   } from "../lib/mission";
 
+  type Part = "wing" | "tail" | "fin";
+
   const setup = $derived(app.mission);
+  const view = $derived(app.missionView);
   const c = $derived(app.missionConditions);
   const lang = $derived(app.tourLang);
   let massUnit = $state<"g" | "kg">("g");
   let unitChosen = false;
+  /** Panel opened by a click in the 3D view (or by hand). */
+  let openPart = $state<PartKind | "cg" | null>("wing");
 
   $effect(() => {
     // Grams for models, kilograms from 1 kg, until the user picks one.
@@ -42,7 +50,46 @@
     app.updateMission(s);
   }
 
-  /** The typed number, if finite and positive (or any finite with `signed`). */
+  /** Changes a field of the wing, tail or fin. */
+  function surface(part: Part, change: (p: SurfaceParams) => void) {
+    update((s) => {
+      const p = part === "wing" ? s.aircraft.wing : s.aircraft[part];
+      if (p) change(p);
+    });
+  }
+
+  /** Adds a part proportional to the wing, or removes it. */
+  function toggle(part: "tail" | "fin" | "fuselage", on: boolean) {
+    update((s) => {
+      if (!on) {
+        s.aircraft[part] = null;
+        return;
+      }
+      const w = s.aircraft.wing;
+      const span = w.span ?? 1;
+      const chord = w.root_chord ?? 0.2;
+      const x = w.x ?? 0;
+      if (part === "fuselage") {
+        s.aircraft.fuselage = { length: 0.8 * span, diameter: 0.08 * span };
+        return;
+      }
+      const tail = part === "tail";
+      s.aircraft[part] = {
+        span: tail ? 0.35 * span : 0.14 * span,
+        root_chord: 0.6 * chord,
+        tip_chord: 0.45 * chord,
+        sweep_deg: tail ? 0 : 30,
+        dihedral_deg: 0,
+        incidence_deg: 0,
+        twist_deg: 0,
+        x: x + 0.55 * span,
+        z: 0,
+        root_airfoil: "naca:0009",
+        tip_airfoil: "naca:0009",
+      };
+    });
+  }
+
   function read(e: Event, signed = false): number | null {
     const v = (e.currentTarget as HTMLInputElement).valueAsNumber;
     return Number.isFinite(v) && (signed || v > 0) ? v : null;
@@ -50,6 +97,36 @@
 
   function round(v: number, digits: number): number {
     return Number(v.toFixed(digits));
+  }
+
+  /** Airfoil choices: the catalogue and the library, plus the current key
+   * when it is neither (such as the presets' `naca:0009`). */
+  function airfoilChoices(current: string) {
+    const catalogue = app.catalogue.map((e) => ({ key: `catalogue:${e.id}`, name: e.name }));
+    const library = app.airfoils.map((a) => ({ key: `library:${a.id}`, name: a.name }));
+    const known = [...catalogue, ...library].some((o) => o.key === current);
+    const extra = known ? [] : [{ key: current, name: current.replace(/^naca:/, "NACA ") }];
+    return { catalogue, library, extra };
+  }
+
+  function setAirfoil(part: Part, key: string) {
+    surface(part, (p) => {
+      p.root_airfoil = key;
+      p.tip_airfoil = key;
+    });
+  }
+
+  function select(kind: PartKind) {
+    openPart = kind;
+    queueMicrotask(() =>
+      document.getElementById(`part-${kind}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
+    );
+  }
+
+  function opened(kind: PartKind | "cg") {
+    return (e: Event) => {
+      if ((e.currentTarget as HTMLDetailsElement).open) openPart = kind;
+    };
   }
 
   const LEVEL_ICON: Record<Level, string> = { ok: "✓", info: "i", warning: "!", danger: "✕" };
@@ -64,21 +141,127 @@
   const reReading = $derived(c?.reynolds != null ? readReynolds(c.reynolds) : null);
   const machReading = $derived(c?.mach != null ? readMach(c.mach) : null);
   const loading = $derived(c ? wingLoadingGdm2(c) : Number.NaN);
+  const tailReading = $derived(view ? readTailVolume(view.layout.tail_volume) : null);
+  const finReading = $derived(view ? readFinVolume(view.layout.fin_volume, view.aircraft.tail === null) : null);
   const seaLevelDensity = 1.225;
 </script>
 
+{#snippet surfaceFields(part: Part, p: SurfaceParams)}
+  {@const fin = part === "fin"}
+  {@const choices = airfoilChoices(p.root_airfoil)}
+  <NumberField
+    label={app.t(fin ? "field.height" : "field.span")}
+    value={p.span}
+    unit="m"
+    step={0.05}
+    digits={3}
+    onchange={(v) => surface(part, (q) => (q.span = v))}
+  />
+  {#if !(part === "wing" && setup?.sizing_cl !== null)}
+    <NumberField
+      label={app.t("field.rootChord")}
+      value={p.root_chord}
+      unit="cm"
+      scale={100}
+      digits={1}
+      onchange={(v) => surface(part, (q) => (q.root_chord = v))}
+    />
+    <NumberField
+      label={app.t("field.tipChord")}
+      value={p.tip_chord}
+      unit="cm"
+      scale={100}
+      digits={1}
+      onchange={(v) => surface(part, (q) => (q.tip_chord = v))}
+    />
+  {/if}
+  <NumberField
+    label={app.t("field.sweep")}
+    value={p.sweep_deg}
+    unit="°"
+    signed
+    min={-60}
+    max={60}
+    digits={1}
+    onchange={(v) => surface(part, (q) => (q.sweep_deg = v))}
+  />
+  {#if !fin}
+    <NumberField
+      label={app.t("field.dihedral")}
+      value={p.dihedral_deg}
+      unit="°"
+      signed
+      min={-30}
+      max={30}
+      digits={1}
+      onchange={(v) => surface(part, (q) => (q.dihedral_deg = v))}
+    />
+    <NumberField
+      label={app.t("field.incidence")}
+      value={p.incidence_deg}
+      unit="°"
+      signed
+      min={-15}
+      max={15}
+      digits={1}
+      onchange={(v) => surface(part, (q) => (q.incidence_deg = v))}
+    />
+    <NumberField
+      label={app.t("field.twist")}
+      value={p.twist_deg}
+      unit="°"
+      signed
+      min={-15}
+      max={15}
+      digits={1}
+      onchange={(v) => surface(part, (q) => (q.twist_deg = v))}
+    />
+  {/if}
+  <NumberField
+    label={app.t("field.x")}
+    value={p.x}
+    unit="m"
+    signed
+    step={0.01}
+    digits={3}
+    onchange={(v) => surface(part, (q) => (q.x = v))}
+  />
+  <NumberField
+    label={app.t("field.z")}
+    value={p.z}
+    unit="cm"
+    scale={100}
+    signed
+    digits={1}
+    onchange={(v) => surface(part, (q) => (q.z = v))}
+  />
+  <label class="row">
+    <span>{app.t("field.airfoil")}</span>
+    <select value={p.root_airfoil} onchange={(e) => setAirfoil(part, (e.currentTarget as HTMLSelectElement).value)}>
+      {#each choices.extra as o (o.key)}<option value={o.key}>{o.name}</option>{/each}
+      <optgroup label={app.t("airfoil.catalogue")}>
+        {#each choices.catalogue as o (o.key)}<option value={o.key}>{o.name}</option>{/each}
+      </optgroup>
+      {#if choices.library.length}
+        <optgroup label={app.t("airfoil.library")}>
+          {#each choices.library as o (o.key)}<option value={o.key}>{o.name}</option>{/each}
+        </optgroup>
+      {/if}
+    </select>
+  </label>
+{/snippet}
+
 {#if setup}
+  {@const aircraft = setup.aircraft}
   <div class="mission">
     <section class="panel form" aria-labelledby="mission-title">
       <h1 id="mission-title">{app.t("mission.title")}</h1>
       <p class="muted intro">{app.t("mission.intro")}</p>
 
-      <div class="presets" role="group" aria-label={app.t("mission.presets")}>
-        <span class="muted">{app.t("mission.presets")}</span>
-        {#each PRESETS as p (p.id)}
-          <button class="chip" onclick={() => update((s) => Object.assign(s, applyPreset(s, p)))}
-            >{app.t(p.label)}</button
-          >
+      <div class="presets" role="group" aria-label={app.t("aircraft.presets")}>
+        <span class="muted">{app.t("aircraft.presets")}</span>
+        {#each PRESETS as p (p.aircraft)}
+          <button class="chip" onclick={() => app.applyPreset(p)}>{app.t(p.label)}</button>
         {/each}
       </div>
 
@@ -145,8 +328,10 @@
         </label>
       </div>
 
-      <fieldset class="wing">
-        <legend>{app.t("mission.wing")}</legend>
+      <h2 class="section-title">{app.t("aircraft.title")}</h2>
+
+      <details id="part-wing" class="part" open={openPart === "wing"} ontoggle={opened("wing")}>
+        <summary>{app.t("part.wing")}</summary>
         <div class="segmented" role="radiogroup">
           <button
             role="radio"
@@ -161,65 +346,105 @@
             onclick={() => update((s) => (s.sizing_cl = s.sizing_cl ?? 0.6))}>{app.t("mission.wingSized")}</button
           >
         </div>
-        <label class="row">
-          <span>{app.t("mission.span")}</span>
-          <span class="field">
-            <input
-              type="number"
-              min="0.05"
-              step="0.05"
-              value={round(setup.wing.span ?? 0, 3)}
-              oninput={(e) => {
-                const v = read(e);
-                if (v !== null) update((s) => (s.wing.span = v));
-              }}
-            />
-            <span class="unit">m</span>
-          </span>
-        </label>
-        {#if setup.sizing_cl === null}
-          <label class="row">
-            <span>{app.t("mission.chord")}</span>
-            <span class="field">
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={round((setup.wing.chord ?? 0) * 100, 1)}
-                oninput={(e) => {
-                  const v = read(e);
-                  if (v !== null) update((s) => (s.wing.chord = v / 100));
-                }}
-              />
-              <span class="unit">cm</span>
-            </span>
-          </label>
-        {:else}
-          <label class="row">
-            <span><Term id="cl">{app.t("mission.sizingCl")}</Term></span>
-            <span class="field">
-              <input
-                type="number"
-                min="0.1"
-                max="2"
-                step="0.05"
-                value={setup.sizing_cl}
-                oninput={(e) => {
-                  const v = read(e);
-                  if (v !== null) update((s) => (s.sizing_cl = Math.min(v, 2.5)));
-                }}
-              />
-            </span>
-          </label>
+        {#if setup.sizing_cl !== null}
+          <NumberField
+            label={app.t("mission.sizingCl")}
+            value={setup.sizing_cl}
+            step={0.05}
+            max={2.5}
+            onchange={(v) => update((s) => (s.sizing_cl = v))}
+          />
           <p class="muted hint">{app.t("mission.sizingHint")}</p>
-          <p class="sized">
-            {app.t("mission.sizedWing", {
-              chord: length(setup.wing.chord, lang),
-              area: `${sig((setup.wing.span ?? 0) * (setup.wing.chord ?? 0), lang, 3)} m²`,
-            })}
-          </p>
+          {#if view}
+            <p class="sized">
+              {app.t("mission.sizedWing", {
+                root: length(view.aircraft.wing.root_chord, lang),
+                tip: length(view.aircraft.wing.tip_chord, lang),
+                area: `${sig(view.layout.wing.area, lang, 3)} m²`,
+              })}
+            </p>
+          {/if}
         {/if}
-      </fieldset>
+        {@render surfaceFields("wing", aircraft.wing)}
+      </details>
+
+      <details id="part-tail" class="part" open={openPart === "tail"} ontoggle={opened("tail")}>
+        <summary>{app.t("part.tail")}</summary>
+        <label class="check">
+          <input
+            type="checkbox"
+            checked={aircraft.tail !== null}
+            onchange={(e) => toggle("tail", (e.currentTarget as HTMLInputElement).checked)}
+          />
+          {app.t("part.tail.toggle")}
+        </label>
+        {#if aircraft.tail}{@render surfaceFields("tail", aircraft.tail)}{/if}
+      </details>
+
+      <details id="part-fin" class="part" open={openPart === "fin"} ontoggle={opened("fin")}>
+        <summary>{app.t("part.fin")}</summary>
+        <label class="check">
+          <input
+            type="checkbox"
+            checked={aircraft.fin !== null}
+            onchange={(e) => toggle("fin", (e.currentTarget as HTMLInputElement).checked)}
+          />
+          {app.t("part.fin.toggle")}
+        </label>
+        {#if aircraft.fin}{@render surfaceFields("fin", aircraft.fin)}{/if}
+      </details>
+
+      <details id="part-fuselage" class="part" open={openPart === "fuselage"} ontoggle={opened("fuselage")}>
+        <summary>{app.t("part.fuselage")}</summary>
+        <label class="check">
+          <input
+            type="checkbox"
+            checked={aircraft.fuselage !== null}
+            onchange={(e) => toggle("fuselage", (e.currentTarget as HTMLInputElement).checked)}
+          />
+          {app.t("part.fuselage.toggle")}
+        </label>
+        {#if aircraft.fuselage}
+          <NumberField
+            label={app.t("field.length")}
+            value={aircraft.fuselage.length}
+            unit="m"
+            step={0.05}
+            digits={3}
+            onchange={(v) =>
+              update((s) => {
+                if (s.aircraft.fuselage) s.aircraft.fuselage.length = v;
+              })}
+          />
+          <NumberField
+            label={app.t("field.diameter")}
+            value={aircraft.fuselage.diameter}
+            unit="cm"
+            scale={100}
+            digits={1}
+            onchange={(v) =>
+              update((s) => {
+                if (s.aircraft.fuselage) s.aircraft.fuselage.diameter = v;
+              })}
+          />
+        {/if}
+      </details>
+
+      <details id="part-cg" class="part" open={openPart === "cg"} ontoggle={opened("cg")}>
+        <summary>{app.t("part.cg")}</summary>
+        <NumberField
+          label={app.t("field.cg")}
+          value={aircraft.cg_mac_fraction}
+          unit="%"
+          scale={100}
+          digits={0}
+          signed
+          min={-50}
+          max={100}
+          onchange={(v) => update((s) => (s.aircraft.cg_mac_fraction = v))}
+        />
+        <p class="muted hint">{app.t("cg.hint")}</p>
+      </details>
 
       <fieldset>
         <legend>{app.t("mission.goal")}</legend>
@@ -255,49 +480,31 @@
             {/each}
           </select>
         </label>
-        <label class="row">
-          <span>{app.t("mission.temperature")}</span>
-          <input
-            type="number"
-            min="-60"
-            max="60"
-            step="5"
-            value={setup.flight.temperature_offset ?? 0}
-            oninput={(e) => {
-              const v = read(e, true);
-              if (v !== null) update((s) => (s.flight.temperature_offset = v));
-            }}
-          />
-        </label>
+        <NumberField
+          label={app.t("mission.temperature")}
+          value={setup.flight.temperature_offset ?? 0}
+          signed
+          min={-60}
+          max={60}
+          step={5}
+          digits={0}
+          onchange={(v) => update((s) => (s.flight.temperature_offset = v))}
+        />
         <p class="muted hint">{app.t("mission.temperatureHint")}</p>
-        <label class="row">
-          <span>{app.t("mission.spanEfficiency")}</span>
-          <input
-            type="number"
-            min="0.5"
-            max="1"
-            step="0.05"
-            value={setup.model.span_efficiency}
-            oninput={(e) => {
-              const v = read(e);
-              if (v !== null && v <= 1) update((s) => (s.model.span_efficiency = v));
-            }}
-          />
-        </label>
-        <label class="row">
-          <span>{app.t("mission.clMaxFactor")}</span>
-          <input
-            type="number"
-            min="0.5"
-            max="1"
-            step="0.05"
-            value={setup.model.cl_max_factor}
-            oninput={(e) => {
-              const v = read(e);
-              if (v !== null && v <= 1) update((s) => (s.model.cl_max_factor = v));
-            }}
-          />
-        </label>
+        <NumberField
+          label={app.t("mission.spanEfficiency")}
+          value={setup.model.span_efficiency}
+          step={0.05}
+          max={1}
+          onchange={(v) => update((s) => (s.model.span_efficiency = v))}
+        />
+        <NumberField
+          label={app.t("mission.clMaxFactor")}
+          value={setup.model.cl_max_factor}
+          step={0.05}
+          max={1}
+          onchange={(v) => update((s) => (s.model.cl_max_factor = v))}
+        />
       </details>
 
       {#if app.airfoils.length > 0}
@@ -322,11 +529,24 @@
     </section>
 
     <div class="right">
+      <section class="panel viewer-panel" aria-label={app.t("aircraft.title")}>
+        {#if view}
+          <AircraftViewer
+            parts={view.parts}
+            layout={view.layout}
+            wingZ={view.aircraft.wing.z ?? 0}
+            selected={openPart === "cg" ? null : openPart}
+            onselect={select}
+          />
+        {/if}
+        {#if app.missionError}
+          <p class="callout danger overlay">{app.t("mission.flightError", { message: app.missionError })}</p>
+        {/if}
+      </section>
+
       <section class="meaning" aria-labelledby="meaning-title">
         <h2 id="meaning-title">{app.t("card.title")}</h2>
-        {#if app.missionError}
-          <p class="callout danger">{app.t("mission.flightError", { message: app.missionError })}</p>
-        {:else if c}
+        {#if c && view}
           <div class="cards">
             {#if clReading}
               <article class="panel card {clReading.level}">
@@ -359,6 +579,14 @@
               <p class="value">{sig(loading, lang, 3)} g/dm²</p>
               <p>{app.t(readWingLoading(loading))}</p>
             </article>
+            {#if tailReading && finReading}
+              {@const worst = [tailReading, finReading].some((r) => r.level === "warning") ? "warning" : "ok"}
+              <article class="panel card {worst}">
+                <header><Term id="tail-volume">{app.t("card.tails")}</Term></header>
+                <p>{app.t(tailReading.text, { value: num(view.layout.tail_volume, lang, 2) })}</p>
+                <p>{app.t(finReading.text, { value: num(view.layout.fin_volume, lang, 3) })}</p>
+              </article>
+            {/if}
             <article class="panel card">
               <header>
                 <Term id="atmosphere">{app.t("card.air", { altitude: `${sig(setup.flight.altitude, lang, 4)} m` })}</Term>
@@ -378,10 +606,6 @@
                 <p>{app.t(machReading.text)}</p>
               </article>
             {/if}
-            <article class="panel card sketch">
-              <header>{app.t("sketch.title")}</header>
-              <WingSketch span={setup.wing.span ?? 0} chord={setup.wing.chord ?? 0} />
-            </article>
           </div>
         {/if}
       </section>
@@ -404,12 +628,16 @@
     overflow: auto;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 12px;
   }
   h1 {
     font-size: 18px;
     margin: 0;
     letter-spacing: -0.01em;
+  }
+  .section-title {
+    font-size: 14px;
+    margin: 4px 0 -4px;
   }
   .intro {
     margin: -6px 0 0;
@@ -455,6 +683,22 @@
   select.unit {
     color: var(--text);
   }
+  .part {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px 12px;
+  }
+  .part[open] {
+    padding-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .part summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 2px 0;
+  }
   fieldset {
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -491,9 +735,8 @@
     justify-content: space-between;
     gap: 8px;
   }
-  .row input {
-    width: 90px;
-    text-align: right;
+  .row select {
+    max-width: 190px;
   }
   .hint {
     margin: -4px 0 0;
@@ -573,6 +816,19 @@
     gap: 12px;
     padding-right: 2px;
   }
+  .viewer-panel {
+    position: relative;
+    height: 48vh;
+    min-height: 320px;
+    flex: none;
+    background: linear-gradient(to bottom, var(--panel), var(--panel-2));
+  }
+  .overlay {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 12px;
+  }
   .meaning h2 {
     margin: 2px 0 8px;
   }
@@ -599,9 +855,6 @@
   }
   .card.danger {
     border-left-color: var(--danger);
-  }
-  .card.sketch {
-    grid-column: span 2;
   }
   .card header {
     display: flex;

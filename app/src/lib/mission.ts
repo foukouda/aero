@@ -2,7 +2,15 @@
 // the order of the recommended airfoils. Pure functions, tested in
 // mission.test.ts; the physics is in the Rust crate aero-mission.
 
-import type { CandidateResult, Conditions, Goal, MissionSetup, RecommendResult } from "./bindings";
+import type {
+  Aircraft,
+  CandidateResult,
+  Conditions,
+  Goal,
+  MissionSetup,
+  Preset as AircraftPreset,
+  RecommendResult,
+} from "./bindings";
 import type { Lang, MessageKey } from "./i18n";
 
 /** Standard gravity, m/s². */
@@ -16,28 +24,35 @@ export interface Reading {
 }
 
 export interface Preset {
-  id: string;
+  /** The example aircraft (aero-aircraft `Preset`). */
+  aircraft: AircraftPreset;
   label: MessageKey;
   speedKmh: number;
   altitude: number;
   mass: number;
-  span: number;
-  chord: number;
+  /** Wing area of the example aircraft, m² (checked in mission.test.ts). */
+  wingArea: number;
 }
 
-/** Example flights; the wing loadings and lift coefficients are typical of
- * each kind of aircraft (checked in mission.test.ts). */
+/** Example aircraft and a typical flight for each; the wing loadings and
+ * lift coefficients are typical of each kind of aircraft. */
 export const PRESETS: Preset[] = [
-  { id: "parkflyer", label: "preset.parkflyer", speedKmh: 22, altitude: 50, mass: 0.25, span: 0.9, chord: 0.18 },
-  { id: "glider", label: "preset.glider", speedKmh: 30, altitude: 100, mass: 0.6, span: 1.5, chord: 0.17 },
-  { id: "trainer", label: "preset.trainer", speedKmh: 40, altitude: 100, mass: 0.9, span: 1.2, chord: 0.22 },
-  { id: "drone", label: "preset.drone", speedKmh: 60, altitude: 120, mass: 2, span: 1.8, chord: 0.25 },
-  // Cessna 172: 1111 kg, 11.0 m span, 16.2 m² wing, cruise 226 km/h at 2400 m.
-  { id: "cessna", label: "preset.cessna", speedKmh: 226, altitude: 2400, mass: 1111, span: 11.0, chord: 1.47 },
+  { aircraft: "trainer", label: "aircraftPreset.trainer", speedKmh: 40, altitude: 100, mass: 0.9, wingArea: 0.24 },
+  { aircraft: "glider", label: "aircraftPreset.glider", speedKmh: 30, altitude: 100, mass: 0.6, wingArea: 0.2325 },
+  { aircraft: "flying_wing", label: "aircraftPreset.flying_wing", speedKmh: 35, altitude: 100, mass: 0.5, wingArea: 0.21 },
+  // Cessna 172: 1111 kg, 16.2 m², cruise 226 km/h at 2400 m.
+  {
+    aircraft: "light_aircraft",
+    label: "aircraftPreset.light_aircraft",
+    speedKmh: 226,
+    altitude: 2400,
+    mass: 1111,
+    wingArea: 16.225,
+  },
 ];
 
-/** The setup with the preset's flight and wing (the wing is given). */
-export function applyPreset(setup: MissionSetup, preset: Preset): MissionSetup {
+/** The setup with the preset's flight and aircraft (the chords are given). */
+export function applyPreset(setup: MissionSetup, preset: Preset, aircraft: Aircraft): MissionSetup {
   return {
     ...setup,
     flight: {
@@ -46,9 +61,26 @@ export function applyPreset(setup: MissionSetup, preset: Preset): MissionSetup {
       altitude: preset.altitude,
       mass: preset.mass,
     },
-    wing: { span: preset.span, chord: preset.chord },
+    aircraft,
     sizing_cl: null,
   };
+}
+
+/** Reading of the horizontal tail volume coefficient (usual 0.35 to 0.8). */
+export function readTailVolume(v: number | null | undefined): Reading {
+  if (v === null || v === undefined || !Number.isFinite(v)) return { level: "info", text: "tail.none" };
+  if (v < 0.3) return { level: "warning", text: "tail.small" };
+  if (v <= 0.8) return { level: "ok", text: "tail.ok" };
+  return { level: "info", text: "tail.large" };
+}
+
+/** Reading of the vertical tail volume coefficient (usual 0.02 to 0.06;
+ * a swept flying wing does with less). */
+export function readFinVolume(v: number | null | undefined, flyingWing = false): Reading {
+  if (v === null || v === undefined || !Number.isFinite(v)) return { level: "info", text: "fin.none" };
+  if (v < 0.02) return flyingWing ? { level: "info", text: "fin.flyingWing" } : { level: "warning", text: "fin.small" };
+  if (v <= 0.06) return { level: "ok", text: "fin.ok" };
+  return { level: "info", text: "fin.large" };
 }
 
 /** Critical amplification exponents offered as "air turbulence". */

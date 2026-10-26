@@ -156,7 +156,8 @@
             {sig((e?.buildability.thickness ?? Number.NaN) * 100, lang, 3)} %
           </p>
           <div class="actions">
-            <button class="primary" onclick={() => app.analyseCandidate(c)}>{app.t("cand.analyse")}</button>
+            <button class="primary" onclick={() => app.putOnWing(c)}>{app.t("cand.putOnWing")}</button>
+            <button onclick={() => app.analyseCandidate(c)}>{app.t("cand.analyse")}</button>
             <button onclick={() => app.optimizeCandidate(c)}>{app.t("cand.optimize")}</button>
           </div>
         </article>

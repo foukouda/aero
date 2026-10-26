@@ -1,5 +1,6 @@
 //! Errors returned to the user interface.
 
+use aero_aircraft::AircraftError;
 use aero_foil2d::inverse::InverseError;
 use aero_foil2d::inviscid::InviscidError;
 use aero_foil2d::viscous::ViscousError;
@@ -109,6 +110,15 @@ impl From<OptimError> for AppError {
     fn from(e: OptimError) -> Self {
         match e {
             OptimError::Geometry(g) => g.into(),
+            _ => Self::new(ErrorKind::InvalidInput, e.to_string()),
+        }
+    }
+}
+
+impl From<AircraftError> for AppError {
+    fn from(e: AircraftError) -> Self {
+        match e {
+            AircraftError::Geometry(g) => g.into(),
             _ => Self::new(ErrorKind::InvalidInput, e.to_string()),
         }
     }
