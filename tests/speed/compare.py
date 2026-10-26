@@ -94,7 +94,9 @@ def xfoil_results(xfoil: str, repeat: int, workers: int) -> dict:
             total = median_time(repeat, lambda: run_xfoil(xfoil, script, workdir)[0])
             out[task] = {
                 "seconds": max(total - base, 0.0),
-                "failed": log.count("Convergence failed"),
+                # Unconverged points; "MRCHUE/MRCHDU: Convergence failed"
+                # are local marching failures within a Newton iteration.
+                "failed": log.count("VISCAL:  Convergence failed"),
             }
         scripts = [session(code, VISC + ["ASEQ -4 14 0.5"]) for code in BATCH]
 
