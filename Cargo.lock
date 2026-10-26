@@ -64,6 +64,7 @@ version = "0.1.0"
 dependencies = [
  "aero-foil2d",
  "aero-geometry",
+ "criterion",
  "faer",
  "serde",
  "serde_json",
