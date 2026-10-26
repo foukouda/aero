@@ -1,0 +1,95 @@
+name: Speed comparison with XFOIL
+
+# Builds XFOIL 6.996 from the official sources (three variants) and Aero,
+# times the same tasks on the same runner (tests/speed/compare.py) and
+# publishes the report as the job summary and an artifact.
+
+on:
+  workflow_dispatch:
+    inputs:
+      repeat:
+        description: Runs per measurement (the median is reported)
+        default: "5"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  XFOIL_URL: https://web.mit.edu/drela/Public/web/xfoil/xfoil6.996.tgz
+  XFOIL_SHA256: 0feb71b58070d8514d830fcb0b609a10a11399d362493d7b9bbfb7343dff3f23
+  LEGACY: -std=legacy -fallow-argument-mismatch -w
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Fortran toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran libx11-dev xvfb
+
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Download XFOIL 6.996
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/xfoil.tgz" "$XFOIL_URL"
+          echo "$XFOIL_SHA256  $RUNNER_TEMP/xfoil.tgz" | sha256sum -c
+
+      # XFOIL's own Makefile_gfortran: double precision, -O.
+      - name: Build XFOIL (official flags, double precision)
+        run: |
+          mkdir -p "$RUNNER_TEMP/official" && tar xzf "$RUNNER_TEMP/xfoil.tgz" -C "$RUNNER_TEMP/official"
+          cd "$RUNNER_TEMP/official/Xfoil/plotlib"
+          cp config.make.gfortranDP config.make
+          make -f Makefile.all lib FFLAGS="-O2 -fdefault-real-8 $LEGACY" CFLAGS="-O2 -DUNDERSCORE -DDBL_ARGS"
+          cd ../bin
+          make -f Makefile_gfortran xfoil FFLAGS="-O -fdefault-real-8 $LEGACY" FFLOPT="-O -fdefault-real-8 $LEGACY" INSTALLCMD=true BINDIR=.
+
+      # The same with -O3, to give XFOIL its best chance.
+      - name: Build XFOIL (-O3, double precision)
+        run: |
+          mkdir -p "$RUNNER_TEMP/o3" && tar xzf "$RUNNER_TEMP/xfoil.tgz" -C "$RUNNER_TEMP/o3"
+          cd "$RUNNER_TEMP/o3/Xfoil/plotlib"
+          cp config.make.gfortranDP config.make
+          make -f Makefile.all lib FFLAGS="-O3 -fdefault-real-8 $LEGACY" CFLAGS="-O2 -DUNDERSCORE -DDBL_ARGS"
+          cd ../bin
+          make -f Makefile_gfortran xfoil FFLAGS="-O3 -fdefault-real-8 $LEGACY" FFLOPT="-O3 -fdefault-real-8 $LEGACY" INSTALLCMD=true BINDIR=.
+
+      # Single precision, as the historical binaries.
+      - name: Build XFOIL (-O2, single precision)
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/single" && tar xzf "$RUNNER_TEMP/xfoil.tgz" -C "$RUNNER_TEMP/single"
+          cd "$RUNNER_TEMP/single/Xfoil/plotlib"
+          cp config.make.gfortran config.make
+          make -f Makefile.all lib FFLAGS="-O2 $LEGACY" CFLAGS="-O2 -DUNDERSCORE"
+          cd ../bin
+          make -f Makefile_gfortran xfoil FFLAGS="-O2 $LEGACY" FFLOPT="-O2 $LEGACY" PLTOBJ=../plotlib/libPlt_gSP.a INSTALLCMD=true BINDIR=.
+
+      - name: Build Aero
+        run: cargo build --release -p aero-foil2d --example xfoil_speed
+
+      - name: Compare
+        run: |
+          set -- --xfoil "official (-O, double)=$RUNNER_TEMP/official/Xfoil/bin/xfoil" \
+                 --xfoil "-O3 (double)=$RUNNER_TEMP/o3/Xfoil/bin/xfoil"
+          if [ -x "$RUNNER_TEMP/single/Xfoil/bin/xfoil" ]; then
+            set -- "$@" --xfoil "-O2 (single)=$RUNNER_TEMP/single/Xfoil/bin/xfoil"
+          fi
+          xvfb-run -a python3 tests/speed/compare.py "$@" \
+            --aero target/release/examples/xfoil_speed \
+            --repeat "${{ inputs.repeat }}" --out speed-report.md --json speed-results.json
+          cat speed-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: speed-report
+          path: |
+            speed-report.md
+            speed-results.json
