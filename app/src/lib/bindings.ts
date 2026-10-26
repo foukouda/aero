@@ -69,6 +69,8 @@ export const commands = {
 	missionView: (setup: MissionSetup) => typedError<MissionView, AppError>(__TAURI_INVOKE("mission_view", { setup })),
 	/**  An example aircraft. */
 	aircraftPreset: (preset: Preset) => __TAURI_INVOKE<Aircraft>("aircraft_preset", { preset }),
+	/**  Random aircraft for the gallery: `count` (at most 60) from `seed`. */
+	randomAircraft: (count: number, seed: number) => typedError<RandomAircraftView[], AppError>(__TAURI_INVOKE("random_aircraft", { count, seed })),
 	/**
 	 *  Evaluates catalogue and library airfoils for a flight, streaming
 	 *  progress on `on_event`.
@@ -549,6 +551,17 @@ export type Conditions = {
 	/**  Lift coefficient the wing must fly at, weight / (q S). */
 	required_cl: number | null,
 };
+
+/**  Layout of a random aircraft. */
+export type Configuration = 
+/**  Wing, horizontal tail and fin behind. */
+"classic" | 
+/**  Canard ahead, wing behind with the fin. */
+"canard" | 
+/**  No tail: a swept wing with a reflexed airfoil. */
+"flying_wing" | 
+/**  Canard, wing and tail. */
+"three_surfaces";
 
 /**  Constraints of the design; `None` or empty disables one. */
 export type Constraints = {
@@ -1426,6 +1439,18 @@ export type Problem = {
 	paneling?: PanelingOptions,
 	/**  Design space. */
 	design?: DesignOptions,
+};
+
+/**  A random aircraft, with what the gallery shows of it. */
+export type RandomAircraftView = {
+	/**  Its layout. */
+	configuration: Configuration,
+	/**  The aircraft. */
+	aircraft: Aircraft,
+	/**  Areas, mean chords, tail volumes. */
+	layout: Layout,
+	/**  Coarse surfaces for a thumbnail. */
+	parts: MeshPart[],
 };
 
 /**

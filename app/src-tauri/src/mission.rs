@@ -5,7 +5,13 @@
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
-use aero_aircraft::{Aircraft, Layout, MeshOptions, MeshPart, layout, mesh};
+use std::cell::RefCell;
+use std::collections::HashMap;
+
+use aero_aircraft::{
+    Aircraft, AirfoilPools, Configuration, Layout, MeshOptions, MeshPart, Rng, layout, mesh,
+    random_aircraft,
+};
 use aero_geometry::Airfoil;
 use aero_mission::{
     AirfoilEvaluation, AnalysisSettings, Conditions, Flight, Goal, Wing, WingConstraint, WingModel,
@@ -147,6 +153,58 @@ fn outline(airfoil: &Airfoil) -> (Vec<f64>, Vec<f64>) {
         keep.iter().map(|&i| x[i]).collect(),
         keep.iter().map(|&i| y[i]).collect(),
     )
+}
+
+/// Most random aircraft generated at once.
+pub const MAX_RANDOM_AIRCRAFT: u32 = 60;
+
+/// A random aircraft, with what the gallery shows of it.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+pub struct RandomAircraftView {
+    /// Its layout.
+    pub configuration: Configuration,
+    /// The aircraft.
+    pub aircraft: Aircraft,
+    /// Areas, mean chords, tail volumes.
+    pub layout: Layout,
+    /// Coarse surfaces for a thumbnail.
+    pub parts: Vec<MeshPart>,
+}
+
+/// `count` random aircraft from `seed` (the same seed gives the same
+/// aircraft); `airfoil` resolves airfoil keys, each resolved once.
+pub fn random_views(
+    count: u32,
+    seed: u32,
+    pools: &AirfoilPools,
+    airfoil: &dyn Fn(&str) -> Option<Airfoil>,
+) -> Result<Vec<RandomAircraftView>, AppError> {
+    let cache: RefCell<HashMap<String, Option<Airfoil>>> = RefCell::new(HashMap::new());
+    let cached = |key: &str| {
+        if let Some(a) = cache.borrow().get(key) {
+            return a.clone();
+        }
+        let a = airfoil(key);
+        cache.borrow_mut().insert(key.to_string(), a.clone());
+        a
+    };
+    let coarse = MeshOptions {
+        chordwise: 12,
+        around: 14,
+        along: 18,
+    };
+    let mut rng = Rng::new(u64::from(seed));
+    (0..count.clamp(1, MAX_RANDOM_AIRCRAFT))
+        .map(|_| {
+            let (configuration, aircraft) = random_aircraft(&mut rng, pools)?;
+            Ok(RandomAircraftView {
+                configuration,
+                layout: layout(&aircraft)?,
+                parts: mesh(&aircraft, &cached, &coarse)?,
+                aircraft,
+            })
+        })
+        .collect()
 }
 
 /// What the My aircraft tab shows for a setup.

@@ -47,6 +47,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::add_from_catalogue,
             commands::mission_view,
             commands::aircraft_preset,
+            commands::random_aircraft,
             commands::recommend_airfoils,
             commands::cancel_recommendation,
             commands::update_mission_setup,

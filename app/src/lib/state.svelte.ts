@@ -12,6 +12,7 @@ import type {
   Conditions,
   MissionSetup,
   MissionView,
+  RandomAircraftView,
   SurfaceParams,
   RecommendEvent,
   RecommendResult,
@@ -202,6 +203,11 @@ class AppState {
   recommending = $state<RecommendProgress | null>(null);
   /** Also evaluate the library airfoils. */
   includeLibrary = $state(true);
+  /** Gallery of random aircraft: open, being drawn, its aircraft. */
+  galleryOpen = $state(false);
+  galleryBusy = $state(false);
+  galleryCount = $state(12);
+  gallery = $state<{ seed: number; items: RandomAircraftView[] } | null>(null);
 
   #nextToast = 1;
 
@@ -1090,6 +1096,34 @@ class AppState {
     if (!setup) return;
     const aircraft = await commands.aircraftPreset(preset.aircraft);
     this.updateMission(applyPreset($state.snapshot(setup) as MissionSetup, preset, aircraft));
+  }
+
+  /** Opens the gallery and draws `count` random aircraft (new seed). */
+  async drawGallery(count = this.galleryCount) {
+    const n = Math.max(1, Math.min(60, Math.round(count)));
+    this.galleryCount = n;
+    this.galleryOpen = true;
+    this.galleryBusy = true;
+    const seed = Math.floor(Math.random() * 2 ** 31);
+    await this.guard(async () => {
+      this.gallery = { seed, items: await call(commands.randomAircraft(n, seed)) };
+    });
+    this.galleryBusy = false;
+  }
+
+  /** Puts aircraft `index` of the gallery in the editor (the flight is
+   * kept). */
+  useRandomAircraft(index: number) {
+    const item = this.gallery?.items[index];
+    const setup = this.mission;
+    if (!item || !setup) return;
+    this.updateMission({
+      ...($state.snapshot(setup) as MissionSetup),
+      aircraft: $state.snapshot(item.aircraft),
+      sizing_cl: null,
+    });
+    this.galleryOpen = false;
+    this.notify("info", this.t("toast.random.title"), this.t("toast.random", { n: index + 1 }));
   }
 
   /** Puts a recommended airfoil on every section of the wing. */

@@ -18,7 +18,9 @@ use crate::dto::{
 };
 use crate::engine::Engine;
 use crate::error::{AppError, ErrorKind};
-use crate::mission::{MissionView, RecommendEvent, RecommendRequest, RecommendResult};
+use crate::mission::{
+    MissionView, RandomAircraftView, RecommendEvent, RecommendRequest, RecommendResult,
+};
 use crate::model::{
     AirfoilId, MissionSetup, Modification, OptimizationSetup, PROJECT_FORMAT_VERSION, Settings,
     StoredOptimization, StoredPolar,
@@ -210,6 +212,18 @@ pub fn add_examples(engine: Shared<'_>) -> Result<Vec<AirfoilSummary>, AppError>
 #[specta::specta]
 pub fn get_catalogue(engine: Shared<'_>) -> Result<Vec<CatalogueEntry>, AppError> {
     engine.catalogue()
+}
+
+/// Random aircraft for the gallery: `count` (at most 60) from `seed`.
+#[tauri::command]
+#[specta::specta]
+pub async fn random_aircraft(
+    engine: Shared<'_>,
+    count: u32,
+    seed: u32,
+) -> Result<Vec<RandomAircraftView>, AppError> {
+    let engine = engine.inner().clone();
+    blocking(move || engine.random_aircraft(count, seed)).await
 }
 
 /// An example aircraft.

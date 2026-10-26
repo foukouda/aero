@@ -132,6 +132,16 @@ the viewer, README, NOTICE (three.js, AVL references), release.
   room ahead of the wing) with its volume coefficient. Project format 6 (a
   frozen format-5 project opens with two sections per surface). 12 more
   injected bugs caught.
+- P2c done on 2026-10-26 (requested: "a button that generates the number
+  of aircraft I ask, with random airfoils and shapes, see them all neatly
+  and click one to zoom"): `aero_aircraft::random` draws classic, canard,
+  flying-wing and three-surface aircraft (2 to 4 wing sections, gull and
+  polyhedral wings, airfoils by role from the catalogue), the canard, tail
+  and fin sized on their real arm for usual volume coefficients (0.3–0.6,
+  0.4–0.7, 0.025–0.045; smaller fins on canard aircraft); 2000 draws all
+  valid, reproducible by seed, 5 injected bugs caught. In the application a
+  gallery of up to 60 pictures rendered from the same angle with one WebGL
+  context, a large 3D view on click (previous, next, use this aircraft).
 
 ## Order and checks
 

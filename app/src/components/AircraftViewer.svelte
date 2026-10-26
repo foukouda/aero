@@ -11,6 +11,7 @@
   import type { Layout, MeshPart, PartKind } from "../lib/bindings";
   import { app } from "../lib/state.svelte";
   import { length } from "../lib/mission";
+  import { VIEW_DIRECTIONS, addLights, partMesh, type View } from "../lib/scene3d";
 
   interface Props {
     parts: MeshPart[];
@@ -23,7 +24,6 @@
 
   let { parts, layout, wingZ, selected, onselect }: Props = $props();
 
-  type View = "threeQuarter" | "top" | "front" | "side";
   const VIEWS: View[] = ["threeQuarter", "top", "front", "side"];
 
   let host: HTMLDivElement | undefined = $state();
@@ -40,19 +40,8 @@
   let framedRadius = 0;
   let view: View = "threeQuarter";
 
-  const COLORS: Record<PartKind, number> = {
-    wing: 0xc9d4e2,
-    canard: 0xc9d4e2,
-    tail: 0xb6c3d3,
-    fin: 0xb6c3d3,
-    fuselage: 0x98a6b8,
-  };
-
   scene.add(aircraft, markers);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 1.6));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.8);
-  sun.position.set(2, 4, -3);
-  scene.add(sun);
+  addLights(scene);
 
   function cssColor(name: string): string {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#2563eb";
@@ -78,40 +67,12 @@
     }
   }
 
-  /** The parts as three.js meshes, with their outline. */
+  /** The parts as three.js meshes, with their outline; the selected one
+   * tinted with the accent colour. */
   function buildAircraft() {
     disposeGroup(aircraft);
     const accent = new THREE.Color(cssColor("--accent"));
-    for (const part of parts) {
-      const p = part.positions;
-      const positions = new Float32Array(p.length);
-      for (let i = 0; i < p.length; i += 3) {
-        positions[i] = p[i + 1] ?? 0;
-        positions[i + 1] = p[i + 2] ?? 0;
-        positions[i + 2] = p[i] ?? 0;
-      }
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-      geometry.setIndex(part.indices.map((i) => i ?? 0));
-      geometry.computeVertexNormals();
-      const isSelected = part.kind === selected;
-      const material = new THREE.MeshStandardMaterial({
-        color: COLORS[part.kind],
-        roughness: 0.6,
-        metalness: 0.05,
-        side: THREE.DoubleSide,
-        emissive: isSelected ? accent : new THREE.Color(0x000000),
-        emissiveIntensity: isSelected ? 0.35 : 0,
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.userData.kind = part.kind;
-      const edges = new THREE.LineSegments(
-        new THREE.EdgesGeometry(geometry, 35),
-        new THREE.LineBasicMaterial({ color: isSelected ? accent : 0x5b6676, transparent: true, opacity: 0.55 }),
-      );
-      mesh.add(edges);
-      aircraft.add(mesh);
-    }
+    for (const part of parts) aircraft.add(partMesh(part, part.kind === selected ? accent : null));
   }
 
   function label(text: string): CSS2DObject {
@@ -192,14 +153,7 @@
     const s = sphere ?? new THREE.Box3().setFromObject(aircraft).getBoundingSphere(new THREE.Sphere());
     // The bounding sphere is generous for a flat aircraft: frame it tighter.
     const distance = (s.radius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2))) * 0.8;
-    // The nose points to −z (three.js), the right wing to +x.
-    const directions: Record<View, THREE.Vector3> = {
-      threeQuarter: new THREE.Vector3(-1.1, 0.75, -1.3),
-      top: new THREE.Vector3(0, 1, 0.0001),
-      front: new THREE.Vector3(0, 0.12, -1),
-      side: new THREE.Vector3(-1, 0.08, 0),
-    };
-    const dir = directions[v].normalize();
+    const dir = new THREE.Vector3(...VIEW_DIRECTIONS[v]).normalize();
     controls.target.copy(s.center);
     camera.position.copy(s.center).addScaledVector(dir, distance);
     camera.near = distance / 100;

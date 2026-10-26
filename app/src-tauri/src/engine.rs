@@ -27,7 +27,7 @@ use aero_geometry::{
 
 use aero_optim::{DesignSpace, Phase, Stop};
 
-use crate::catalogue::{self, CatalogueEntry, CatalogueSource};
+use crate::catalogue::{self, CatalogueCategory, CatalogueEntry, CatalogueSource};
 use crate::design::DesignSession;
 use crate::dto::{
     AirfoilSummary, AnalysisRequest, AnalysisView, BatchFailure, BatchImport, BatchResult,
@@ -37,10 +37,10 @@ use crate::dto::{
 };
 use crate::error::{AppError, ErrorKind};
 use crate::export;
-use crate::mission::MissionView;
 use crate::mission::{
     self, Candidate, CandidateSource, RecommendEvent, RecommendRequest, RecommendResult,
 };
+use crate::mission::{MissionView, RandomAircraftView};
 use crate::model::{
     AirfoilEntry, AirfoilId, AirfoilOrigin, MissionSetup, Modification, OperatingMode,
     OptimizationSetup, PolarData, Session, Settings, Shape, StoredOptimization, StoredPolar,
@@ -1401,6 +1401,34 @@ impl Engine {
         }
     }
 
+    /// Random aircraft with airfoils of the catalogue: cambered ones on
+    /// wings and canards, reflexed ones on flying wings, symmetric ones on
+    /// tails and fins.
+    pub fn random_aircraft(
+        &self,
+        count: u32,
+        seed: u32,
+    ) -> Result<Vec<RandomAircraftView>, AppError> {
+        let entries = catalogue::entries()?;
+        let keys = |categories: &[CatalogueCategory]| -> Vec<String> {
+            entries
+                .iter()
+                .filter(|e| categories.contains(&e.category))
+                .map(|e| format!("catalogue:{}", e.id))
+                .collect()
+        };
+        let pools = aero_aircraft::AirfoilPools {
+            lifting: keys(&[
+                CatalogueCategory::SlowFlight,
+                CatalogueCategory::Glider,
+                CatalogueCategory::Trainer,
+            ]),
+            reflexed: keys(&[CatalogueCategory::FlyingWing]),
+            symmetric: keys(&[CatalogueCategory::Aerobatic]),
+        };
+        crate::mission::random_views(count, seed, &pools, &|key| self.airfoil_by_key(key))
+    }
+
     /// What the "My aircraft" tab shows for `setup`.
     pub fn mission_view(&self, setup: &MissionSetup) -> Result<MissionView, AppError> {
         crate::mission::mission_view(setup, &|key| self.airfoil_by_key(key))
@@ -1750,6 +1778,31 @@ mod tests {
         assert!(e.airfoil_by_key("catalogue:s1223").is_some());
         assert!(e.airfoil_by_key("catalogue:nope").is_none());
         assert!(e.airfoil_by_key("nonsense").is_none());
+    }
+
+    #[test]
+    fn random_aircraft_for_the_gallery() {
+        let e = Engine::new();
+        let a = e.random_aircraft(12, 5).unwrap();
+        assert_eq!(a.len(), 12);
+        assert_eq!(
+            a,
+            e.random_aircraft(12, 5).unwrap(),
+            "same seed, same aircraft"
+        );
+        assert_ne!(a, e.random_aircraft(12, 6).unwrap());
+        for v in &a {
+            assert!(
+                v.parts
+                    .iter()
+                    .any(|p| p.kind == aero_aircraft::PartKind::Wing)
+            );
+            for s in &v.aircraft.wing.sections {
+                assert!(s.airfoil.starts_with("catalogue:"), "{}", s.airfoil);
+            }
+        }
+        assert_eq!(e.random_aircraft(500, 1).unwrap().len(), 60);
+        assert_eq!(e.random_aircraft(0, 1).unwrap().len(), 1);
     }
 
     #[test]

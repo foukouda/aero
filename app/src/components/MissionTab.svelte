@@ -6,6 +6,7 @@
   import NumberField from "./NumberField.svelte";
   import AircraftViewer from "./AircraftViewer.svelte";
   import SurfaceEditor from "./SurfaceEditor.svelte";
+  import AircraftGallery from "./AircraftGallery.svelte";
   import MissionResults from "./MissionResults.svelte";
   import type { MissionSetup, PartKind, SurfaceParams } from "../lib/bindings";
   import { defaultSurface } from "../lib/aircraft";
@@ -128,6 +129,7 @@
         {#each PRESETS as p (p.aircraft)}
           <button class="chip" onclick={() => app.applyPreset(p)}>{app.t(p.label)}</button>
         {/each}
+        <button class="chip random" onclick={() => app.drawGallery()}>🎲 {app.t("gallery.open")}</button>
       </div>
 
       <div class="sentence">
@@ -507,6 +509,7 @@
       <MissionResults />
     </div>
   </div>
+  <AircraftGallery />
 {/if}
 
 <style>
@@ -547,6 +550,11 @@
     border-radius: 999px;
     padding: 2px 10px;
     font-size: 12px;
+  }
+  .chip.random {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
   }
   .sentence {
     display: flex;

@@ -8,7 +8,8 @@
 //!   areas, mean aerodynamic chords and aspect ratios, the tail volume
 //!   coefficients and the position of the centre of gravity;
 //! - [`mesh`](mod@mesh): a triangle mesh of the aircraft, lofted from the real airfoil
-//!   coordinates, for a 3D view.
+//!   coordinates, for a 3D view;
+//! - [`random`]: random aircraft to explore shapes, valid and reproducible.
 //!
 //! Axes as in AVL: x from the nose towards the tail, y towards the right
 //! wing tip, z up; metres and degrees.
@@ -29,6 +30,7 @@ mod error;
 pub mod mesh;
 pub mod params;
 pub mod planform;
+pub mod random;
 
 pub use error::{AircraftError, Result};
 pub use mesh::{MeshOptions, MeshPart, PartKind, mesh};
@@ -37,3 +39,4 @@ pub use params::{
     TaperedParams,
 };
 pub use planform::{Layout, Planform, Section, Surface, SurfaceKind, layout, surfaces};
+pub use random::{AirfoilPools, Configuration, Rng, random_aircraft};
