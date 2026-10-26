@@ -1,0 +1,22 @@
+# XFOIL geometry-edit reference case (see ../README.md).
+description = "NACA 0012: trailing-edge gap and leading-edge radius"
+
+[airfoil]
+kind = "naca"
+code = "0012"
+
+[[edits]]
+name = "tgap"
+commands = ["TGAP 0.01 0.8 0"]
+
+[[edits]]
+name = "tgap_split"
+commands = ["TGAP 0.02 0.3 0.5"]
+
+[[edits]]
+name = "lera"
+commands = ["LERA 2.0 0.2"]
+
+[[edits]]
+name = "lera_small"
+commands = ["LERA 0.5 0.1"]

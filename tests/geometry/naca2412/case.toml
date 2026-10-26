@@ -1,0 +1,32 @@
+# XFOIL geometry-edit reference case: ../../reference/generate.py --root
+# tests/geometry runs each [[edits]] in its own XFOIL 6.996 session (GDES
+# commands, EXEC, SAVE); see ../README.md.
+description = "NACA 2412: flaps down and up, thickness and camber, high points, chained edits"
+
+[airfoil]
+kind = "naca"
+code = "2412"
+
+[[edits]]
+name = "flap_down"
+commands = ["FLAP 0.75 999 10", "0.5"]
+
+[[edits]]
+name = "flap_up"
+commands = ["FLAP 0.7 0.0 -15"]
+
+[[edits]]
+name = "flap_high_hinge"
+commands = ["FLAP 0.8 999 20", "0.8"]
+
+[[edits]]
+name = "tfac"
+commands = ["TFAC 1.2 0.8"]
+
+[[edits]]
+name = "high"
+commands = ["HIGH 0.4 0.3"]
+
+[[edits]]
+name = "chain"
+commands = ["TSET 0.14 0.03", "FLAP 0.7 999 5", "0.5"]

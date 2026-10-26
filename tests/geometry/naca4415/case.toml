@@ -1,0 +1,14 @@
+# XFOIL geometry-edit reference case (see ../README.md).
+description = "NACA 4415: set thickness and camber, large flap deflection"
+
+[airfoil]
+kind = "naca"
+code = "4415"
+
+[[edits]]
+name = "tset"
+commands = ["TSET 0.13 0.05"]
+
+[[edits]]
+name = "flap25"
+commands = ["FLAP 0.8 999 25", "0.3"]

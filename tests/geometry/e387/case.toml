@@ -1,0 +1,14 @@
+# XFOIL geometry-edit reference case (see ../README.md).
+description = "Eppler 387 (UIUC file): thickness high point, trailing-edge gap"
+
+[airfoil]
+kind = "file"
+file = "e387.dat"
+
+[[edits]]
+name = "high"
+commands = ["HIGH 0.35 0"]
+
+[[edits]]
+name = "tgap"
+commands = ["TGAP 0.005 0.5 -0.5"]

@@ -1,0 +1,18 @@
+# XFOIL geometry-edit reference case (see ../README.md).
+description = "Clark Y (UIUC file): flap, interpolation and extrapolation with the Eppler 387"
+
+[airfoil]
+kind = "file"
+file = "clarky.dat"
+
+[[edits]]
+name = "flap"
+commands = ["FLAP 0.72 999 12", "0.5"]
+
+[[edits]]
+name = "inte"
+interpolate = { with = "e387.dat", fraction = 0.3 }
+
+[[edits]]
+name = "inte_extra"
+interpolate = { with = "e387.dat", fraction = 1.2 }

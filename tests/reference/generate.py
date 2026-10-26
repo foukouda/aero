@@ -34,7 +34,16 @@ the points are ``CL`` commands, values are lift coefficients; outputs named
 ``_c<cl>``), ``type = 2 | 3`` (XFOIL ``TYPE``: Mach and Reynolds numbers
 varying with CL), ``damp2 = true`` (XFOIL ``DAMP``). A case-level
 ``hinge = [x, y]`` sets a flap hinge (``FNEW``, ``FMOM``) and adds the hinge
-moment to the polar files (``HINC``) of all its sessions.
+moment to the polar files (``HINC``) of all its sessions. A case-level
+``gdes = [...]`` applies XFOIL ``GDES`` commands to the airfoil (followed by
+``EXEC``) before it is paneled, e.g. a flap deflection.
+
+Geometry edits (``[[edits]]``), one session ``edit_<name>.in`` each, which
+saves the modified airfoil (``SAVE``, 7 significant digits) to
+``edit_<name>.dat``: ``commands = [...]`` are ``GDES`` commands (and the
+answers to their prompts), followed by ``EXEC``; ``interpolate = { with =
+"file.dat", fraction = f }`` runs ``INTE`` between the case's airfoil file
+and another file, followed by ``PCOP``.
 
 Usage:
     python3 generate.py --scripts-only          # only write the scripts
@@ -134,6 +143,10 @@ def geometry_lines(case: dict, save_panels: bool) -> list[str]:
         lines.append(f"LOAD {airfoil['file']}")
     else:
         raise SystemExit(f"unknown airfoil kind {kind!r}")
+
+    gdes = case.get("gdes", [])
+    if gdes:
+        lines += ["GDES", *gdes, "EXEC", ""]  # leave GDES with the new airfoil
 
     pan = case["paneling"]
     lines += [
@@ -242,6 +255,47 @@ def build_viscous_script(case: dict, run: dict, save_panels: bool) -> str:
     return "\n".join(lines)
 
 
+def edit_names(edit: dict) -> dict:
+    name = edit["name"]
+    return {
+        "script": f"edit_{name}.in",
+        "log": f"edit_{name}.log",
+        "dat": f"edit_{name}.dat",
+    }
+
+
+def build_edit_script(case: dict, edit: dict) -> str:
+    names = edit_names(edit)
+    airfoil = case["airfoil"]
+    lines: list[str] = ["PLOP", "G", ""]  # disable graphics
+    if airfoil["kind"] == "naca":
+        lines.append(f"NACA {airfoil['code']}")
+    elif airfoil["kind"] == "file":
+        lines.append(f"LOAD {airfoil['file']}")
+    else:
+        raise SystemExit(f"unsupported airfoil kind {airfoil['kind']!r} for edits")
+    if "commands" in edit:
+        lines += ["GDES", *edit["commands"], "EXEC", ""]
+    elif "interpolate" in edit:
+        if airfoil["kind"] != "file":
+            raise SystemExit("INTE needs the case airfoil as a file")
+        inte = edit["interpolate"]
+        lines += [
+            "INTE",
+            "F",
+            airfoil["file"],
+            "F",
+            inte["with"],
+            f"{float(inte['fraction'])}",
+            "interpolated",
+            "PCOP",
+        ]
+    else:
+        raise SystemExit(f"edit {edit['name']!r} has neither commands nor interpolate")
+    lines += [f"SAVE {names['dat']}", "", "QUIT", ""]
+    return "\n".join(lines)
+
+
 def inviscid_outputs(case: dict) -> list[str]:
     names = ["panels.dat", "xfoil.log"]
     for run in case.get("runs", []):
@@ -270,6 +324,9 @@ def viscous_outputs(run: dict, save_panels: bool) -> list[str]:
 def sessions(case: dict) -> list[tuple[str, str, str, list[str]]]:
     """XFOIL sessions of a case: (script name, log name, script, outputs)."""
     out = []
+    for edit in case.get("edits", []):
+        names = edit_names(edit)
+        out.append((names["script"], names["log"], build_edit_script(case, edit), [names["log"], names["dat"]]))
     if case.get("runs"):
         out.append(("xfoil.in", "xfoil.log", build_script(case), inviscid_outputs(case)))
     for run in case.get("viscous", []):
