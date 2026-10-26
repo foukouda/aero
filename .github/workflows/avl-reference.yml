@@ -1,0 +1,67 @@
+name: AVL reference data
+
+# Builds the official AVL 3.52 sources (gfortran, double precision, as in
+# Drela and Youngren's bin/Makefile.gfortranDP) and runs the sessions of
+# tests/avl. The outputs are uploaded as an artifact to be reviewed and
+# committed; this workflow never pushes anything. It also runs on a push to
+# an avl-reference-* branch, so that new cases can be generated before the
+# workflow is on the default branch.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "avl-reference-*"
+
+permissions:
+  contents: read
+
+env:
+  AVL_URL: https://web.mit.edu/drela/Public/web/avl/avl3.52.tgz
+  AVL_SHA256: 0b588ecea9222f5b625d0af0c87ae31daf3cdba1532cf0bbb36f93d6e854849b
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Fortran toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran libx11-dev xvfb
+
+      - name: Download AVL 3.52
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/avl.tgz" "$AVL_URL"
+          echo "$AVL_SHA256  $RUNNER_TEMP/avl.tgz" | sha256sum -c
+          mkdir "$RUNNER_TEMP/avl"
+          tar xzf "$RUNNER_TEMP/avl.tgz" -C "$RUNNER_TEMP/avl"
+          echo "AVL_DIR=$(find "$RUNNER_TEMP/avl" -maxdepth 1 -mindepth 1 -type d | head -1)" >> "$GITHUB_ENV"
+
+      - name: Build plotlib (double precision)
+        run: |
+          cd "$AVL_DIR/plotlib"
+          cp config.make.gfortranDP config.make
+          make -f Makefile.all lib
+
+      - name: Build EISPACK (double precision)
+        run: |
+          cd "$AVL_DIR/eispack"
+          make -f Makefile.gfortran DP=-fdefault-real-8
+
+      - name: Build AVL (double precision)
+        run: |
+          cd "$AVL_DIR/bin"
+          make -f Makefile.gfortranDP avl PLTLIB=-lX11
+          ls -l avl
+
+      - name: Run the cases
+        run: xvfb-run -a python3 tests/avl/generate.py --avl "$AVL_DIR/bin/avl"
+
+      - name: Upload outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: avl-outputs
+          path: tests/avl/

@@ -1,0 +1,13 @@
+OPER
+A A 2.0
+B B 4.0
+R R 0.04
+P P 0.03
+Y Y -0.02
+X
+MRF
+FT ft_a2_b4_rates.txt
+FS fs_a2_b4_rates.txt
+ST st_a2_b4_rates.txt
+
+QUIT

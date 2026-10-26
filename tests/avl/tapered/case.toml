@@ -1,0 +1,16 @@
+# Two-panel tapered wing (sweep, dihedral, washout, NACA 2412 to 0012),
+# whole model (YDUPLICATE, no symmetry plane), Mach 0.3, per-section
+# spanwise spacing.
+geometry = "tapered.avl"
+
+[[runs]]
+name = "a5"
+alpha = 5.0
+
+[[runs]]
+name = "a2_b4_rates"
+alpha = 2.0
+beta = 4.0
+roll = 0.04
+pitch = 0.03
+yaw = -0.02

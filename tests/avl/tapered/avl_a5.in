@@ -1,0 +1,13 @@
+OPER
+A A 5.0
+B B 0.0
+R R 0.0
+P P 0.0
+Y Y 0.0
+X
+MRF
+FT ft_a5.txt
+FS fs_a5.txt
+ST st_a5.txt
+
+QUIT

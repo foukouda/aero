@@ -142,6 +142,25 @@ the viewer, README, NOTICE (three.js, AVL references), release.
   valid, reproducible by seed, 5 injected bugs caught. In the application a
   gallery of up to 60 pictures rendered from the same angle with one WebGL
   context, a large 3D view on click (previous, next, use this aircraft).
+- P3 done on 2026-10-26: crate `aero-vlm`, a port of AVL 3.52's vortex
+  lattice — spacings, camber slopes from NACA digits or airfoil
+  coordinates, strips and normals, mirror images and the `y = 0` symmetry
+  plane, Prandtl–Glauert, vortex cores between components, `NOWAKE` and
+  `NOLOAD` surfaces, linearized control deflections, Kutta–Joukowski forces
+  by strip, surface and total, Trefftz-plane drag and span efficiency,
+  stability and control derivatives, neutral point — and a reader of AVL
+  geometry files. The lattice is factored once with the unit solutions;
+  a flow condition then costs a time proportional to its size. Left out:
+  bodies, ground effect, design variables, `CDCL` polars (the profile drag
+  will come from the 2D viscous polars, P4). AVL 3.52 built in CI
+  (`avl-reference` workflow) on five cases and nine runs (`tests/avl`):
+  every printed total, surface and strip force and derivative agrees within
+  10⁻¹² (mostly 10⁻¹⁵). Independent checks: elliptic wing (e = 1.00,
+  elliptic loading, CLα within 2 % of Helmbold), rectangular wings tending
+  to the lifting line as the aspect ratio grows, half model = whole model,
+  every derivative = finite differences. One AVL quirk kept and documented:
+  its alpha derivatives turn non-zero roll and yaw rates with the wrong sign
+  (no effect in steady flight). 33 injected bugs all caught.
 
 ## Order and checks
 

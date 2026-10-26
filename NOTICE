@@ -27,6 +27,22 @@ the same terms: GPL-2.0-or-later. See the LICENSE file.
 
 Each ported Rust function documents the XFOIL routine it derives from.
 
+The vortex lattice of crates/vlm is a Rust port of algorithms from AVL 3.52
+(https://web.mit.edu/drela/Public/web/avl/), Copyright (C) 2002 Mark Drela
+and Harold Youngren, also distributed under the GNU General Public License,
+version 2 or later:
+
+  - amake.f    (MAKESURF, SDUPL, ENCALC)
+  - aic.f      (VVOR, VORVELC)
+  - asetup.f   (SETUP, GUCALC, GAMSUM, VELSUM)
+  - aero.f     (AERO, SFFORC, VINFAB)
+  - atpforc.f  (TPFORC)
+  - aoutput.f  (DERMATS)
+  - sgutil.f   (AKIMA, SPACER, CSPACER, NRMLIZ)
+  - airutil.f  (GETCAM, LEFIND, NORMIT, READBL)
+  - spline.f   (SPLIND, SEGSPL, SEVAL, DEVAL, D2VAL, SINVRT, SCALC)
+  - ainput.f   (the geometry file format)
+
 Airfoil coordinates of the UIUC Airfoil Coordinates Database (Michael
 Selig, University of Illinois at Urbana-Champaign,
 https://m-selig.ae.illinois.edu/ads/coord_database.html) are used as test
@@ -39,7 +55,8 @@ files are unchanged apart from line endings; the airfoils remain the work
 of their designers.
 
 The reference results in tests/ were computed with XFOIL 6.996, built from
-the official sources by the xfoil-reference workflow; XFOIL itself is not
+the official sources by the xfoil-reference workflow, and in tests/avl with
+AVL 3.52, built by the avl-reference workflow; neither program is
 distributed with this project.
 
 The wind-tunnel measurements in tests/wind_tunnel come from NASA TM-4062

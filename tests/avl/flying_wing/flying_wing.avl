@@ -1,0 +1,47 @@
+Swept flying wing with winglets and elevons
+! Mach
+0.1
+! iYsym  iZsym  Zsym
+0  0  0.0
+! Sref  Cref  Bref
+0.514  0.27  2.0
+! Xref  Yref  Zref
+0.2  0.0  0.0
+!
+!==============================================================
+SURFACE
+Wing
+! Nchord  Cspace  (spanwise spacing given per section)
+10  2.0
+YDUPLICATE
+0.0
+!
+SECTION
+! Xle  Yle  Zle  Chord  Ainc  Nspan  Sspace
+0.0  0.0  0.0  0.35  1.0  10  1.0
+AFILE
+mh45.dat
+!
+SECTION
+0.28  0.6  0.02  0.24  -0.5  7  -2.0
+AFILE
+mh45.dat
+CONTROL
+! name  gain  Xhinge  XYZhvec  SgnDup
+elevator  1.0  0.8  0.0 0.0 0.0  1.0
+CONTROL
+aileron  1.0  0.8  0.0 0.0 0.0  -1.0
+!
+SECTION
+0.47  1.0  0.04  0.16  -2.5  3  0.0
+AFILE
+mh45.dat
+CONTROL
+elevator  1.0  0.8  0.0 0.0 0.0  1.0
+CONTROL
+aileron  1.0  0.8  0.0 0.0 0.0  -1.0
+!
+SECTION
+0.55  1.04  0.2  0.09  0.0
+NACA
+0008

@@ -1,0 +1,23 @@
+[package]
+name = "aero-vlm"
+description = "The vortex lattice method of AVL (Drela and Youngren) in Rust: lifting surfaces, forces, induced drag and stability derivatives"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aero_vlm"
+
+[dependencies]
+faer.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+toml.workspace = true
+
+[lints]
+workspace = true

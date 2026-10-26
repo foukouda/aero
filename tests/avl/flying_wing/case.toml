@@ -1,0 +1,15 @@
+# Tailless swept wing (MH 45 reflexed airfoil from a file), washout, a
+# winglet as a last near-vertical panel, elevons as two controls (elevator
+# deflected alike on both sides, aileron opposite), sine chordwise spacing.
+geometry = "flying_wing.avl"
+
+[[runs]]
+name = "a2"
+alpha = 2.0
+
+[[runs]]
+name = "a4_b2_ctl"
+alpha = 4.0
+beta = 2.0
+roll = -0.03
+controls = [2.0, 3.0]

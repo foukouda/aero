@@ -1,0 +1,16 @@
+# Classic layout: E387 wing (AFILE) with an interior section matched by the
+# surface spacing, horizontal tail moved by TRANSLATE and ANGLE with an
+# elevator, fin on the plane of symmetry with a rudder (default hinge line).
+geometry = "wing_tail.avl"
+
+[[runs]]
+name = "a3"
+alpha = 3.0
+
+[[runs]]
+name = "a5_b3_ctl"
+alpha = 5.0
+beta = 3.0
+roll = 0.02
+yaw = 0.01
+controls = [-4.0, 2.0]

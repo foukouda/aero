@@ -1,0 +1,27 @@
+TOT
+VERSION 1.0
+Vortex Lattice Output -- Total Forces
+Wing with tail, elevator, fin and rudder                    
+     5      | # surfaces
+    50      | # strips
+   356      | # vortices
+  5.350000000000000E-01  2.700000000000000E-01  2.000000000000000E+00      | Sref, Cref, Bref
+  8.000000000000000E-02  0.000000000000000E+00  0.000000000000000E+00      | Xref, Yref, Zref
+Standard axis orientation,  X fwd, Z down         
+ -unnamed-                              
+  3.000000000000000E+00 -0.000000000000000E+00 -0.000000000000000E+00      | Alpha, pb/2V, p'b/2V
+  0.000000000000000E+00  0.000000000000000E+00      | Beta, qc/2V
+  0.000000000000000E+00 -0.000000000000000E+00 -0.000000000000000E+00      | Mach, rb/2V, r'b/2V
+  1.663694725527280E-02 -1.429767372747681E-17 -1.425418371216758E-17      | CXtot, Cltot, Cl'tot
+ -3.046721976951626E-18  1.132227321866699E-03      | CYtot, Cmtot
+ -5.732757651678264E-01  4.565799899472093E-19  1.204236689516344E-18      | CZtot, Cntot, Cn'tot
+  5.733608211991869E-01      | CLtot
+  1.338878846369405E-02      | CDtot
+  0.000000000000000E+00  1.338878846369405E-02      | CDvis, CDind
+  5.730090886557402E-01  1.408293680082679E-02  1.082273436222043E-18  9.925987150220114E-01      | Trefftz Plane: CLff, CDff, CYff, e
+CONTROL
+     2
+  0.000000000000000E+00  elevator        
+  0.000000000000000E+00  rudder          
+DESIGN
+     0

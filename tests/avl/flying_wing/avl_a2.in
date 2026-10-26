@@ -1,0 +1,13 @@
+OPER
+A A 2.0
+B B 0.0
+R R 0.0
+P P 0.0
+Y Y 0.0
+X
+MRF
+FT ft_a2.txt
+FS fs_a2.txt
+ST st_a2.txt
+
+QUIT

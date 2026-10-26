@@ -1,0 +1,10 @@
+# Canard layout on the y = 0 wall plane: canard with inline AIRFOIL
+# coordinates, SCALE, TRANSLATE, ANGLE and CLAF; SD7037 wing from a file
+# (the tip with an x/c range), and a strake with NOWAKE and NOLOAD sharing
+# the wing's component.
+geometry = "canard.avl"
+
+[[runs]]
+name = "a4_q"
+alpha = 4.0
+pitch = 0.02

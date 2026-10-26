@@ -1,0 +1,12 @@
+# Flat rectangular wing of aspect ratio 10, half model on the y = 0 wall
+# plane; cosine chordwise spacing, -sine spanwise spacing (fine at the tip).
+geometry = "rect.avl"
+
+[[runs]]
+name = "a4"
+alpha = 4.0
+
+[[runs]]
+name = "a-3_q"
+alpha = -3.0
+pitch = 0.05

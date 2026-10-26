@@ -1,0 +1,33 @@
+Tapered swept wing with dihedral and twist
+! Mach
+0.3
+! iYsym  iZsym  Zsym
+0  0  0.0
+! Sref  Cref  Bref
+2.625  0.45  6.0
+! Xref  Yref  Zref
+0.25  0.0  0.0
+!
+!==============================================================
+SURFACE
+Wing
+! Nchord  Cspace  (spanwise spacing given per section)
+10  1.0
+YDUPLICATE
+0.0
+!
+SECTION
+! Xle  Yle  Zle  Chord  Ainc  Nspan  Sspace
+0.0  0.0  0.0  0.6  2.0  8  -1.5
+NACA
+2412
+!
+SECTION
+0.4  1.5  0.13  0.45  0.0  7  1.0
+NACA
+2412
+!
+SECTION
+0.9  3.0  0.35  0.25  -2.0
+NACA
+0012

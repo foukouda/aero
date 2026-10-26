@@ -1,0 +1,27 @@
+TOT
+VERSION 1.0
+Vortex Lattice Output -- Total Forces
+Swept flying wing with winglets and elevons                 
+     2      | # surfaces
+    40      | # strips
+   400      | # vortices
+  5.140000000000000E-01  2.700000000000000E-01  2.000000000000000E+00      | Sref, Cref, Bref
+  2.000000000000000E-01  0.000000000000000E+00  0.000000000000000E+00      | Xref, Yref, Zref
+Standard axis orientation,  X fwd, Z down         
+ -unnamed-                              
+  4.000000000000000E+00 -2.992692150779473E-02 -3.000000000000000E-02      | Alpha, pb/2V, p'b/2V
+  2.000000000000000E+00  0.000000000000000E+00      | Beta, qc/2V
+  1.000000000000000E-01 -2.092694212323759E-03 -0.000000000000000E+00      | Mach, rb/2V, r'b/2V
+  2.157109492297141E-02 -2.355374580563264E-03 -2.195521772132639E-03      | CXtot, Cltot, Cl'tot
+ -7.238462954286919E-03 -1.196199618764272E-01      | CYtot, Cmtot
+ -3.990248654891462E-01  2.209332353845715E-03  2.368253156359044E-03      | CZtot, Cntot, Cn'tot
+  3.995575844883604E-01      | CLtot
+  6.316018732848267E-03      | CDtot
+  0.000000000000000E+00  6.316018732848267E-03      | CDvis, CDind
+  3.994173748235413E-01  5.815773280313749E-03 -4.896236840209151E-03  1.122186266282160E+00      | Trefftz Plane: CLff, CDff, CYff, e
+CONTROL
+     2
+  2.000000000000000E+00  elevator        
+  3.000000000000000E+00  aileron         
+DESIGN
+     0

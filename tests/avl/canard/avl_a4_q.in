@@ -1,0 +1,13 @@
+OPER
+A A 4.0
+B B 0.0
+R R 0.0
+P P 0.02
+Y Y 0.0
+X
+MRF
+FT ft_a4_q.txt
+FS fs_a4_q.txt
+ST st_a4_q.txt
+
+QUIT

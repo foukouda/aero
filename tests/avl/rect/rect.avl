@@ -1,0 +1,22 @@
+Rectangular flat wing
+! Mach
+0.0
+! iYsym  iZsym  Zsym
+1  0  0.0
+! Sref  Cref  Bref
+10.0  1.0  10.0
+! Xref  Yref  Zref
+0.25  0.0  0.0
+!
+!==============================================================
+SURFACE
+Wing
+! Nchord  Cspace  Nspan  Sspace
+8  1.0  20  -2.0
+!
+SECTION
+! Xle  Yle  Zle  Chord  Ainc
+0.0  0.0  0.0  1.0  0.0
+!
+SECTION
+0.0  5.0  0.0  1.0  0.0

@@ -1,0 +1,15 @@
+OPER
+A A 5.0
+B B 3.0
+R R 0.02
+P P 0.0
+Y Y 0.01
+D1 D1 -4.0
+D2 D2 2.0
+X
+MRF
+FT ft_a5_b3_ctl.txt
+FS fs_a5_b3_ctl.txt
+ST st_a5_b3_ctl.txt
+
+QUIT

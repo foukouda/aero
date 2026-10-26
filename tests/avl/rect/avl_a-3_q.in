@@ -1,0 +1,13 @@
+OPER
+A A -3.0
+B B 0.0
+R R 0.0
+P P 0.05
+Y Y 0.0
+X
+MRF
+FT ft_a-3_q.txt
+FS fs_a-3_q.txt
+ST st_a-3_q.txt
+
+QUIT

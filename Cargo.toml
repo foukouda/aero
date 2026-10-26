@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/geometry", "crates/foil2d", "crates/optim", "crates/mission", "crates/aircraft", "app/src-tauri"]
+members = ["crates/geometry", "crates/foil2d", "crates/optim", "crates/mission", "crates/aircraft", "crates/vlm", "app/src-tauri"]
 
 [workspace.package]
 version = "0.2.0"
@@ -15,6 +15,7 @@ aero-foil2d = { path = "crates/foil2d" }
 aero-optim = { path = "crates/optim" }
 aero-mission = { path = "crates/mission" }
 aero-aircraft = { path = "crates/aircraft" }
+aero-vlm = { path = "crates/vlm" }
 faer = { version = "0.24", default-features = false, features = ["std", "linalg"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
@@ -50,6 +51,9 @@ opt-level = 2
 opt-level = 2
 
 [profile.dev.package.aero-mission]
+opt-level = 2
+
+[profile.dev.package.aero-vlm]
 opt-level = 2
 
 [profile.dev.package.faer]
