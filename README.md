@@ -5,20 +5,22 @@ A modern rewrite of [XFOIL](https://web.mit.edu/drela/Public/web/xfoil/)
 parallel-friendly airfoil analysis — and later optimization — toolkit that is
 usable as a library.
 
-> **Status:** step 1 — geometry, XFOIL-compatible inviscid solver and desktop
-> application. Viscous analysis, shape optimization, 3D methods, Python
-> bindings and WebAssembly come later; the architecture is prepared for them.
+> **Status:** step 2 — geometry, XFOIL-compatible inviscid and viscous
+> solvers (boundary layer, transition, drag, stall) and desktop application.
+> Shape optimization, 3D methods, Python bindings and WebAssembly come later;
+> the architecture is prepared for them.
 
 ## Workspace layout
 
 ```
 crates/
   geometry/       aero-geometry: airfoils, splines, .dat I/O, NACA/CST, PANGEN paneling
-  foil2d/         aero-foil2d:   2D solvers (XFOIL inviscid panel method; viscous later)
+  foil2d/         aero-foil2d:   2D solvers (XFOIL panel method and viscous-inviscid interaction)
 app/
   src-tauri/      aero-app: thin Tauri layer (commands -> Tauri-free engine -> crates)
   src/            Svelte 5 + TypeScript frontend (uPlot charts)
-tests/reference/  XFOIL 6.996 reference results used for validation
+tests/reference/  XFOIL 6.996 inviscid reference results (tests/validation: random set)
+tests/viscous/    XFOIL 6.996 viscous reference results (tests/viscous_validation: random set)
 docs/             specifications and design notes
 ```
 
@@ -56,9 +58,15 @@ panel nodes and overlays, geometric properties, XFOIL `PANGEN` paneling
 controls with immediate preview, single angle-of-attack analysis driven by a
 live slider (Cp with −Cp up, Cl, Cm, Cp min, optional Mach number with the
 Kármán–Tsien correction and a clear error beyond the critical Mach number),
-angle-of-attack sweeps with progress and cancellation (Cl(α), Cm(α) for
-several airfoils), exports (`.dat`, CSV, PNG, SVG), JSON project files with
-a format version, light and dark themes.
+viscous analysis as in XFOIL's `VISC` mode (Reynolds number, Ncrit and
+trips per surface; Cl, Cd, L/D, Cm, transition points, pressure and friction
+drag; viscous and inviscid Cp; boundary-layer plots of δ*, θ, H, Cf, N and
+Ue on both surfaces and the wake), angle-of-attack sweeps with progress and
+cancellation (Cl(α), drag polar Cl(Cd), Cm(α) and transition points for
+several airfoils; viscous sweeps warm-start each point from the previous one,
+as XFOIL's `ASEQ`), exports (`.dat`, CSV of polars, Cp and boundary layer,
+PNG, SVG), JSON project files with a format version (older projects are
+migrated), light and dark themes, and a guided tour in English and French.
 
 ## Libraries and tests
 
@@ -74,14 +82,26 @@ types by `tauri-specta`; a test fails when they are out of date. Regenerate
 them with `npm run bindings` in `app/`.
 
 ```rust
-use aero_foil2d::inviscid::{InviscidOptions, InviscidSolver, OperatingPoint};
+use aero_foil2d::inviscid::{AlphaSweep, InviscidOptions, InviscidSolver, OperatingPoint};
+use aero_foil2d::viscous::{ViscousOptions, ViscousSolver};
 use aero_geometry::{NacaOptions, PanelingOptions, naca};
 
 let airfoil = naca("2412", &NacaOptions::default())?.paneled(&PanelingOptions::default())?;
 let solver = InviscidSolver::new(&airfoil, &InviscidOptions::default())?; // factorized once
 let solution = solver.solve(OperatingPoint::incompressible(4.0))?;        // O(N) per alpha
 println!("Cl = {:.4}, Cm = {:.4}", solution.cl, solution.cm);
+
+// Viscous analysis (XFOIL VISC): boundary layer, transition, drag.
+let options = ViscousOptions { reynolds: 1e6, ncrit: [9.0, 9.0], ..ViscousOptions::default() };
+let viscous = ViscousSolver::new(&airfoil, &options)?;
+let s = viscous.solve(4.0)?; // fresh boundary layer (XFOIL INIT + ALFA)
+println!("Cl = {:.4}, Cd = {:.5}, x_tr = {:.3} / {:.3}", s.cl, s.cd, s.transition[0].x, s.transition[1].x);
+let polar = viscous.sweep(&AlphaSweep { start_deg: -4.0, end_deg: 14.0, step_deg: 0.5 })?; // as ASEQ
 ```
+
+`ViscousSolver::session()` gives full control over the warm starts (XFOIL's
+`ALFA` without `INIT`) and can record XFOIL's console messages (iteration
+history, transition points) for diagnosis.
 
 ## Validation
 
@@ -115,6 +135,51 @@ lift angle, exact solutions for the circle, the ellipse and a Kármán–Trefftz
 airfoil (lift within 10⁻⁴, second-order convergence of Cp), and convergence
 of the lift with the number of panels.
 
+### Viscous analysis
+
+The viscous solver is a line-by-line port of XFOIL 6.996's
+viscous–inviscid interaction (`xblsys.f`, `xbl.f`, `xsolve.f`, the wake and
+coupling routines of `xpanel.f`, `VISCAL`): two-equation integral boundary
+layer with Drela's closures, eᴺ transition (free or tripped), lag-dissipation
+turbulence model, wake, source influence matrix and XFOIL's global Newton
+system and block solver, with the same relaxations, limits and sequence
+semantics. It is checked against XFOIL 6.996 on ten reference cases
+(`tests/viscous`, `crates/foil2d/tests/xfoil_viscous.rs`): NACA 0012 (blunt
+and sharp TE, trips, 240 nodes), NACA 2412 (Mach 0.3, different Ncrit on each
+side), 4415, 23012, Clark Y and Eppler 387 (laminar separation bubbles), at
+Reynolds numbers from 2·10⁵ to 6·10⁶, as polars (warm-started sequences) and
+single points:
+
+- the same points converge and fail to converge as in XFOIL (156 converged
+  points);
+- forces, transition points and x, Cp, θ, δ*, Cf and N or √Cτ at every
+  boundary-layer station agree with XFOIL's full-precision dump files to
+  10⁻¹⁰ on most points (10⁻⁵ at worst, on a point that needs all its Newton
+  iterations);
+- XFOIL's console output — the rms change of every Newton iteration, the
+  transition points, the marching failures — is reproduced line by line: six
+  of the ten sessions are identical over their whole length (thousands of
+  lines), the four others until a last printed digit late in a sequence.
+
+An **extended viscous validation** (`tests/viscous_validation`,
+`crates/foil2d/tests/xfoil_viscous_validation.rs`, [report](tests/viscous_validation/REPORT.md))
+runs 50 random analyses (UIUC and NACA airfoils, Re from 10⁵ to 10⁷, Ncrit
+per side, trips, Mach up to 0.4). XFOIL hangs on one of them, ours
+terminates. 34 of the 49 others agree with XFOIL on every converged point. In
+the 15 remaining ones the iterations go through unstable phases (separated
+flows, points that do not converge), where last-bit differences between two
+implementations (math libraries, operation order) are amplified until the
+codes follow different paths: for each of them our console log is identical
+to XFOIL's up to a first difference that is a last printed digit or no larger
+than the change of that line when our own Reynolds number is perturbed by
+10⁻¹⁵ to 10⁻¹¹. This log comparison found a real porting error (the handling
+of a NaN residual), now fixed. Mutation testing — 18 deliberately injected
+bugs: closure and transition constants, marching parameters, relaxation
+limits, a sign in the Newton system, the block-solver threshold, wake
+geometry and sources, the drag formula, the NaN handling — confirmed that
+every one of them makes the validation fail (two are caught only by the
+random set).
+
 ## Performance
 
 `cargo bench -p aero-foil2d` (NACA 2412, release build, one core of a
@@ -127,6 +192,8 @@ desktop CPU):
 | One angle of attack (Cp, Cl, Cm, Cp min) | 2.6 µs |
 | Sweep of 101 angles of attack | 0.27 ms |
 | `PANGEN` repaneling, 160 nodes | 0.23 ms |
+| Viscous point from a fresh boundary layer, 160 nodes | 20 ms |
+| Viscous sweep, 33 warm-started points | 0.41 s |
 
 ## License
 

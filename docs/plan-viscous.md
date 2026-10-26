@@ -52,3 +52,29 @@ test fails.
   CL–CD and transition plots, BL plots (δ*, θ, Cf, H, N), CSV export,
   guided tour update.
 - **V7** — benchmarks, README and documentation.
+
+## Outcome
+
+All sub-steps are done.
+
+- Modules: `viscous::closure`, `blsys` (interval systems), `panels` (wake,
+  `DIJ`), `session` (XFOIL session state and bookkeeping), `march`
+  (`MRCHUE`, `MRCHDU`), `newton` (`SETBL`, `BLSOLV`, `UPDATE`), `viscal`,
+  `solver` (public API: `ViscousSolver`, `ViscousSession`, sweeps).
+- Validation: ten reference cases (dump files, polars, console logs) and 50
+  random analyses in `tests/viscous_validation` (see its `REPORT.md`).
+  Comparing XFOIL's console output line by line located the only porting
+  error found (a NaN residual must take the extrapolation branch of the
+  marching routines, as XFOIL's `IF(DMAX .LE. 0.1)` does).
+- Divergences of iteration paths in unstable phases are accepted only when
+  our own computation shows the same sensitivity to perturbations of the
+  Reynolds number of 1e-15 to 1e-11.
+- Decisions taken during the port:
+  - `allow_supercritical` of the inviscid options also governs the viscous
+    solver; with it, a Kármán–Tsien breakdown is flagged
+    (`compressibility_breakdown`) instead of refused, as XFOIL warns and
+    goes on;
+  - single points start from a fresh boundary layer (XFOIL `INIT` +
+    `ALFA`); `ViscousSession` gives XFOIL's warm starts;
+  - the application stores tagged polars (project format 2; format 1
+    projects are migrated on load).
