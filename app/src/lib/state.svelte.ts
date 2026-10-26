@@ -6,6 +6,7 @@ import * as nativeDialogs from "@tauri-apps/plugin-dialog";
 import { call, CommandError, commands, errorTitle } from "./api";
 import type {
   AnalysisRequest,
+  BatchFailure,
   AnalysisView,
   BestDesign,
   Evaluation,
@@ -124,6 +125,13 @@ function initialTourLang(): TourLang {
 
 function baseName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
+}
+
+/** "a (why); b (why); and 3 more" for a toast. */
+function failureList(failed: BatchFailure[], shown = 3): string {
+  const head = failed.slice(0, shown).map((f) => `${f.item} (${f.message})`);
+  const more = failed.length > shown ? `; and ${failed.length - shown} more` : "";
+  return head.join("; ") + more;
 }
 
 class AppState {
@@ -316,30 +324,47 @@ class AppState {
 
   // --------------------------------------------------------------- library
 
-  async createNaca(designation: string, closedTe: boolean) {
+  /** Generates one NACA airfoil, or several from a list ("0012, 2412 4415"). */
+  async createNaca(designations: string, closedTe: boolean) {
     await this.guard(async () => {
-      const a = await call(commands.createNaca(designation, closedTe));
-      this.dirty = true;
-      this.selectedId = a.id;
+      const r = await call(commands.createNacaSeries(designations, closedTe));
+      if (r.added.length) {
+        this.dirty = true;
+        this.selectedId = r.added[r.added.length - 1].id;
+      }
+      if (r.added.length > 1) this.notify("info", `${r.added.length} airfoils generated`, r.added.map((a) => a.name).join(", "));
+      if (r.failed.length) this.notify("error", "Not generated", failureList(r.failed));
       await this.refresh();
     });
   }
 
+  /** Imports coordinate files and folders; opens project files. */
   async importPaths(paths: string[]) {
+    const others: string[] = [];
     for (const path of paths) {
-      if (/\.(aero|json)$/i.test(path)) {
-        await this.openProjectPath(path);
-        continue;
-      }
-      await this.guard(async () => {
-        const r = await call(commands.importAirfoil(path));
-        this.dirty = true;
-        this.selectedId = r.airfoil.id;
-        if (r.warnings.length) {
-          this.notify("warning", `Imported ${r.airfoil.name}`, r.warnings.join("; "));
-        }
-      });
+      if (/\.(aero|json)$/i.test(path)) await this.openProjectPath(path);
+      else others.push(path);
     }
+    if (others.length === 0) return;
+    await this.guard(async () => {
+      const r = await call(commands.importPaths(others));
+      const added = r.imported.map((i) => i.airfoil);
+      if (added.length) {
+        this.dirty = true;
+        this.selectedId = added[added.length - 1].id;
+      }
+      if (added.length === 1 && r.imported[0].warnings.length) {
+        this.notify("warning", `Imported ${added[0].name}`, r.imported[0].warnings.join("; "));
+      } else if (added.length > 1) {
+        const warned = r.imported.filter((i) => i.warnings.length).length;
+        this.notify(
+          "info",
+          `${added.length} airfoils imported`,
+          warned ? `${warned} with warnings (duplicate points removed, reordered…).` : added.map((a) => a.name).join(", "),
+        );
+      }
+      if (r.failed.length) this.notify("error", `${r.failed.length} file(s) not imported`, failureList(r.failed));
+    });
     await this.refresh();
   }
 
@@ -347,6 +372,50 @@ class AppState {
     const picked = await dialogs.open({ multiple: true, filters: DAT_FILTERS });
     if (!picked) return;
     await this.importPaths(Array.isArray(picked) ? picked : [picked]);
+  }
+
+  /** Imports every coordinate file of a folder. */
+  async importFolderDialog() {
+    const picked = await dialogs.open({ directory: true, multiple: false });
+    if (typeof picked === "string") await this.importPaths([picked]);
+  }
+
+  /** Adds a set of classic airfoils to compare. */
+  async addExamples() {
+    await this.guard(async () => {
+      const added = await call(commands.addExamples());
+      this.dirty = true;
+      this.selectedId = added[0]?.id ?? this.selectedId;
+      this.notify("info", `${added.length} example airfoils added`, added.map((a) => a.name).join(", "));
+      await this.refresh();
+    });
+  }
+
+  /** Shows or hides every airfoil. */
+  async setAllVisible(visible: boolean) {
+    const ids = this.airfoils.filter((a) => a.visible !== visible).map((a) => a.id);
+    if (ids.length === 0) return;
+    await this.guard(async () => {
+      await call(commands.setAirfoilsVisible(ids, visible));
+      this.dirty = true;
+      await this.refresh();
+    });
+  }
+
+  /** Deletes the hidden airfoils, after confirmation. */
+  async deleteHidden() {
+    const hidden = this.airfoils.filter((a) => !a.visible);
+    if (hidden.length === 0) return;
+    const confirmed = await dialogs.ask(`Delete the ${hidden.length} hidden airfoil(s) and their results?`, {
+      title: "Delete hidden airfoils",
+      kind: "warning",
+    });
+    if (!confirmed) return;
+    await this.guard(async () => {
+      await call(commands.deleteAirfoils(hidden.map((a) => a.id)));
+      this.dirty = true;
+      await this.refresh();
+    });
   }
 
   async duplicate(id: number) {

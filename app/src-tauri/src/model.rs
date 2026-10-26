@@ -31,8 +31,9 @@ pub const PROJECT_FORMAT_VERSION: u32 = 3;
 pub const PROJECT_FORMAT: &str = "aero-project";
 
 /// Plot colors assigned to new airfoils, in order.
-const PALETTE: [&str; 8] = [
+const PALETTE: [&str; 16] = [
     "#2563eb", "#dc2626", "#16a34a", "#d97706", "#7c3aed", "#0891b2", "#db2777", "#65a30d",
+    "#4f46e5", "#ea580c", "#0d9488", "#9333ea", "#be123c", "#15803d", "#a16207", "#0369a1",
 ];
 
 /// Where an airfoil comes from.

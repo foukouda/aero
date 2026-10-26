@@ -27,8 +27,9 @@ use aero_geometry::{
 use aero_optim::{DesignSpace, Phase, Stop};
 
 use crate::dto::{
-    AirfoilSummary, AnalysisRequest, AnalysisView, BestDesign, GeometryView, ImportResult,
-    OptimizationEvent, OptimizeRequest, SessionView, SweepEvent, SweepRequest, ViscousView,
+    AirfoilSummary, AnalysisRequest, AnalysisView, BatchFailure, BatchImport, BatchResult,
+    BestDesign, GeometryView, ImportResult, OptimizationEvent, OptimizeRequest, SessionView,
+    SweepEvent, SweepRequest, ViscousView,
 };
 use crate::error::{AppError, ErrorKind};
 use crate::export;
@@ -39,6 +40,48 @@ use crate::model::{
 
 /// Largest accepted coordinate file, in bytes.
 const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
+
+/// Extensions of the files read when a folder is imported.
+const COORDINATE_EXTENSIONS: [&str; 6] = ["dat", "txt", "cor", "xy", "csv", "lednicer"];
+
+/// Most files imported in one batch.
+const MAX_BATCH_FILES: usize = 5000;
+
+/// NACA sections of [`Engine::add_examples`].
+const EXAMPLE_NACA: [&str; 6] = ["0012", "2412", "4412", "4415", "23012", "6409"];
+
+/// Splits a list of NACA designations such as `"0012, 2412 4415; NACA 23012"`.
+pub fn parse_designations(text: &str) -> Vec<String> {
+    text.split(|c: char| c == ',' || c == ';' || c.is_whitespace())
+        .map(|s| {
+            let lower = s.to_ascii_lowercase();
+            match lower.strip_prefix("naca") {
+                Some(rest) => s[s.len() - rest.len()..]
+                    .trim_start_matches(['-', ' '])
+                    .to_string(),
+                None => s.to_string(),
+            }
+        })
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+fn is_coordinate_file(path: &Path) -> bool {
+    let hidden = path
+        .file_name()
+        .is_some_and(|n| n.to_string_lossy().starts_with('.'));
+    let known = path.extension().is_some_and(|e| {
+        let e = e.to_string_lossy().to_ascii_lowercase();
+        COORDINATE_EXTENSIONS.contains(&e.as_str())
+    });
+    path.is_file() && known && !hidden
+}
+
+fn display_name(path: &Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.display().to_string())
+}
 
 /// Sweep progress is sent in batches at most this often, so that very large
 /// sweeps do not flood the interface with messages.
@@ -258,6 +301,115 @@ impl Engine {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
         self.import_text(&text, &name)
+    }
+
+    /// Generates the NACA sections of a list (see [`parse_designations`]);
+    /// invalid designations are reported, the others are added.
+    pub fn create_naca_series(&self, text: &str, closed_te: bool) -> Result<BatchResult, AppError> {
+        let list = parse_designations(text);
+        if list.is_empty() {
+            return Err(AppError::new(
+                ErrorKind::InvalidInput,
+                "type a NACA designation, or several separated by commas",
+            ));
+        }
+        let mut out = BatchResult::default();
+        for d in list {
+            match self.create_naca(&d, closed_te) {
+                Ok(a) => out.added.push(a),
+                Err(e) => out.failed.push(BatchFailure {
+                    item: d,
+                    message: e.message,
+                }),
+            }
+        }
+        Ok(out)
+    }
+
+    /// Imports coordinate files and folders. A folder contributes its
+    /// coordinate files (by extension, not recursively), in name order.
+    /// Files that cannot be read are reported, the others are imported.
+    pub fn import_paths(&self, paths: &[PathBuf]) -> BatchImport {
+        let mut out = BatchImport::default();
+        let mut files = Vec::new();
+        for path in paths {
+            if path.is_dir() {
+                match std::fs::read_dir(path) {
+                    Ok(entries) => {
+                        let mut found: Vec<PathBuf> = entries
+                            .filter_map(|e| e.ok().map(|e| e.path()))
+                            .filter(|p| is_coordinate_file(p))
+                            .collect();
+                        found.sort();
+                        if found.is_empty() {
+                            out.failed.push(BatchFailure {
+                                item: display_name(path),
+                                message: "the folder contains no coordinate file (.dat, .txt…)"
+                                    .into(),
+                            });
+                        }
+                        files.extend(found);
+                    }
+                    Err(e) => out.failed.push(BatchFailure {
+                        item: display_name(path),
+                        message: format!("cannot read the folder: {e}"),
+                    }),
+                }
+            } else {
+                files.push(path.clone());
+            }
+        }
+        if files.len() > MAX_BATCH_FILES {
+            out.failed.push(BatchFailure {
+                item: format!("{} files", files.len()),
+                message: format!("only the first {MAX_BATCH_FILES} files are imported"),
+            });
+            files.truncate(MAX_BATCH_FILES);
+        }
+        for file in files {
+            match self.import_file(&file) {
+                Ok(r) => out.imported.push(r),
+                Err(e) => out.failed.push(BatchFailure {
+                    item: display_name(&file),
+                    message: e.message,
+                }),
+            }
+        }
+        out
+    }
+
+    /// Adds classic airfoils to compare: NACA 0012, 2412, 4412, 4415, 23012,
+    /// 6409, Clark Y and Eppler 387 (UIUC coordinates).
+    pub fn add_examples(&self) -> Result<Vec<AirfoilSummary>, AppError> {
+        let mut out = Vec::new();
+        for d in EXAMPLE_NACA {
+            out.push(self.create_naca(d, false)?);
+        }
+        for (text, file, name) in [
+            (include_str!("../data/clarky.dat"), "clarky.dat", "Clark Y"),
+            (include_str!("../data/e387.dat"), "e387.dat", "Eppler 387"),
+        ] {
+            let id = self.import_text(text, file)?.airfoil.id;
+            out.push(self.rename(id, name)?);
+        }
+        Ok(out)
+    }
+
+    /// Shows or hides several airfoils.
+    pub fn set_airfoils_visible(&self, ids: &[AirfoilId], visible: bool) -> Result<(), AppError> {
+        let mut session = lock(&self.session);
+        for &id in ids {
+            session.set_visible(id, visible)?;
+        }
+        Ok(())
+    }
+
+    /// Deletes several airfoils.
+    pub fn delete_airfoils(&self, ids: &[AirfoilId]) -> Result<(), AppError> {
+        for &id in ids {
+            self.delete(id)?;
+        }
+        Ok(())
     }
 
     /// Duplicates an airfoil.
@@ -1343,5 +1495,67 @@ mod tests {
             e.optimize(&bad, |_| true).unwrap_err().kind,
             ErrorKind::InvalidInput
         );
+    }
+
+    #[test]
+    fn designation_lists() {
+        assert_eq!(
+            parse_designations(" 0012, 2412  4415;NACA 23012 naca6409\n"),
+            ["0012", "2412", "4415", "23012", "6409"]
+        );
+        assert!(parse_designations(" , ; ").is_empty());
+    }
+
+    #[test]
+    fn many_airfoils_at_once() {
+        let e = Engine::new();
+        let r = e
+            .create_naca_series("0012, 2412 9z99, 4415", false)
+            .unwrap();
+        let names: Vec<&str> = r.added.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(names, ["NACA 0012", "NACA 2412", "NACA 4415"]);
+        assert_eq!(r.failed.len(), 1);
+        assert_eq!(r.failed[0].item, "9z99");
+        assert!(e.create_naca_series("  ", false).is_err());
+
+        // A folder: coordinate files in name order, other files ignored,
+        // unreadable files reported.
+        let dir = std::env::temp_dir().join(format!("aero-batch-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("b.dat"), e.dat_text(r.added[1].id).unwrap()).unwrap();
+        std::fs::write(dir.join("a.dat"), e.dat_text(r.added[0].id).unwrap()).unwrap();
+        std::fs::write(dir.join("broken.dat"), "not an airfoil").unwrap();
+        std::fs::write(dir.join("notes.md"), "ignored").unwrap();
+        let empty = dir.join("empty");
+        std::fs::create_dir_all(&empty).unwrap();
+        let imported = e.import_paths(&[dir.clone(), empty, dir.join("missing.dat")]);
+        std::fs::remove_dir_all(&dir).ok();
+        let files: Vec<&str> = imported
+            .imported
+            .iter()
+            .map(|r| r.airfoil.name.as_str())
+            .collect();
+        assert_eq!(files, ["NACA 0012", "NACA 2412"]);
+        let failed: Vec<&str> = imported.failed.iter().map(|f| f.item.as_str()).collect();
+        assert_eq!(failed, ["empty", "broken.dat", "missing.dat"]);
+
+        let examples = e.add_examples().unwrap();
+        assert_eq!(examples.len(), 8);
+        assert_eq!(examples[6].name, "Clark Y");
+        assert_eq!(examples[7].name, "Eppler 387");
+        let all: Vec<AirfoilId> = e.session_view().airfoils.iter().map(|a| a.id).collect();
+        assert_eq!(all.len(), 13);
+        e.set_airfoils_visible(&all[..10], false).unwrap();
+        assert_eq!(
+            e.session_view()
+                .airfoils
+                .iter()
+                .filter(|a| a.visible)
+                .count(),
+            3
+        );
+        e.delete_airfoils(&all[..10]).unwrap();
+        assert_eq!(e.session_view().airfoils.len(), 3);
+        assert!(e.delete_airfoils(&[999]).is_err());
     }
 }

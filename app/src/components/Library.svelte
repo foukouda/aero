@@ -51,9 +51,10 @@
       <input
         type="text"
         bind:value={designation}
-        placeholder="2412 or 23012"
-        aria-label="NACA designation"
-        maxlength="10"
+        placeholder="2412 — or 0012, 2412, 4415"
+        aria-label="NACA designation, or several separated by commas"
+        title="One designation (2412, 23012) or several at once: 0012, 2412, 4415"
+        maxlength="400"
       />
       <button class="primary" type="submit">Generate</button>
     </div>
@@ -64,11 +65,33 @@
   </form>
 
   <div class="import" data-tour="import">
-    <button onclick={() => app.importDialog()}>Import .dat…</button>
-    <span class="muted hint">or drop files on the window</span>
+    <div class="buttons">
+      <button onclick={() => app.importDialog()} title="Import one or several coordinate files">Import .dat…</button>
+      <button onclick={() => app.importFolderDialog()} title="Import every coordinate file of a folder">Folder…</button>
+      <button
+        onclick={() => app.addExamples()}
+        title="Add classic airfoils to compare: NACA 0012, 2412, 4412, 4415, 23012, 6409, Clark Y, Eppler 387"
+        >Examples</button
+      >
+    </div>
+    <span class="muted hint">or drop files or folders on the window</span>
   </div>
 
-  <h2 class="title">Airfoils</h2>
+  <div class="title-row">
+    <h2 class="title">Airfoils{app.airfoils.length > 1 ? ` (${app.airfoils.length})` : ""}</h2>
+    {#if app.airfoils.length > 1}
+      <div class="bulk" data-tour="bulk">
+        <button title="Show every airfoil in the plots and sweeps" onclick={() => app.setAllVisible(true)}>All</button>
+        <button title="Hide every airfoil" onclick={() => app.setAllVisible(false)}>None</button>
+        <button
+          class="danger"
+          title="Delete the hidden airfoils"
+          disabled={app.airfoils.every((a) => a.visible)}
+          onclick={() => app.deleteHidden()}>Delete hidden</button
+        >
+      </div>
+    {/if}
+  </div>
   {#if app.airfoils.length === 0}
     <p class="muted empty">No airfoil yet. Generate a NACA section or import a coordinate file
       (Selig or Lednicer format).</p>
@@ -146,10 +169,32 @@
   }
   .import {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 4px;
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border);
+  }
+  .import .buttons {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .title-row h2 {
+    margin: 0;
+  }
+  .bulk {
+    display: flex;
+    gap: 3px;
+  }
+  .bulk button {
+    font-size: 11px;
+    padding: 1px 6px;
   }
   .hint {
     font-size: 11px;

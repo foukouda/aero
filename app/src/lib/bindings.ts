@@ -16,6 +16,16 @@ export const commands = {
 	createNaca: (designation: string, closedTe: boolean) => typedError<AirfoilSummary, AppError>(__TAURI_INVOKE("create_naca", { designation, closedTe })),
 	/**  Imports an airfoil coordinate file (Selig or Lednicer). */
 	importAirfoil: (path: string) => typedError<ImportResult, AppError>(__TAURI_INVOKE("import_airfoil", { path })),
+	/**  Generates several NACA airfoils from a list ("0012, 2412 4415"). */
+	createNacaSeries: (designations: string, closedTe: boolean) => typedError<BatchResult, AppError>(__TAURI_INVOKE("create_naca_series", { designations, closedTe })),
+	/**  Imports coordinate files and whole folders of them. */
+	importPaths: (paths: string[]) => typedError<BatchImport, AppError>(__TAURI_INVOKE("import_paths", { paths })),
+	/**  Adds a set of classic airfoils. */
+	addExamples: () => typedError<AirfoilSummary[], AppError>(__TAURI_INVOKE("add_examples")),
+	/**  Shows or hides several airfoils. */
+	setAirfoilsVisible: (ids: number[], visible: boolean) => typedError<null, AppError>(__TAURI_INVOKE("set_airfoils_visible", { ids, visible })),
+	/**  Deletes several airfoils. */
+	deleteAirfoils: (ids: number[]) => typedError<null, AppError>(__TAURI_INVOKE("delete_airfoils", { ids })),
 	/**  Duplicates an airfoil. */
 	duplicateAirfoil: (id: number) => typedError<AirfoilSummary, AppError>(__TAURI_INVOKE("duplicate_airfoil", { id })),
 	/**  Renames an airfoil. */
@@ -195,6 +205,30 @@ export type AppInfo = {
 	xfoil_reference: string,
 	/**  Project file format version written by this build. */
 	project_format_version: number,
+};
+
+/**  An item of a batch operation that failed. */
+export type BatchFailure = {
+	/**  The item: a NACA designation or a file name. */
+	item: string,
+	/**  Why it failed. */
+	message: string,
+};
+
+/**  Result of a batch import of files and folders. */
+export type BatchImport = {
+	/**  Imported files, in order. */
+	imported: ImportResult[],
+	/**  Files or folders that could not be read. */
+	failed: BatchFailure[],
+};
+
+/**  Result of a batch creation of airfoils. */
+export type BatchResult = {
+	/**  New library entries, in order. */
+	added: AirfoilSummary[],
+	/**  Items that could not be added. */
+	failed: BatchFailure[],
 };
 
 /**  New best design of an optimization. */

@@ -9,8 +9,8 @@ use tauri::State;
 use tauri::ipc::Channel;
 
 use crate::dto::{
-    AirfoilSummary, AnalysisRequest, AnalysisView, AppInfo, GeometryView, ImportResult,
-    OptimizationEvent, OptimizeRequest, SessionView, SweepEvent, SweepRequest,
+    AirfoilSummary, AnalysisRequest, AnalysisView, AppInfo, BatchImport, BatchResult, GeometryView,
+    ImportResult, OptimizationEvent, OptimizeRequest, SessionView, SweepEvent, SweepRequest,
 };
 use crate::engine::Engine;
 use crate::error::{AppError, ErrorKind};
@@ -71,6 +71,54 @@ pub fn create_naca(
 pub async fn import_airfoil(engine: Shared<'_>, path: String) -> Result<ImportResult, AppError> {
     let engine = engine.inner().clone();
     blocking(move || engine.import_file(&PathBuf::from(path))).await
+}
+
+/// Generates several NACA airfoils from a list ("0012, 2412 4415").
+#[tauri::command]
+#[specta::specta]
+pub fn create_naca_series(
+    engine: Shared<'_>,
+    designations: String,
+    closed_te: bool,
+) -> Result<BatchResult, AppError> {
+    engine.create_naca_series(&designations, closed_te)
+}
+
+/// Imports coordinate files and whole folders of them.
+#[tauri::command]
+#[specta::specta]
+pub async fn import_paths(engine: Shared<'_>, paths: Vec<String>) -> Result<BatchImport, AppError> {
+    let engine = engine.inner().clone();
+    blocking(move || {
+        let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+        Ok(engine.import_paths(&paths))
+    })
+    .await
+}
+
+/// Adds a set of classic airfoils.
+#[tauri::command]
+#[specta::specta]
+pub fn add_examples(engine: Shared<'_>) -> Result<Vec<AirfoilSummary>, AppError> {
+    engine.add_examples()
+}
+
+/// Shows or hides several airfoils.
+#[tauri::command]
+#[specta::specta]
+pub fn set_airfoils_visible(
+    engine: Shared<'_>,
+    ids: Vec<AirfoilId>,
+    visible: bool,
+) -> Result<(), AppError> {
+    engine.set_airfoils_visible(&ids, visible)
+}
+
+/// Deletes several airfoils.
+#[tauri::command]
+#[specta::specta]
+pub fn delete_airfoils(engine: Shared<'_>, ids: Vec<AirfoilId>) -> Result<(), AppError> {
+    engine.delete_airfoils(&ids)
 }
 
 /// Duplicates an airfoil.

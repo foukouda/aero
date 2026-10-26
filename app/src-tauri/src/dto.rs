@@ -301,3 +301,30 @@ pub enum OptimizationEvent {
         cancelled: bool,
     },
 }
+
+/// An item of a batch operation that failed.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+pub struct BatchFailure {
+    /// The item: a NACA designation or a file name.
+    pub item: String,
+    /// Why it failed.
+    pub message: String,
+}
+
+/// Result of a batch creation of airfoils.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Type)]
+pub struct BatchResult {
+    /// New library entries, in order.
+    pub added: Vec<AirfoilSummary>,
+    /// Items that could not be added.
+    pub failed: Vec<BatchFailure>,
+}
+
+/// Result of a batch import of files and folders.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Type)]
+pub struct BatchImport {
+    /// Imported files, in order.
+    pub imported: Vec<ImportResult>,
+    /// Files or folders that could not be read.
+    pub failed: Vec<BatchFailure>,
+}
