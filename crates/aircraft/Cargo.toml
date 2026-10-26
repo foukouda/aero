@@ -1,0 +1,27 @@
+[package]
+name = "aero-aircraft"
+description = "A simplified aircraft: parametric wing, tail, fin and fuselage, their planform properties and a 3D surface mesh"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aero_aircraft"
+
+[dependencies]
+aero-geometry.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+specta = { workspace = true, optional = true }
+
+[features]
+# Derives `specta::Type` on the public data types (TypeScript bindings).
+specta = ["dep:specta", "aero-geometry/specta"]
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true
