@@ -58,6 +58,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "aero-optim"
+version = "0.1.0"
+dependencies = [
+ "aero-foil2d",
+ "aero-geometry",
+ "faer",
+ "serde",
+ "serde_json",
+ "specta",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

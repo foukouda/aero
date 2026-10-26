@@ -1,0 +1,29 @@
+[package]
+name = "aero-optim"
+description = "Airfoil shape optimization: CST design space, XFOIL-compatible viscous analysis, CMA-ES and Nelder-Mead"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aero_optim"
+
+[dependencies]
+aero-geometry.workspace = true
+aero-foil2d.workspace = true
+faer.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+specta = { workspace = true, optional = true }
+
+[features]
+# Derives `specta::Type` on the public data types (TypeScript bindings).
+specta = ["dep:specta", "aero-geometry/specta", "aero-foil2d/specta"]
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true
