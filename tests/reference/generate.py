@@ -29,6 +29,13 @@ The sequence starts from an uninitialized boundary layer and ``INIT`` is
 issued before each single point (``ALFA``), so every single point is a cold
 start, independent of the order of the points.
 
+Optional keys of a viscous run: ``mode = "cl"`` (the polar is a ``CSEQ`` and
+the points are ``CL`` commands, values are lift coefficients; outputs named
+``_c<cl>``), ``type = 2 | 3`` (XFOIL ``TYPE``: Mach and Reynolds numbers
+varying with CL), ``damp2 = true`` (XFOIL ``DAMP``). A case-level
+``hinge = [x, y]`` sets a flap hinge (``FNEW``, ``FMOM``) and adds the hinge
+moment to the polar files (``HINC``) of all its sessions.
+
 Usage:
     python3 generate.py --scripts-only          # only write the scripts
     python3 generate.py --xfoil path/to/xfoil   # write scripts and run XFOIL
@@ -72,12 +79,27 @@ def viscous_names(run: dict) -> dict:
     }
 
 
-def vcp_name(run: dict, alpha: float) -> str:
-    return f"vcp_{run['name']}_a{alpha:+05.1f}.txt"
+def point_tag(run: dict, value: float) -> str:
+    """Suffix of the outputs of a single point: angle or lift coefficient."""
+    if run.get("mode", "alpha") == "cl":
+        return f"c{value:+05.2f}"
+    return f"a{value:+05.1f}"
 
 
-def vbl_name(run: dict, alpha: float) -> str:
-    return f"vbl_{run['name']}_a{alpha:+05.1f}.txt"
+def vcp_name(run: dict, value: float) -> str:
+    return f"vcp_{run['name']}_{point_tag(run, value)}.txt"
+
+
+def vbl_name(run: dict, value: float) -> str:
+    return f"vbl_{run['name']}_{point_tag(run, value)}.txt"
+
+
+def hinge_lines(case: dict) -> list[str]:
+    """Flap hinge definition, its first moment calculation and the polar column."""
+    hinge = case.get("hinge")
+    if not hinge:
+        return []
+    return [f"FNEW {float(hinge[0])} {float(hinge[1])}", "FMOM", "HINC"]
 
 
 def lednicer_to_selig(src: pathlib.Path, dst: pathlib.Path) -> None:
@@ -140,6 +162,7 @@ def build_script(case: dict) -> str:
         "OPER",
         "CINC",  # include Cpmin in the polar file
     ]
+    lines += hinge_lines(case)
 
     for run in case["runs"]:
         mach = float(run["mach"])
@@ -169,8 +192,16 @@ def build_viscous_script(case: dict, run: dict, save_panels: bool) -> str:
         "CINC",  # include Cpmin in the polar file
         f"VISC {float(run['reynolds']):.1f}",
         f"MACH {float(run.get('mach', 0.0))}",
-        "VPAR",
     ]
+    if int(run.get("type", 1)) != 1:
+        lines.append(f"TYPE {int(run['type'])}")
+    if run.get("damp2", False):
+        lines.append("DAMP")
+    lines += hinge_lines(case)
+    lines += ["VPAR"]
+    cl_mode = run.get("mode", "alpha") == "cl"
+    if run.get("mode", "alpha") not in ("alpha", "cl"):
+        raise SystemExit(f"unknown mode {run['mode']!r}")
     ncrit = run.get("ncrit", 9.0)
     if isinstance(ncrit, list):
         lines += [f"NT {float(ncrit[0])}", f"NB {float(ncrit[1])}"]
@@ -189,7 +220,7 @@ def build_viscous_script(case: dict, run: dict, save_panels: bool) -> str:
             "PACC",
             names["polar"],
             names["dump"],
-            f"ASEQ {polar['start']} {polar['end']} {polar['step']}",
+            f"{'CSEQ' if cl_mode else 'ASEQ'} {polar['start']} {polar['end']} {polar['step']}",
             "PACC",
         ]
         initialized = True
@@ -200,7 +231,7 @@ def build_viscous_script(case: dict, run: dict, save_panels: bool) -> str:
             if initialized:
                 lines.append("INIT")
             lines += [
-                f"ALFA {alpha}",
+                f"{'CL' if cl_mode else 'ALFA'} {alpha}",
                 f"CPWR {vcp_name(run, float(alpha))}",
                 f"DUMP {vbl_name(run, float(alpha))}",
             ]

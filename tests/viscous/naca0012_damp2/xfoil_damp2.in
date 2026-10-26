@@ -1,0 +1,36 @@
+PLOP
+G
+
+NACA 0012
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+PSAV panels.dat
+OPER
+CINC
+VISC 1000000.0
+MACH 0.0
+DAMP
+VPAR
+N 9.0
+XTR 1.0 1.0
+
+PACC
+vpolar_damp2.txt
+vdump_damp2.bin
+ASEQ 0.0 10.0 1.0
+PACC
+PACC
+vpoints_damp2.txt
+vpdump_damp2.bin
+INIT
+ALFA 4.0
+CPWR vcp_damp2_a+04.0.txt
+DUMP vbl_damp2_a+04.0.txt
+PACC
+
+QUIT

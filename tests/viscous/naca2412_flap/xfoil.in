@@ -1,0 +1,25 @@
+PLOP
+G
+
+NACA 2412
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+PSAV panels.dat
+OPER
+CINC
+FNEW 0.75 0.0
+FMOM
+HINC
+MACH 0.0
+PACC
+polar_M0.00.txt
+
+ASEQ -4.0 8.0 2.0
+PACC
+
+QUIT

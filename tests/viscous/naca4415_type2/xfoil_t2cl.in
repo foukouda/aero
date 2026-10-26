@@ -1,0 +1,35 @@
+PLOP
+G
+
+NACA 4415
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+OPER
+CINC
+VISC 1000000.0
+MACH 0.2
+TYPE 2
+VPAR
+N 9.0
+XTR 1.0 1.0
+
+PACC
+vpolar_t2cl.txt
+vdump_t2cl.bin
+CSEQ 0.4 1.4 0.1
+PACC
+PACC
+vpoints_t2cl.txt
+vpdump_t2cl.bin
+INIT
+CL 0.8
+CPWR vcp_t2cl_c+0.80.txt
+DUMP vbl_t2cl_c+0.80.txt
+PACC
+
+QUIT

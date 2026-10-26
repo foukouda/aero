@@ -1,0 +1,39 @@
+PLOP
+G
+
+NACA 2412
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+PSAV panels.dat
+OPER
+CINC
+VISC 1000000.0
+MACH 0.0
+VPAR
+N 9.0
+XTR 1.0 1.0
+
+PACC
+vpolar_cl.txt
+vdump_cl.bin
+CSEQ 0.0 1.2 0.1
+PACC
+PACC
+vpoints_cl.txt
+vpdump_cl.bin
+INIT
+CL 0.5
+CPWR vcp_cl_c+0.50.txt
+DUMP vbl_cl_c+0.50.txt
+INIT
+CL 1.0
+CPWR vcp_cl_c+1.00.txt
+DUMP vbl_cl_c+1.00.txt
+PACC
+
+QUIT

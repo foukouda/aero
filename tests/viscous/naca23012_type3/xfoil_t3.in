@@ -1,0 +1,36 @@
+PLOP
+G
+
+NACA 23012
+PPAR
+N 160
+P 1.0
+T 0.15
+R 0.2
+
+
+PSAV panels.dat
+OPER
+CINC
+VISC 1000000.0
+MACH 0.0
+TYPE 3
+VPAR
+N 9.0
+XTR 1.0 1.0
+
+PACC
+vpolar_t3.txt
+vdump_t3.bin
+CSEQ 0.2 1.2 0.1
+PACC
+PACC
+vpoints_t3.txt
+vpdump_t3.bin
+INIT
+CL 0.6
+CPWR vcp_t3_c+0.60.txt
+DUMP vbl_t3_c+0.60.txt
+PACC
+
+QUIT
