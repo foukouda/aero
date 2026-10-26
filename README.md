@@ -290,6 +290,27 @@ desktop CPU):
 The CMA-ES generations run in parallel; the Nelder–Mead polish (a fifth of
 the budget by default) is sequential by nature, which bounds the speed-up.
 
+### Compared with XFOIL
+
+The `speed-comparison` workflow builds XFOIL 6.996 from the official sources
+and times the same computations as Aero on the same GitHub runner (AMD EPYC,
+4 cores; [full report](tests/speed/REPORT.md), [method](tests/speed/README.md)):
+
+| NACA 2412, 160 nodes, Re = 10⁶ | XFOIL, official build | XFOIL, `-O3` | Aero |
+|---|---|---|---|
+| Inviscid polar, 37 angles | 8.1 ms | 8.1 ms | 2.7 ms |
+| Viscous polar, 37 angles | 658 ms | 508 ms | 487 ms |
+| Viscous polar at prescribed Cl, 13 values | 357 ms | 307 ms | 266 ms |
+| Viscous polars of 8 airfoils, one core | 5.0 s | 4.2 s | 3.8 s |
+| Viscous polars of 8 airfoils, 4 cores | 2.1 s | 1.7 s | 1.6 s |
+
+The same points fail to converge on both sides. In short: per computation,
+Aero is as fast as XFOIL compiled with full optimization and 10 to 35 %
+faster than XFOIL built with its own Makefile; inviscid polars are about
+three times faster (the factorized matrix is reused). The practical gains are
+elsewhere: no process to start and no files to parse, results directly in
+memory, and the application sweeps many airfoils on all cores at once.
+
 ## License
 
 The solver and paneling code are direct ports of XFOIL routines, so the
