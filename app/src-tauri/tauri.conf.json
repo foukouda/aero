@@ -34,6 +34,23 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "foukouda",
+    "copyright": "GPL-2.0-or-later. Contains ports of XFOIL (Mark Drela, Harold Youngren).",
+    "category": "Education",
+    "shortDescription": "Airfoil analysis and optimization (XFOIL rewritten in Rust)",
+    "longDescription": "Aero analyses 2D airfoils with the methods of XFOIL 6.996 (panel method and viscous boundary layer), compares many airfoils at once and optimizes their shape.",
+    "homepage": "https://github.com/foukouda/aero",
+    "license": "GPL-2.0-or-later",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "English",
+          "French"
+        ],
+        "displayLanguageSelector": false
+      }
+    }
   }
 }

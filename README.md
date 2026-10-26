@@ -9,10 +9,20 @@ New to airfoils? The [glossary](docs/glossary.md) ([en français](docs/glossaire
 explains every quantity — Cl, Cd, L/D, Cm, Cp, Reynolds number, transition… —
 with orders of magnitude; the application shows the same explanations.
 
-> **Status:** step 3 — geometry, XFOIL-compatible inviscid and viscous
-> solvers (boundary layer, transition, drag, stall; prescribed angle or lift,
-> Mach and Reynolds numbers varying with the lift, flap hinge moments), shape
-> optimization and desktop application. 3D methods, Python bindings and
+## Download
+
+**Windows 10/11:** get `Aero_…_x64-setup.exe` from the
+[latest release](https://github.com/foukouda/aero/releases/latest) and run it
+(no administrator rights needed); a portable `.exe` that needs no
+installation is there too. The files are not code-signed: if Windows
+SmartScreen warns, click *More info* → *Run anyway*. Other systems: build
+from source (below).
+
+> **Status:** version 0.1.0 — geometry, XFOIL-compatible inviscid and
+> viscous solvers (boundary layer, transition, drag, stall; prescribed angle
+> or lift, Mach and Reynolds numbers varying with the lift, flap hinge
+> moments), comparison of many airfoils, shape optimization and desktop
+> application. 3D methods, Python bindings and
 > WebAssembly come later; the architecture is prepared for them.
 
 ## Workspace layout

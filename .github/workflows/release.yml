@@ -1,0 +1,75 @@
+name: Release
+
+# Pushing a version tag (v0.1.0, …) builds the Windows application and
+# publishes a GitHub release with the installer, the portable executable
+# and their SHA-256 checksums. The tag must match the version of
+# app/src-tauri/tauri.conf.json.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build again (e.g. v0.1.0); its assets are replaced
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Check the version
+        shell: bash
+        run: |
+          version=$(node -p "require('./app/src-tauri/tauri.conf.json').version")
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::tag $TAG does not match the application version $version"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Build the application and the installer
+        working-directory: app
+        run: npm run tauri build -- --bundles nsis
+
+      - name: Collect the files
+        shell: bash
+        run: |
+          mkdir release
+          cp target/release/bundle/nsis/Aero_${VERSION}_x64-setup.exe release/
+          cp target/release/aero.exe "release/Aero_${VERSION}_x64_portable.exe"
+          cd release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
+          else
+            sed "s/{{VERSION}}/$VERSION/g" .github/release-notes.md > notes.md
+            gh release create "$TAG" release/* --title "Aero $VERSION" --notes-file notes.md
+          fi
