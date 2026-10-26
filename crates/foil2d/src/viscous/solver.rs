@@ -173,6 +173,9 @@ pub struct ViscousSolution {
     pub cp_star: Option<f64>,
     /// True if `Cp min < Cp*`.
     pub supercritical: bool,
+    /// True if the local speed is too large somewhere for the Kármán–Tsien
+    /// correction (XFOIL's "compressibility corrections invalid").
+    pub compressibility_breakdown: bool,
     /// Transition on the top and bottom surfaces.
     pub transition: [Transition; 2],
     /// Top surface, from the stagnation point to the trailing edge.
@@ -342,9 +345,11 @@ impl ViscousSolver {
     /// Solves one angle of attack from a fresh boundary layer.
     ///
     /// An unconverged solution is returned with
-    /// [`ViscousSolution::converged`] unset. Errors: invalid angle, critical
-    /// Mach number exceeded (unless the inviscid solver allows it),
-    /// Kármán–Tsien breakdown.
+    /// [`ViscousSolution::converged`] unset. Errors: invalid angle; critical
+    /// Mach number exceeded or Kármán–Tsien breakdown, unless the inviscid
+    /// options allow supercritical solutions (XFOIL behaviour: the solution
+    /// is then returned with [`ViscousSolution::supercritical`] or
+    /// [`ViscousSolution::compressibility_breakdown`] set).
     pub fn solve(&self, alpha_deg: f64) -> Result<ViscousSolution> {
         self.session().solve(alpha_deg)
     }
@@ -365,13 +370,50 @@ impl ViscousSolver {
     pub fn sweep_with(
         &self,
         sweep: &AlphaSweep,
+        on_progress: impl FnMut(&ViscousSweepProgress, Option<&ViscousSolution>) -> ControlFlow<()>,
+    ) -> Result<ViscousPolar> {
+        self.session().sweep_with(sweep, on_progress)
+    }
+}
+
+/// A viscous analysis keeping its boundary layer between points, as an
+/// XFOIL session does: each [`Self::solve`] starts from the previous
+/// solution (XFOIL `ALFA`), [`Self::reset`] discards it (XFOIL `INIT`).
+#[derive(Debug, Clone)]
+pub struct ViscousSession<'a> {
+    solver: &'a ViscousSolver,
+    state: Session<'a>,
+}
+
+impl ViscousSession<'_> {
+    /// Solves one angle of attack starting from the current boundary layer,
+    /// with [`ViscousOptions::max_iterations`] Newton iterations.
+    pub fn solve(&mut self, alpha_deg: f64) -> Result<ViscousSolution> {
+        if !alpha_deg.is_finite() {
+            return Err(InviscidError::InvalidAlpha(alpha_deg).into());
+        }
+        let mut s = self.run(alpha_deg.to_radians(), self.solver.options.max_iterations)?;
+        s.alpha_deg = alpha_deg;
+        Ok(s)
+    }
+
+    /// Discards the boundary layer: the next point starts from scratch.
+    pub fn reset(&mut self) {
+        self.state.reset_boundary_layer();
+    }
+
+    /// Runs an angle-of-attack sweep from the current boundary layer, like
+    /// [`ViscousSolver::sweep_with`] (XFOIL `ASEQ`).
+    pub fn sweep_with(
+        &mut self,
+        sweep: &AlphaSweep,
         mut on_progress: impl FnMut(&ViscousSweepProgress, Option<&ViscousSolution>) -> ControlFlow<()>,
     ) -> Result<ViscousPolar> {
         const NSEQEX: usize = 4;
         let alphas = sweep.alphas()?;
         let total = alphas.len();
         let mut polar = ViscousPolar {
-            options: self.options,
+            options: self.solver.options,
             points: Vec::with_capacity(total),
             failures: Vec::new(),
             stopped: false,
@@ -387,12 +429,11 @@ impl ViscousSolver {
         };
         let (aa1, daa) = (sweep.start_deg * dtor, daa * dtor);
 
-        let mut session = self.session();
-        let itmax = self.options.max_iterations + 5;
+        let itmax = self.solver.options.max_iterations + 5;
         let mut unconverged = 0;
         for (index, &alpha_deg) in alphas.iter().enumerate() {
             let alfa = aa1 + daa * index as f64;
-            let result = session.run(alfa, itmax).map(|mut s| {
+            let result = self.run(alfa, itmax).map(|mut s| {
                 s.alpha_deg = alpha_deg;
                 s
             });
@@ -429,7 +470,7 @@ impl ViscousSolver {
                 break;
             }
             // XFOIL counts the points whose Newton iteration failed.
-            if session.state.lvconv {
+            if self.state.lvconv {
                 unconverged = 0;
             } else {
                 unconverged += 1;
@@ -441,32 +482,25 @@ impl ViscousSolver {
         }
         Ok(polar)
     }
-}
 
-/// A viscous analysis keeping its boundary layer between points, as an
-/// XFOIL session does: each [`Self::solve`] starts from the previous
-/// solution (XFOIL `ALFA`), [`Self::reset`] discards it (XFOIL `INIT`).
-#[derive(Debug, Clone)]
-pub struct ViscousSession<'a> {
-    solver: &'a ViscousSolver,
-    state: Session<'a>,
-}
-
-impl ViscousSession<'_> {
-    /// Solves one angle of attack starting from the current boundary layer,
-    /// with [`ViscousOptions::max_iterations`] Newton iterations.
-    pub fn solve(&mut self, alpha_deg: f64) -> Result<ViscousSolution> {
-        if !alpha_deg.is_finite() {
-            return Err(InviscidError::InvalidAlpha(alpha_deg).into());
+    /// Starts or stops recording XFOIL's console messages: marching
+    /// failures, transition points and the convergence history of each
+    /// Newton iteration, formatted as XFOIL prints them. Useful to diagnose
+    /// a difficult point or to compare with an XFOIL session.
+    pub fn record_log(&mut self, enabled: bool) {
+        match (enabled, &self.state.trace) {
+            (true, None) => self.state.trace = Some(Vec::new()),
+            (false, _) => self.state.trace = None,
+            _ => {}
         }
-        let mut s = self.run(alpha_deg.to_radians(), self.solver.options.max_iterations)?;
-        s.alpha_deg = alpha_deg;
-        Ok(s)
     }
 
-    /// Discards the boundary layer: the next point starts from scratch.
-    pub fn reset(&mut self) {
-        self.state.reset_boundary_layer();
+    /// The messages recorded since the last call, one line each.
+    pub fn take_log(&mut self) -> Vec<String> {
+        match &mut self.state.trace {
+            Some(lines) => std::mem::take(lines),
+            None => Vec::new(),
+        }
     }
 
     fn run(&mut self, alfa: f64, itmax: usize) -> Result<ViscousSolution> {
@@ -476,18 +510,11 @@ impl ViscousSession<'_> {
         let solution = solution(st, iterations, converged);
 
         let minf = st.par.mach;
-        if minf > 0.0 {
-            let beta = (1.0 - minf * minf).sqrt();
-            let bfac = 0.5 * minf * minf / (1.0 + beta);
-            let breakdown = st.qvis[..st.n + st.nw].iter().any(|&q| {
-                let cpinc = 1.0 - (q / st.qinf).powi(2);
-                beta + bfac * cpinc <= 0.0
-            });
-            if breakdown {
-                return Err(InviscidError::CompressibilityBreakdown { mach: minf }.into());
-            }
+        let allowed = self.solver.inviscid.options().allow_supercritical;
+        if solution.compressibility_breakdown && !allowed {
+            return Err(InviscidError::CompressibilityBreakdown { mach: minf }.into());
         }
-        if solution.supercritical && !self.solver.inviscid.options().allow_supercritical {
+        if solution.supercritical && !allowed {
             return Err(InviscidError::CriticalMachExceeded {
                 mach: minf,
                 cp_min: solution.cp_min,
@@ -513,6 +540,13 @@ fn solution(st: &Session<'_>, iterations: usize, converged: bool) -> ViscousSolu
     let mach = st.par.mach;
     let cp_star = (mach > 0.0).then(|| sonic_cp(mach));
     let supercritical = cp_star.is_some_and(|c| cp_min < c);
+    let beta = (1.0 - mach * mach).sqrt();
+    let bfac = 0.5 * mach * mach / (1.0 + beta);
+    let compressibility_breakdown = mach > 0.0
+        && st.qvis[..st.n + st.nw].iter().any(|&q| {
+            let cpinc = 1.0 - (q / st.qinf).powi(2);
+            beta + bfac * cpinc <= 0.0
+        });
 
     let que = 0.5 * st.qinf * st.qinf;
     let layer = |is: usize, range: std::ops::RangeInclusive<usize>| {
@@ -565,6 +599,7 @@ fn solution(st: &Session<'_>, iterations: usize, converged: bool) -> ViscousSolu
         cp_min_x,
         cp_star,
         supercritical,
+        compressibility_breakdown,
         transition: [transition(0), transition(1)],
         top: layer(0, 2..=top.iblte),
         bottom: layer(1, 2..=bot.iblte),

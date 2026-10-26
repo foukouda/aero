@@ -276,6 +276,18 @@ impl Session<'_> {
                     side.xoctr = xoc;
                     side.yoctr = yoc;
                 }
+                if ibl + 1 > nbl {
+                    // End of the side: XFOIL prints the transition point.
+                    let side = &self.sides[is];
+                    let (forced, xoc, itr) = (side.tforce, side.xoctr, side.itran);
+                    self.log(|| {
+                        format!(
+                            " Side{:2}{}transition at x/c = {xoc:7.4}{itr:5}",
+                            is + 1,
+                            if forced { " forced " } else { "  free  " }
+                        )
+                    });
+                }
                 self.bl.tran = false;
 
                 if ibl == iblte {
@@ -582,6 +594,7 @@ impl Session<'_> {
         const DLO: f64 = -0.5;
         let mut rmsbl = 0.0;
         let mut rmxbl: f64 = 0.0;
+        let (mut vmxbl, mut imxbl, mut ismxbl) = (' ', 0, 0);
         let vdel = &self.sys.vdel;
         let deltas = |side: &super::session::Side, is: usize, ibl: usize| {
             let iv = side.isys[ibl];
@@ -605,10 +618,19 @@ impl Session<'_> {
                 let dn4 = duedg.abs() / 0.25;
                 rmsbl += dn1 * dn1 + dn2 * dn2 + dn3 * dn3 + dn4 * dn4;
 
-                for (dn, rmx) in [(dn1, dn1), (dn2, dn2), (dn3, dn3), (dn4, duedg)] {
+                let v1 = if ibl < side.itran { 'n' } else { 'C' };
+                for (dn, rmx, v) in [
+                    (dn1, dn1, v1),
+                    (dn2, dn2, 'T'),
+                    (dn3, dn3, 'D'),
+                    (dn4, duedg, 'U'),
+                ] {
                     let rdn = rlx * dn;
                     if dn.abs() > rmxbl.abs() {
                         rmxbl = rmx;
+                        vmxbl = v;
+                        imxbl = ibl;
+                        ismxbl = is + 1;
                     }
                     if rdn > DHI {
                         rlx = DHI / dn;
@@ -622,6 +644,9 @@ impl Session<'_> {
         let nbl_total = (self.sides[0].nbl + self.sides[1].nbl) as f64;
         self.rmsbl = (rmsbl / (4.0 * nbl_total)).sqrt();
         self.rmxbl = rmxbl;
+        self.vmxbl = vmxbl;
+        self.imxbl = imxbl;
+        self.ismxbl = ismxbl;
         self.rlx = rlx;
 
         // Underrelaxed change of CL.

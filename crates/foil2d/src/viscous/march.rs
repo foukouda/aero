@@ -267,6 +267,9 @@ impl Session<'_> {
                             } else {
                                 htarg.max(hmax)
                             };
+                            self.log(|| {
+                                format!(" MRCHUE: Inverse mode at{ibl:4}     Hk ={htarg:8.3}")
+                            });
                             // Try again with the prescribed Hk.
                             continue;
                         }
@@ -313,9 +316,18 @@ impl Session<'_> {
                 }
 
                 if !converged {
-                    // "MRCHUE: Convergence failed". A large residual means
-                    // the solution is garbage: extrapolate instead.
-                    if dmax > 0.1 && ibl > 3 {
+                    self.log(|| {
+                        format!(
+                            " MRCHUE: Convergence failed at{ibl:4}  side{:2}    Res ={}",
+                            is + 1,
+                            super::session::fortran_e(dmax, 12, 4)
+                        )
+                    });
+                    // A large residual means the solution is garbage:
+                    // extrapolate instead.
+                    // XFOIL: IF(DMAX .LE. 0.1) GO TO 109 -- a NaN residual is
+                    // garbage too.
+                    if (dmax > 0.1 || dmax.is_nan()) && ibl > 3 {
                         let side = &self.sides[is];
                         if ibl <= iblte {
                             let r = (side.xssi[ibl] / side.xssi[ibm]).powf(0.5);
@@ -567,8 +579,16 @@ impl Session<'_> {
                 }
 
                 if !converged {
-                    // "MRCHDU: Convergence failed".
-                    if dmax > 0.1 && ibl > 3 {
+                    self.log(|| {
+                        format!(
+                            " MRCHDU: Convergence failed at{ibl:4}  side{:2}    Res ={}",
+                            is + 1,
+                            super::session::fortran_e(dmax, 12, 4)
+                        )
+                    });
+                    // XFOIL: IF(DMAX .LE. 0.1) GO TO 109 -- a NaN residual is
+                    // garbage too.
+                    if (dmax > 0.1 || dmax.is_nan()) && ibl > 3 {
                         let side = &self.sides[is];
                         if ibl <= iblte {
                             let r = (side.xssi[ibl] / side.xssi[ibm]).powf(0.5);

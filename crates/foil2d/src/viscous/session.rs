@@ -230,7 +230,16 @@ pub(crate) struct Session<'a> {
     /// Convergence measures of the last Newton update.
     pub rmsbl: f64,
     pub rmxbl: f64,
+    /// Variable (`n`, `C`, `T`, `D`, `U`) and station (side, station) of
+    /// the largest change.
+    pub vmxbl: char,
+    pub imxbl: usize,
+    pub ismxbl: usize,
     pub rlx: f64,
+    /// When set, receives XFOIL's console messages (marching failures,
+    /// transition points, Newton iterations) with XFOIL's formatting, to
+    /// compare the iteration histories.
+    pub trace: Option<Vec<String>>,
 }
 
 impl<'a> Session<'a> {
@@ -283,7 +292,11 @@ impl<'a> Session<'a> {
             sys: GlobalSystem::default(),
             rmsbl: 0.0,
             rmxbl: 0.0,
+            vmxbl: ' ',
+            imxbl: 0,
+            ismxbl: 0,
             rlx: 1.0,
+            trace: None,
         };
         // Base speeds on the airfoil (GGCALC); the wake part is set by
         // QWCALC once the wake exists.
@@ -294,6 +307,13 @@ impl<'a> Session<'a> {
         }
         s.comset();
         s
+    }
+
+    /// Records a console message when tracing.
+    pub fn log(&mut self, message: impl FnOnce() -> String) {
+        if let Some(trace) = &mut self.trace {
+            trace.push(message());
+        }
     }
 
     pub fn geo(&self) -> &'a PanelGeometry {
@@ -773,4 +793,50 @@ fn sinvrt(si: f64, xi: f64, w: &Spline, span: f64) -> f64 {
         }
     }
     si
+}
+
+/// Fortran `Ew.d` formatting as gfortran prints it (`0.1183E+00`,
+/// `-.1714E+01` when the width leaves no room for the leading zero).
+pub(crate) fn fortran_e(value: f64, w: usize, d: usize) -> String {
+    if !value.is_finite() {
+        return format!(
+            "{:>w$}",
+            if value.is_nan() {
+                "NaN"
+            } else if value > 0.0 {
+                "Infinity"
+            } else {
+                "-Infinity"
+            }
+        );
+    }
+    let (mut mantissa, mut exponent) = (value.abs(), 0_i32);
+    if mantissa != 0.0 {
+        exponent = mantissa.log10().floor() as i32 + 1;
+        mantissa /= 10f64.powi(exponent);
+        // Rounding may carry into a new digit.
+        if (mantissa * 10f64.powi(d as i32)).round() >= 10f64.powi(d as i32) {
+            mantissa /= 10.0;
+            exponent += 1;
+        }
+    }
+    let digits = format!("{:.d$}", mantissa);
+    let digits = digits.trim_start_matches('0');
+    let sign = if value < 0.0 { "-" } else { "" };
+    let body = format!(
+        "{sign}{digits}E{}{:02}",
+        if exponent < 0 { '-' } else { '+' },
+        exponent.abs()
+    );
+    let padded = if body.len() < w {
+        format!("0{}", body.trim_start_matches('-'))
+    } else {
+        body.clone()
+    };
+    let padded = if value < 0.0 && body.len() < w {
+        format!("-{padded}")
+    } else {
+        padded
+    };
+    format!("{padded:>w$}")
 }

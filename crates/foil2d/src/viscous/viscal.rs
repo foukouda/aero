@@ -72,6 +72,7 @@ impl Session<'_> {
             self.stmove();
             self.clcalc();
             self.cdcalc();
+            self.log_iteration(iter);
             if self.rmsbl < EPS1 {
                 self.lvconv = true;
                 self.avisc = self.alfa;
@@ -85,5 +86,25 @@ impl Session<'_> {
     /// Viscous pressure coefficients at all nodes (airfoil, then wake).
     pub(crate) fn cpv(&self) -> Vec<f64> {
         self.cpcalc(&self.qvis[..self.n + self.nw])
+    }
+
+    /// XFOIL's iteration report (formats 2000/2010 of `VISCAL`).
+    fn log_iteration(&mut self, iter: usize) {
+        use super::session::fortran_e;
+        let (rms, rmx, rlx) = (self.rmsbl, self.rmxbl, self.rlx);
+        let (v, i, is) = (self.vmxbl, self.imxbl, self.ismxbl);
+        let (alpha, cl) = (self.alfa.to_degrees(), self.cl);
+        self.log(|| {
+            let mut line = format!(
+                "{iter:4}   rms: {}   max: {}   {v} at {i:4}{is:3}",
+                fortran_e(rms, 10, 4),
+                fortran_e(rmx, 10, 4)
+            );
+            if rlx < 1.0 {
+                line += &format!("   RLX:{rlx:6.3}");
+            }
+            line
+        });
+        self.log(|| format!("       a ={alpha:7.3}      CL ={cl:8.4}"));
     }
 }
