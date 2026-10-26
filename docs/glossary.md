@@ -218,6 +218,20 @@ A larger leading-edge radius softens the suction peak at high angles of attack a
 
 A very small trailing-edge angle is hard to build and fragile; a blunt trailing edge (a small gap, often 0.1 – 0.5 % of the chord) is easier to manufacture and is modelled by XFOIL as a small panel across the gap.
 
+### Flap deflection
+
+**The rear part of the airfoil is rotated about a hinge, positive down: more lift and more nose-down moment.**
+
+A flap (or an aileron, an elevator) is the part of the airfoil behind a hinge. Deflecting it down by a few degrees cambers the airfoil: the lift at a given angle increases (roughly +0.05 to +0.1 in Cl per degree for a 25 % chord flap), the zero-lift angle moves to more negative values, and Cm becomes more negative. Deflected up, it does the opposite (reflex).
+
+The hinge is given by its x position and either its y or its height as a fraction of the local thickness (0 on the lower surface, 1 on the upper one). As XFOIL does, the surface where the flap moves in is cut and a circular arc closes the gap on the other side; the rounded hinge of a real flap and the flow through its slot are not modelled.
+
+### Modifying an airfoil
+
+**XFOIL's geometry tools: flap, thickness and camber, their high points, trailing-edge gap, leading-edge radius, blending.**
+
+Each tool creates a new airfoil in the library and keeps the original, so both can be compared. Thickness and camber can be scaled or set (camber line and thickness are measured vertically, as XFOIL does); the high points slide the maximum thickness or camber along the chord; the trailing-edge gap opens or closes the trailing edge over a blending distance; the leading-edge radius is scaled near the nose; blending interpolates between two airfoils point by point (a fraction outside 0–1 extrapolates). They are ports of XFOIL's GDES commands (FLAP, TFAC, TSET, HIGH, TGAP, LERA) and of INTE, checked against XFOIL.
+
 ### Panels and paneling
 
 **The airfoil contour is cut into straight segments (panels) on which the flow is solved; 160 is a good default.**

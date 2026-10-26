@@ -3,6 +3,7 @@
   import PlotPanel from "./PlotPanel.svelte";
   import PropertiesPanel from "./PropertiesPanel.svelte";
   import PanelingPanel from "./PanelingPanel.svelte";
+  import ModifyPanel from "./ModifyPanel.svelte";
   import { app } from "../lib/state.svelte";
   import { minIndex, splitSurfaces } from "../lib/plot/scales";
 
@@ -38,6 +39,14 @@
         });
       }
     }
+    const p = app.modificationPreview;
+    if (p && app.selectedId === p.id) {
+      const x = p.preview.x.map((v) => v ?? Number.NaN);
+      const y = p.preview.y.map((v) => v ?? Number.NaN);
+      const { upper, lower } = splitSurfaces(x, y, minIndex(x));
+      out.push({ label: `Preview: ${p.preview.description}`, color: "#d946ef", x: upper.x, y: upper.y, dash: [5, 4] });
+      out.push({ label: "preview lower", color: "#d946ef", x: lower.x, y: lower.y, dash: [5, 4], hideInLegend: true });
+    }
     return out;
   });
 
@@ -67,6 +76,7 @@
   <div class="side">
     {#if geometry}
       <PropertiesPanel {geometry} />
+      <ModifyPanel {geometry} />
       <PanelingPanel {geometry} />
     {:else}
       <section class="panel placeholder muted">Select an airfoil in the library.</section>

@@ -11,7 +11,10 @@ import type {
   BestDesign,
   Evaluation,
   GeometryView,
+  HingeY,
   HistoryEntry,
+  Modification,
+  ModificationPreview,
   Normalization,
   Objective,
   OptimizationEvent,
@@ -144,6 +147,9 @@ class AppState {
   analysisErrors = $state<Record<number, string>>({});
   sweep = $state<SweepProgress | null>(null);
   optimization = $state<OptimizationRun | null>(null);
+  /** Preview of an airfoil modification (Geometry tab). */
+  modificationPreview = $state<{ id: number; preview: ModificationPreview } | null>(null);
+  modificationError = $state<string | null>(null);
   /** Library entry made from the last optimization result. */
   optimizedAirfoilId = $state<number | null>(null);
   toasts = $state<Toast[]>([]);
@@ -482,6 +488,53 @@ class AppState {
     const g = this.geometries[id];
     if (g) g.paneling = options; // controls follow immediately
     void this.#paneling({ id, options });
+  }
+
+  // ---------------------------------------------------------- modifications
+
+  #preview = latestRunner(async ({ id, modification }: { id: number; modification: Modification }) => {
+    const r = await commands.previewModification(id, modification);
+    if (r.status === "ok") {
+      this.modificationPreview = { id, preview: r.data };
+      this.modificationError = null;
+    } else {
+      this.modificationPreview = null;
+      this.modificationError = r.error.message;
+    }
+  });
+
+  /** Previews a modification of an airfoil (latest request wins). */
+  previewModification(id: number, modification: Modification) {
+    void this.#preview({ id, modification });
+  }
+
+  clearPreview() {
+    this.modificationPreview = null;
+    this.modificationError = null;
+  }
+
+  /** Adds a modified copy of an airfoil to the library. */
+  async applyModification(id: number, modification: Modification, name: string) {
+    await this.guard(async () => {
+      const a = await call(commands.applyModification(id, modification, name.trim() || null));
+      this.dirty = true;
+      this.selectedId = a.id;
+      await this.refresh();
+      this.notify("info", "Airfoil created", a.name);
+    });
+  }
+
+  /** Adds copies of an airfoil with its flap deflected by each deflection. */
+  async flapSeries(id: number, hingeX: number, hingeY: HingeY, deflections: number[]) {
+    await this.guard(async () => {
+      const r = await call(commands.flapSeries(id, hingeX, hingeY, deflections));
+      if (r.added.length) {
+        this.dirty = true;
+        this.notify("info", `${r.added.length} airfoils created`, r.added.map((a) => a.name).join(", "));
+      }
+      if (r.failed.length) this.notify("error", "Not created", failureList(r.failed));
+      await this.refresh();
+    });
   }
 
   async normalize(id: number, mode: Normalization) {

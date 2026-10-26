@@ -35,6 +35,8 @@
         return `copy of ${origin.of}`;
       case "optimized":
         return `optimized from ${origin.of}`;
+      case "modified":
+        return `${origin.change}, from ${origin.of}`;
     }
   }
 

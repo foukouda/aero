@@ -4,18 +4,20 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use aero_geometry::{Normalization, PanelingOptions};
+use aero_geometry::{CamberThickness, HingeY, Normalization, PanelingOptions};
 use tauri::State;
 use tauri::ipc::Channel;
 
 use crate::dto::{
     AirfoilSummary, AnalysisRequest, AnalysisView, AppInfo, BatchImport, BatchResult, GeometryView,
-    ImportResult, OptimizationEvent, OptimizeRequest, SessionView, SweepEvent, SweepRequest,
+    ImportResult, ModificationPreview, OptimizationEvent, OptimizeRequest, SessionView, SweepEvent,
+    SweepRequest,
 };
 use crate::engine::Engine;
 use crate::error::{AppError, ErrorKind};
 use crate::model::{
-    AirfoilId, OptimizationSetup, PROJECT_FORMAT_VERSION, Settings, StoredOptimization, StoredPolar,
+    AirfoilId, Modification, OptimizationSetup, PROJECT_FORMAT_VERSION, Settings,
+    StoredOptimization, StoredPolar,
 };
 
 type Shared<'a> = State<'a, Arc<Engine>>;
@@ -71,6 +73,55 @@ pub fn create_naca(
 pub async fn import_airfoil(engine: Shared<'_>, path: String) -> Result<ImportResult, AppError> {
     let engine = engine.inner().clone();
     blocking(move || engine.import_file(&PathBuf::from(path))).await
+}
+
+/// Previews a modification of an airfoil (flap, thickness…).
+#[tauri::command]
+#[specta::specta]
+pub async fn preview_modification(
+    engine: Shared<'_>,
+    id: AirfoilId,
+    modification: Modification,
+) -> Result<ModificationPreview, AppError> {
+    let engine = engine.inner().clone();
+    blocking(move || engine.preview_modification(id, &modification)).await
+}
+
+/// Adds a modified copy of an airfoil to the library.
+#[tauri::command]
+#[specta::specta]
+pub async fn apply_modification(
+    engine: Shared<'_>,
+    id: AirfoilId,
+    modification: Modification,
+    name: Option<String>,
+) -> Result<AirfoilSummary, AppError> {
+    let engine = engine.inner().clone();
+    blocking(move || engine.apply_modification(id, &modification, name.as_deref())).await
+}
+
+/// Adds copies of an airfoil with its flap deflected by each deflection.
+#[tauri::command]
+#[specta::specta]
+pub async fn flap_series(
+    engine: Shared<'_>,
+    id: AirfoilId,
+    hinge_x: f64,
+    hinge_y: HingeY,
+    deflections: Vec<f64>,
+) -> Result<BatchResult, AppError> {
+    let engine = engine.inner().clone();
+    blocking(move || engine.flap_series(id, hinge_x, hinge_y, &deflections)).await
+}
+
+/// Camber line and thickness distribution of an airfoil, with their maxima.
+#[tauri::command]
+#[specta::specta]
+pub fn get_camber_thickness(
+    engine: Shared<'_>,
+    id: AirfoilId,
+) -> Result<CamberThickness, AppError> {
+    engine.camber_thickness(id)
 }
 
 /// Generates several NACA airfoils from a list ("0012, 2412 4415").

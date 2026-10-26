@@ -328,3 +328,16 @@ pub struct BatchImport {
     /// Files or folders that could not be read.
     pub failed: Vec<BatchFailure>,
 }
+
+/// An airfoil modification, previewed before it is created.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+pub struct ModificationPreview {
+    /// Coordinates of the modified airfoil.
+    pub x: Vec<f64>,
+    /// Ordinates.
+    pub y: Vec<f64>,
+    /// Its geometric properties.
+    pub properties: GeometricProperties,
+    /// Short description, used in the new airfoil's name.
+    pub description: String,
+}

@@ -7,7 +7,7 @@ use aero_foil2d::inviscid::{AlphaSweep, ClSweep, Polar};
 use aero_foil2d::viscous::{
     AmplificationModel, MachReynoldsVariation, ViscousOptions, ViscousPolar,
 };
-use aero_geometry::{Airfoil, Normalization, PanelingOptions, panel};
+use aero_geometry::{Airfoil, HingeY, Normalization, PanelingOptions, panel};
 use aero_optim::{
     Constraints, DesignPoint, Evaluation, HistoryEntry, Objective, OptimizeOptions, Problem, Stop,
     Target,
@@ -61,6 +61,72 @@ pub enum AirfoilOrigin {
     Optimized {
         /// Name of the initial airfoil.
         of: String,
+    },
+    /// Modification of another airfoil (flap, thickness…).
+    Modified {
+        /// Name of the original airfoil.
+        of: String,
+        /// What was changed.
+        change: String,
+    },
+}
+
+/// A modification of an airfoil (XFOIL `GDES` commands and `INTE`).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Modification {
+    /// Flap deflection, degrees, positive down (`FLAP`).
+    Flap {
+        /// Hinge abscissa.
+        hinge_x: f64,
+        /// Hinge ordinate, or fraction of the local thickness.
+        hinge_y: HingeY,
+        /// Deflection, degrees, positive down.
+        deflection_deg: f64,
+    },
+    /// Trailing-edge gap (`TGAP`).
+    TeGap {
+        /// New gap.
+        gap: f64,
+        /// Blending distance from the trailing edge, 0 to 1.
+        blend: f64,
+        /// Share between the surfaces, -1 to 1.
+        split: f64,
+    },
+    /// Leading-edge radius scaling (`LERA`).
+    LeRadius {
+        /// Approximate radius ratio.
+        factor: f64,
+        /// Blending distance from the leading edge.
+        blend: f64,
+    },
+    /// Thickness and camber scaling (`TFAC`).
+    ScaleThicknessCamber {
+        /// Thickness factor.
+        thickness: f64,
+        /// Camber factor.
+        camber: f64,
+    },
+    /// New maximum thickness and camber (`TSET`).
+    SetThicknessCamber {
+        /// Maximum thickness, unchanged if absent.
+        thickness: Option<f64>,
+        /// Maximum camber, unchanged if absent.
+        camber: Option<f64>,
+    },
+    /// New positions of the thickness and camber high points (`HIGH`).
+    HighPoints {
+        /// Abscissa of the maximum thickness, unchanged if absent.
+        thickness_x: Option<f64>,
+        /// Abscissa of the maximum camber, unchanged if absent.
+        camber_x: Option<f64>,
+    },
+    /// Interpolation toward another airfoil (`INTE`).
+    Interpolate {
+        /// The other airfoil.
+        other: AirfoilId,
+        /// 0 keeps this airfoil, 1 gives the other one.
+        fraction: f64,
     },
 }
 

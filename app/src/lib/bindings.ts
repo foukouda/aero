@@ -18,6 +18,14 @@ export const commands = {
 	importAirfoil: (path: string) => typedError<ImportResult, AppError>(__TAURI_INVOKE("import_airfoil", { path })),
 	/**  Generates several NACA airfoils from a list ("0012, 2412 4415"). */
 	createNacaSeries: (designations: string, closedTe: boolean) => typedError<BatchResult, AppError>(__TAURI_INVOKE("create_naca_series", { designations, closedTe })),
+	/**  Previews a modification of an airfoil (flap, thickness…). */
+	previewModification: (id: number, modification: Modification) => typedError<ModificationPreview, AppError>(__TAURI_INVOKE("preview_modification", { id, modification })),
+	/**  Adds a modified copy of an airfoil to the library. */
+	applyModification: (id: number, modification: Modification, name: string | null) => typedError<AirfoilSummary, AppError>(__TAURI_INVOKE("apply_modification", { id, modification, name })),
+	/**  Adds copies of an airfoil with its flap deflected by each deflection. */
+	flapSeries: (id: number, hingeX: number | null, hingeY: HingeY, deflections: (number | null)[]) => typedError<BatchResult, AppError>(__TAURI_INVOKE("flap_series", { id, hingeX, hingeY, deflections })),
+	/**  Camber line and thickness distribution of an airfoil, with their maxima. */
+	getCamberThickness: (id: number) => typedError<CamberThickness, AppError>(__TAURI_INVOKE("get_camber_thickness", { id })),
 	/**  Imports coordinate files and whole folders of them. */
 	importPaths: (paths: string[]) => typedError<BatchImport, AppError>(__TAURI_INVOKE("import_paths", { paths })),
 	/**  Adds a set of classic airfoils. */
@@ -92,7 +100,13 @@ of: string } |
 /**  Result of a shape optimization. */
 { kind: "optimized"; 
 /**  Name of the initial airfoil. */
-of: string };
+of: string } | 
+/**  Modification of another airfoil (flap, thickness…). */
+{ kind: "modified"; 
+/**  Name of the original airfoil. */
+of: string; 
+/**  What was changed. */
+change: string };
 
 /**  Library entry as listed in the user interface. */
 export type AirfoilSummary = {
@@ -275,6 +289,26 @@ export type BoundaryLayer = {
 	 *  stations (`None` while laminar).
 	 */
 	sqrt_ctau: (number | null)[],
+};
+
+/**
+ *  Camber line and half-thickness distribution of an airfoil, as XFOIL's
+ *  `GETCAM` builds them (vertical distances, sorted by x), with their
+ *  maxima (`GETMAX`).
+ */
+export type CamberThickness = {
+	/**  Camber line `(x, y)`, from the leftmost point, which is at y = 0. */
+	camber: ([(number | null), (number | null)])[],
+	/**  Half thickness `(x, t/2)`. */
+	half_thickness: ([(number | null), (number | null)])[],
+	/**  Maximum thickness (twice the largest half thickness). */
+	max_thickness: number | null,
+	/**  Its abscissa. */
+	max_thickness_x: number | null,
+	/**  Maximum camber. */
+	max_camber: number | null,
+	/**  Its abscissa. */
+	max_camber_x: number | null,
 };
 
 /**
@@ -482,6 +516,16 @@ export type HingeMoment = {
 	fy: number | null,
 };
 
+/**  Vertical position of a flap hinge. */
+export type HingeY = 
+/**  Ordinate `y`. */
+{ kind: "absolute"; value: number | null } | 
+/**
+ *  Fraction of the local thickness: 0 on the lower surface, 1 on the
+ *  upper one (XFOIL's `y/t`, entered as 999 then the fraction).
+ */
+{ kind: "relative"; value: number | null };
+
 /**  One evaluation of the history. */
 export type HistoryEntry = {
 	/**  Evaluation number, from 1 (the initial design). */
@@ -531,6 +575,67 @@ export type Method =
 "cma_es" | 
 /**  Nelder–Mead only, from the initial design. */
 "nelder_mead";
+
+/**  A modification of an airfoil (XFOIL `GDES` commands and `INTE`). */
+export type Modification = 
+/**  Flap deflection, degrees, positive down (`FLAP`). */
+{ kind: "flap"; 
+/**  Hinge abscissa. */
+hinge_x: number | null; 
+/**  Hinge ordinate, or fraction of the local thickness. */
+hinge_y: HingeY; 
+/**  Deflection, degrees, positive down. */
+deflection_deg: number | null } | 
+/**  Trailing-edge gap (`TGAP`). */
+{ kind: "te_gap"; 
+/**  New gap. */
+gap: number | null; 
+/**  Blending distance from the trailing edge, 0 to 1. */
+blend: number | null; 
+/**  Share between the surfaces, -1 to 1. */
+split: number | null } | 
+/**  Leading-edge radius scaling (`LERA`). */
+{ kind: "le_radius"; 
+/**  Approximate radius ratio. */
+factor: number | null; 
+/**  Blending distance from the leading edge. */
+blend: number | null } | 
+/**  Thickness and camber scaling (`TFAC`). */
+{ kind: "scale_thickness_camber"; 
+/**  Thickness factor. */
+thickness: number | null; 
+/**  Camber factor. */
+camber: number | null } | 
+/**  New maximum thickness and camber (`TSET`). */
+{ kind: "set_thickness_camber"; 
+/**  Maximum thickness, unchanged if absent. */
+thickness: number | null; 
+/**  Maximum camber, unchanged if absent. */
+camber: number | null } | 
+/**  New positions of the thickness and camber high points (`HIGH`). */
+{ kind: "high_points"; 
+/**  Abscissa of the maximum thickness, unchanged if absent. */
+thickness_x: number | null; 
+/**  Abscissa of the maximum camber, unchanged if absent. */
+camber_x: number | null } | 
+/**  Interpolation toward another airfoil (`INTE`). */
+{ kind: "interpolate"; 
+/**  The other airfoil. */
+other: number; 
+/**  0 keeps this airfoil, 1 gives the other one. */
+fraction: number | null };
+
+/**  An airfoil modification, previewed before it is created. */
+export type ModificationPreview = {
+	/**  Coordinates of the modified airfoil. */
+	x: (number | null)[],
+	/**  Ordinates. */
+	y: (number | null)[],
+	/**  Its geometric properties. */
+	properties: GeometricProperties,
+	/**  Short description, used in the new airfoil's name. */
+	description: string,
+};
 
 /**  How an airfoil is normalized to unit chord. */
 export type Normalization = 

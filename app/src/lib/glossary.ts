@@ -511,6 +511,38 @@ export const GLOSSARY: GlossaryEntry[] = [
     },
   },
   {
+    id: "flap",
+    category: "geometry",
+    text: {
+      en: {
+        term: "Flap deflection",
+        short: "The rear part of the airfoil is rotated about a hinge, positive down: more lift and more nose-down moment.",
+        long: "A flap (or an aileron, an elevator) is the part of the airfoil behind a hinge. Deflecting it down by a few degrees cambers the airfoil: the lift at a given angle increases (roughly +0.05 to +0.1 in Cl per degree for a 25 % chord flap), the zero-lift angle moves to more negative values, and Cm becomes more negative. Deflected up, it does the opposite (reflex).\n\nThe hinge is given by its x position and either its y or its height as a fraction of the local thickness (0 on the lower surface, 1 on the upper one). As XFOIL does, the surface where the flap moves in is cut and a circular arc closes the gap on the other side; the rounded hinge of a real flap and the flow through its slot are not modelled.",
+      },
+      fr: {
+        term: "Braquage de volet",
+        short: "L'arrière du profil tourne autour d'une charnière, positif vers le bas : plus de portance et un moment plus piqueur.",
+        long: "Un volet (ou un aileron, une gouverne de profondeur) est la partie du profil en arrière d'une charnière. Le braquer vers le bas de quelques degrés cambre le profil : la portance à un angle donné augmente (environ +0,05 à +0,1 de Cl par degré pour un volet de 25 % de corde), l'angle de portance nulle devient plus négatif et Cm plus négatif. Braqué vers le haut, il fait l'inverse (profil relevé).\n\nLa charnière est donnée par sa position x et soit son ordonnée y, soit sa hauteur en fraction de l'épaisseur locale (0 sur l'intrados, 1 sur l'extrados). Comme dans XFOIL, la surface où le volet rentre est coupée et un arc de cercle ferme l'ouverture de l'autre côté ; l'arrondi d'une vraie charnière et l'écoulement dans la fente ne sont pas représentés.",
+      },
+    },
+  },
+  {
+    id: "modify",
+    category: "geometry",
+    text: {
+      en: {
+        term: "Modifying an airfoil",
+        short: "XFOIL's geometry tools: flap, thickness and camber, their high points, trailing-edge gap, leading-edge radius, blending.",
+        long: "Each tool creates a new airfoil in the library and keeps the original, so both can be compared. Thickness and camber can be scaled or set (camber line and thickness are measured vertically, as XFOIL does); the high points slide the maximum thickness or camber along the chord; the trailing-edge gap opens or closes the trailing edge over a blending distance; the leading-edge radius is scaled near the nose; blending interpolates between two airfoils point by point (a fraction outside 0–1 extrapolates). They are ports of XFOIL's GDES commands (FLAP, TFAC, TSET, HIGH, TGAP, LERA) and of INTE, checked against XFOIL.",
+      },
+      fr: {
+        term: "Modifier un profil",
+        short: "Les outils géométriques de XFOIL : volet, épaisseur et cambrure, leurs points hauts, épaisseur de bord de fuite, rayon de bord d'attaque, mélange.",
+        long: "Chaque outil crée un nouveau profil dans la bibliothèque et garde l'original, pour pouvoir comparer les deux. L'épaisseur et la cambrure peuvent être multipliées ou fixées (la ligne de cambrure et l'épaisseur sont mesurées verticalement, comme dans XFOIL) ; les points hauts font glisser le maximum d'épaisseur ou de cambrure le long de la corde ; l'épaisseur de bord de fuite ouvre ou ferme le bord de fuite sur une distance de raccord ; le rayon de bord d'attaque est modifié près du nez ; le mélange interpole deux profils point par point (une fraction hors de 0–1 extrapole). Ce sont des portages des commandes GDES de XFOIL (FLAP, TFAC, TSET, HIGH, TGAP, LERA) et de INTE, vérifiés contre XFOIL.",
+      },
+    },
+  },
+  {
     id: "paneling",
     category: "geometry",
     text: {

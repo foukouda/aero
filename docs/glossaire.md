@@ -218,6 +218,20 @@ Un grand rayon de bord d'attaque adoucit le pic de dépression aux fortes incide
 
 Un angle de bord de fuite très petit est difficile à fabriquer et fragile ; un bord de fuite épais (un petit écart, souvent 0,1 – 0,5 % de la corde) est plus facile à réaliser et XFOIL le représente par un petit panneau en travers de l'écart.
 
+### Braquage de volet
+
+**L'arrière du profil tourne autour d'une charnière, positif vers le bas : plus de portance et un moment plus piqueur.**
+
+Un volet (ou un aileron, une gouverne de profondeur) est la partie du profil en arrière d'une charnière. Le braquer vers le bas de quelques degrés cambre le profil : la portance à un angle donné augmente (environ +0,05 à +0,1 de Cl par degré pour un volet de 25 % de corde), l'angle de portance nulle devient plus négatif et Cm plus négatif. Braqué vers le haut, il fait l'inverse (profil relevé).
+
+La charnière est donnée par sa position x et soit son ordonnée y, soit sa hauteur en fraction de l'épaisseur locale (0 sur l'intrados, 1 sur l'extrados). Comme dans XFOIL, la surface où le volet rentre est coupée et un arc de cercle ferme l'ouverture de l'autre côté ; l'arrondi d'une vraie charnière et l'écoulement dans la fente ne sont pas représentés.
+
+### Modifier un profil
+
+**Les outils géométriques de XFOIL : volet, épaisseur et cambrure, leurs points hauts, épaisseur de bord de fuite, rayon de bord d'attaque, mélange.**
+
+Chaque outil crée un nouveau profil dans la bibliothèque et garde l'original, pour pouvoir comparer les deux. L'épaisseur et la cambrure peuvent être multipliées ou fixées (la ligne de cambrure et l'épaisseur sont mesurées verticalement, comme dans XFOIL) ; les points hauts font glisser le maximum d'épaisseur ou de cambrure le long de la corde ; l'épaisseur de bord de fuite ouvre ou ferme le bord de fuite sur une distance de raccord ; le rayon de bord d'attaque est modifié près du nez ; le mélange interpole deux profils point par point (une fraction hors de 0–1 extrapole). Ce sont des portages des commandes GDES de XFOIL (FLAP, TFAC, TSET, HIGH, TGAP, LERA) et de INTE, vérifiés contre XFOIL.
+
 ### Panneaux et maillage
 
 **Le contour du profil est découpé en segments droits (panneaux) sur lesquels on calcule l'écoulement ; 160 est un bon défaut.**

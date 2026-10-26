@@ -20,22 +20,24 @@ use aero_foil2d::viscous::{
     ViscousOptions, ViscousPolar, ViscousSolution, ViscousSolver, ViscousSweepProgress,
 };
 use aero_geometry::{
-    Airfoil, NacaOptions, Normalization, PanelingOptions, TrailingEdge, naca, parse_dat,
-    to_selig_string,
+    Airfoil, CamberThickness, HingeY, NacaOptions, Normalization, PanelingOptions, TrailingEdge,
+    camber_thickness, deflect_flap, interpolate, move_high_points, naca, parse_dat,
+    scale_le_radius, scale_thickness_camber, set_te_gap, set_thickness_camber, to_selig_string,
 };
 
 use aero_optim::{DesignSpace, Phase, Stop};
 
 use crate::dto::{
     AirfoilSummary, AnalysisRequest, AnalysisView, BatchFailure, BatchImport, BatchResult,
-    BestDesign, GeometryView, ImportResult, OptimizationEvent, OptimizeRequest, SessionView,
-    SweepEvent, SweepRequest, ViscousView,
+    BestDesign, GeometryView, ImportResult, ModificationPreview, OptimizationEvent,
+    OptimizeRequest, SessionView, SweepEvent, SweepRequest, ViscousView,
 };
 use crate::error::{AppError, ErrorKind};
 use crate::export;
 use crate::model::{
-    AirfoilEntry, AirfoilId, AirfoilOrigin, OperatingMode, OptimizationSetup, PolarData, Session,
-    Settings, Shape, StoredOptimization, StoredPolar, load_project, save_project,
+    AirfoilEntry, AirfoilId, AirfoilOrigin, Modification, OperatingMode, OptimizationSetup,
+    PolarData, Session, Settings, Shape, StoredOptimization, StoredPolar, load_project,
+    save_project,
 };
 
 /// Largest accepted coordinate file, in bytes.
@@ -413,6 +415,156 @@ impl Engine {
             out.push(self.rename(id, name)?);
         }
         Ok(out)
+    }
+
+    /// The airfoil modified as requested, and a short description.
+    fn modified(&self, id: AirfoilId, m: &Modification) -> Result<(Airfoil, String), AppError> {
+        let session = lock(&self.session);
+        let source = &session.get(id)?.source;
+        let pct = |v: f64| format!("{:.2} %", 100.0 * v).replace(".00 %", " %");
+        let (airfoil, description) = match *m {
+            Modification::Flap {
+                hinge_x,
+                hinge_y,
+                deflection_deg,
+            } => (
+                deflect_flap(source, hinge_x, hinge_y, deflection_deg)?,
+                format!("flap {deflection_deg}° at x {hinge_x}"),
+            ),
+            Modification::TeGap { gap, blend, split } => (
+                set_te_gap(source, gap, blend, split)?,
+                format!("TE gap {}", pct(gap)),
+            ),
+            Modification::LeRadius { factor, blend } => (
+                scale_le_radius(source, factor, blend)?,
+                format!("LE radius ×{factor}"),
+            ),
+            Modification::ScaleThicknessCamber { thickness, camber } => (
+                scale_thickness_camber(source, thickness, camber)?,
+                format!("thickness ×{thickness}, camber ×{camber}"),
+            ),
+            Modification::SetThicknessCamber { thickness, camber } => {
+                let mut parts = Vec::new();
+                if let Some(t) = thickness {
+                    parts.push(format!("t {}", pct(t)));
+                }
+                if let Some(c) = camber {
+                    parts.push(format!("camber {}", pct(c)));
+                }
+                (
+                    set_thickness_camber(source, thickness, camber)?,
+                    parts.join(", "),
+                )
+            }
+            Modification::HighPoints {
+                thickness_x,
+                camber_x,
+            } => {
+                let mut parts = Vec::new();
+                if let Some(t) = thickness_x {
+                    parts.push(format!("max t at {t}"));
+                }
+                if let Some(c) = camber_x {
+                    parts.push(format!("max camber at {c}"));
+                }
+                (
+                    move_high_points(source, thickness_x, camber_x)?,
+                    parts.join(", "),
+                )
+            }
+            Modification::Interpolate { other, fraction } => {
+                let b = &session.get(other)?.source;
+                (
+                    interpolate(source, b, fraction)?,
+                    format!("{} % toward {}", (100.0 * fraction).round(), b.name()),
+                )
+            }
+        };
+        Ok((airfoil, description))
+    }
+
+    /// Previews a modification without changing the session.
+    pub fn preview_modification(
+        &self,
+        id: AirfoilId,
+        m: &Modification,
+    ) -> Result<ModificationPreview, AppError> {
+        let (a, description) = self.modified(id, m)?;
+        Ok(ModificationPreview {
+            x: a.x().to_vec(),
+            y: a.y().to_vec(),
+            properties: a.properties(),
+            description,
+        })
+    }
+
+    /// Adds the modified airfoil to the library (the original is kept),
+    /// named `name` or "<original> (<change>)", with the original's
+    /// paneling.
+    pub fn apply_modification(
+        &self,
+        id: AirfoilId,
+        m: &Modification,
+        name: Option<&str>,
+    ) -> Result<AirfoilSummary, AppError> {
+        let (a, change) = self.modified(id, m)?;
+        let mut session = lock(&self.session);
+        let original = session.get(id)?.clone();
+        let name = name
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .map_or_else(|| format!("{} ({change})", original.name()), str::to_string);
+        let new_id = session
+            .add(
+                a.with_name(name),
+                AirfoilOrigin::Modified {
+                    of: original.name().to_string(),
+                    change,
+                },
+            )
+            .id;
+        session.set_paneling(new_id, original.paneling)?;
+        session.get(new_id).map(summary)
+    }
+
+    /// Adds the airfoil with its flap deflected by each of `deflections`.
+    pub fn flap_series(
+        &self,
+        id: AirfoilId,
+        hinge_x: f64,
+        hinge_y: HingeY,
+        deflections: &[f64],
+    ) -> Result<BatchResult, AppError> {
+        if deflections.is_empty() {
+            return Err(AppError::new(
+                ErrorKind::InvalidInput,
+                "no deflection given",
+            ));
+        }
+        let base = lock(&self.session).get(id)?.name().to_string();
+        let mut out = BatchResult::default();
+        for &deflection_deg in deflections {
+            let m = Modification::Flap {
+                hinge_x,
+                hinge_y,
+                deflection_deg,
+            };
+            let name = format!("{base} flap {deflection_deg}°");
+            match self.apply_modification(id, &m, Some(&name)) {
+                Ok(a) => out.added.push(a),
+                Err(e) => out.failed.push(BatchFailure {
+                    item: format!("{deflection_deg}°"),
+                    message: e.message,
+                }),
+            }
+        }
+        Ok(out)
+    }
+
+    /// Camber line, thickness and their maxima, as XFOIL's thickness and
+    /// camber commands see them.
+    pub fn camber_thickness(&self, id: AirfoilId) -> Result<CamberThickness, AppError> {
+        Ok(camber_thickness(&lock(&self.session).get(id)?.source))
     }
 
     /// Shows or hides several airfoils.
@@ -1801,5 +1953,61 @@ mod tests {
             panic!("viscous polar expected")
         };
         assert_eq!(polar.points, solver.sweep(&from_zero.sweep).unwrap().points);
+    }
+
+    #[test]
+    fn modifications_preview_and_create_airfoils() {
+        let e = Engine::new();
+        let a = e.create_naca("2412", false).unwrap();
+        let b = e.create_naca("4412", false).unwrap();
+        let flap = Modification::Flap {
+            hinge_x: 0.75,
+            hinge_y: HingeY::Relative(0.5),
+            deflection_deg: 10.0,
+        };
+        let preview = e.preview_modification(a.id, &flap).unwrap();
+        assert_eq!(preview.description, "flap 10° at x 0.75");
+        assert_eq!(e.session_view().airfoils.len(), 2, "a preview adds nothing");
+
+        let created = e.apply_modification(a.id, &flap, None).unwrap();
+        assert_eq!(created.name, "NACA 2412 (flap 10° at x 0.75)");
+        assert!(matches!(created.origin, AirfoilOrigin::Modified { .. }));
+        let g = e.geometry(created.id).unwrap();
+        assert_eq!(g.x, preview.x);
+
+        let half = e
+            .apply_modification(
+                a.id,
+                &Modification::Interpolate {
+                    other: b.id,
+                    fraction: 0.5,
+                },
+                Some("between"),
+            )
+            .unwrap();
+        assert_eq!(half.name, "between");
+        let camber = e.camber_thickness(half.id).unwrap().max_camber;
+        assert!((camber - 0.03).abs() < 1e-3, "{camber}");
+
+        let series = e
+            .flap_series(a.id, 0.75, HingeY::Relative(0.5), &[0.0, 5.0, 10.0])
+            .unwrap();
+        let names: Vec<&str> = series.added.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "NACA 2412 flap 0°",
+                "NACA 2412 flap 5°",
+                "NACA 2412 flap 10°"
+            ]
+        );
+        let bad = Modification::SetThicknessCamber {
+            thickness: Some(50.0),
+            camber: None,
+        };
+        assert_eq!(
+            e.preview_modification(a.id, &bad).unwrap_err().kind,
+            ErrorKind::InvalidInput
+        );
     }
 }
