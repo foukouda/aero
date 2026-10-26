@@ -1,0 +1,56 @@
+# XFOIL inverse design reference case: ../../reference/generate.py --root
+# tests/inverse (XFOIL 6.996 with the instrumented IQSGET); see ../README.md.
+description = "NACA 2412, 160 nodes: mixed inverse (QDES) and full inverse (MDES)"
+
+[airfoil]
+kind = "naca"
+code = "2412"
+
+[paneling]
+n_nodes = 160
+cvpar = 1.0
+cterat = 0.15
+ctrrat = 0.2
+
+# Mixed inverse: target speed of 2 deg kept on a segment at 4 deg.
+[[inverse]]
+name = "qdes_upper"
+alphas = [2.0, 4.0]
+qdes = ["MARK", "20", "60", "EXEC 10"]
+
+[[inverse]]
+name = "qdes_lower"
+alphas = [2.0, 4.0]
+qdes = ["MARK", "100", "140", "EXEC 10"]
+
+[[inverse]]
+name = "qdes_cpxx"
+alphas = [2.0, 5.0]
+qdes = ["CPXX", "MARK", "25", "55", "EXEC 10"]
+
+# Smoothed target speed (slope matching on by default, then off).
+[[inverse]]
+name = "qdes_smoo"
+alphas = [3.0]
+qdes = ["MARK", "15", "50", "SMOO", "EXEC 5"]
+
+[[inverse]]
+name = "qdes_smoo_noslope"
+alphas = [3.0]
+qdes = ["SLOP", "MARK", "15", "50", "SMOO", "EXEC 5"]
+
+# Full inverse: filtered mapping, smoothing, trailing-edge angle.
+[[inverse]]
+name = "mdes_filt"
+alphas = [3.0]
+mdes = ["FILT", "EXEC"]
+
+[[inverse]]
+name = "mdes_tang"
+alphas = [3.0]
+mdes = ["TANG 5 0", "EXEC"]
+
+[[inverse]]
+name = "mdes_smoo_cq"
+alphas = [3.0]
+mdes = ["CQ 0.6", "SMOO", "EXEC"]

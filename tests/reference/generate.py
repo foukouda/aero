@@ -45,6 +45,16 @@ answers to their prompts), followed by ``EXEC``; ``interpolate = { with =
 "file.dat", fraction = f }`` runs ``INTE`` between the case's airfoil file
 and another file, followed by ``PCOP``.
 
+Inverse design runs (``[[inverse]]``), one session ``inv_<name>.in`` each,
+on the paneled airfoil: for each angle of ``alphas``, ``OPER`` ``ALFA``
+then the design menu (``QDES`` if ``qdes = [...]`` is given, ``MDES`` for
+``mdes = [...]``), the commands being run at the last visit (a QDES target
+speed distribution is set at the first visit and kept). The new airfoil is
+saved to ``inv_<name>.dat``: the current airfoil after ``QDES`` (mixed
+inverse), the buffer airfoil copied by ``PCOP`` after ``MDES`` (full
+inverse). ``MARK`` needs the instrumented ``IQSGET``
+(``tests/inverse/patch_iqsget.py``), which reads the two node indices.
+
 Usage:
     python3 generate.py --scripts-only          # only write the scripts
     python3 generate.py --xfoil path/to/xfoil   # write scripts and run XFOIL
@@ -296,6 +306,30 @@ def build_edit_script(case: dict, edit: dict) -> str:
     return "\n".join(lines)
 
 
+def inverse_names(run: dict) -> dict:
+    name = run["name"]
+    return {"script": f"inv_{name}.in", "log": f"inv_{name}.log", "dat": f"inv_{name}.dat"}
+
+
+def build_inverse_script(case: dict, run: dict) -> str:
+    names = inverse_names(run)
+    lines = geometry_lines(case, save_panels=False)
+    if "qdes" in run:
+        menu, commands = "QDES", run["qdes"]
+    else:
+        menu, commands = "MDES", run["mdes"]
+    alphas = run["alphas"]
+    for k, alpha in enumerate(alphas):
+        lines += ["OPER", f"ALFA {float(alpha)}", "", menu]
+        if k + 1 < len(alphas):
+            lines.append("")  # leave the menu, keeping its target distribution
+    lines += [*commands, ""]
+    if menu == "MDES":
+        lines.append("PCOP")  # the new airfoil is in the buffer
+    lines += [f"SAVE {names['dat']}", "", "QUIT", ""]
+    return "\n".join(lines)
+
+
 def inviscid_outputs(case: dict) -> list[str]:
     names = ["panels.dat", "xfoil.log"]
     for run in case.get("runs", []):
@@ -324,6 +358,9 @@ def viscous_outputs(run: dict, save_panels: bool) -> list[str]:
 def sessions(case: dict) -> list[tuple[str, str, str, list[str]]]:
     """XFOIL sessions of a case: (script name, log name, script, outputs)."""
     out = []
+    for run in case.get("inverse", []):
+        names = inverse_names(run)
+        out.append((names["script"], names["log"], build_inverse_script(case, run), [names["log"], names["dat"]]))
     for edit in case.get("edits", []):
         names = edit_names(edit)
         out.append((names["script"], names["log"], build_edit_script(case, edit), [names["log"], names["dat"]]))

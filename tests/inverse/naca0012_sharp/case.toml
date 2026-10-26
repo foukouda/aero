@@ -1,0 +1,22 @@
+# XFOIL inverse design reference case (see ../README.md).
+description = "NACA 0012 with a sharp trailing edge: mixed inverse (sharp-TE Kutta condition), symmetric full inverse with a TE gap"
+
+[airfoil]
+kind = "naca_sharp"
+code = "0012"
+
+[paneling]
+n_nodes = 160
+cvpar = 1.0
+cterat = 0.15
+ctrrat = 0.2
+
+[[inverse]]
+name = "qdes_upper"
+alphas = [0.0, 2.0]
+qdes = ["MARK", "20", "60", "EXEC 10"]
+
+[[inverse]]
+name = "mdes_symm_tgap"
+alphas = [0.0]
+mdes = ["SYMM", "TGAP 0.005 0", "EXEC"]

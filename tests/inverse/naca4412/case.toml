@@ -1,0 +1,17 @@
+# XFOIL inverse design reference case (see ../README.md).
+description = "NACA 4412: full inverse with two filter passes at a prescribed alpha"
+
+[airfoil]
+kind = "naca"
+code = "4412"
+
+[paneling]
+n_nodes = 160
+cvpar = 1.0
+cterat = 0.15
+ctrrat = 0.2
+
+[[inverse]]
+name = "mdes_aq_filt2"
+alphas = [2.0]
+mdes = ["AQ 5", "FILT", "FILT", "EXEC"]

@@ -1,0 +1,22 @@
+# XFOIL inverse design reference case (see ../README.md).
+description = "Eppler 387 (UIUC file), 160 nodes: mixed inverse near the leading edge, full inverse"
+
+[airfoil]
+kind = "file"
+file = "e387.dat"
+
+[paneling]
+n_nodes = 160
+cvpar = 1.0
+cterat = 0.15
+ctrrat = 0.2
+
+[[inverse]]
+name = "qdes_nose"
+alphas = [3.0, 1.0]
+qdes = ["MARK", "60", "78", "EXEC 10"]
+
+[[inverse]]
+name = "mdes_filt"
+alphas = [4.0]
+mdes = ["FILT", "EXEC"]
