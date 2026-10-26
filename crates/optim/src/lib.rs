@@ -8,11 +8,14 @@
 //! - [`problem`]: operating points, objective and constraints;
 //! - [`evaluate`]: geometry and viscous analysis of a design (the XFOIL
 //!   port of `aero-foil2d`), ranked by feasibility then objective;
-//! - [`optimizers`]: CMA-ES and Nelder–Mead.
+//! - [`optimizers`]: CMA-ES and Nelder–Mead;
+//! - [`optimize`](mod@optimize): the driver, from the initial airfoil to
+//!   the optimized one.
 
 pub mod design;
 mod error;
 pub mod evaluate;
+pub mod optimize;
 pub mod optimizers;
 pub mod problem;
 pub mod rank;
@@ -20,5 +23,9 @@ pub mod rank;
 pub use design::{DesignOptions, DesignSpace};
 pub use error::{OptimError, Result};
 pub use evaluate::{Evaluation, Evaluator, GeometrySummary, PointResult, PointValues};
+pub use optimize::{
+    HistoryEntry, Method, OptimizationResult, OptimizeOptions, Phase, Progress, optimize,
+};
+pub use optimizers::Stop;
 pub use problem::{Constraints, DesignPoint, Objective, Problem, Target, ThicknessStation};
 pub use rank::Ranked;
