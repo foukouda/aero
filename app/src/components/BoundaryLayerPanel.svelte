@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Term from "./Term.svelte";
   import type { PlotCurve } from "./Plot.svelte";
   import PlotPanel from "./PlotPanel.svelte";
   import type { BoundaryLayer } from "../lib/bindings";
@@ -67,7 +68,7 @@
 
 <div class="bl" data-tour="bl-plot">
   <label class="select">
-    <span class="muted">Boundary layer</span>
+    <span class="muted"><Term id="boundary-layer">Boundary layer</Term></span>
     <select bind:value={quantity} aria-label="Boundary-layer quantity">
       {#each QUANTITIES as item (item.key)}
         <option value={item.key}>{item.label}</option>

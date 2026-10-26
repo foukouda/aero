@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Term from "./Term.svelte";
   import type { PlotCurve } from "./Plot.svelte";
   import PlotPanel from "./PlotPanel.svelte";
   import type {
@@ -267,7 +268,7 @@
 <div class="optimize">
   <section class="panel setup" data-tour="optimize-setup">
     {#if setup && problem && options}
-      <h2>Problem</h2>
+      <h2><Term id="optimization">Problem</Term></h2>
       <label class="field">
         Airfoil
         <select
@@ -338,7 +339,7 @@
       <button class="small-button" disabled={running} onclick={addPoint}>+ Point</button>
 
       <label class="field">
-        Objective
+        <Term id="objective">Objective</Term>
         <select
           value={problem.objective ?? "min_drag"}
           disabled={running}
@@ -409,7 +410,7 @@
         </label>
       </div>
 
-      <h3>Constraints</h3>
+      <h3><Term id="constraint">Constraints</Term></h3>
       {#each constraintRows as row (row.key)}
         {@const current = constraints[row.key] ?? null}
         <div class="constraint" title={row.title}>
@@ -481,7 +482,7 @@
       <h3>Search</h3>
       <div class="grid1">
         <label title="Bernstein order of the CST shape functions; 2 (n + 1) design variables">
-          CST order
+          <Term id="cst">CST order</Term>
           <select
             value={problem.design?.order ?? 6}
             disabled={running}
@@ -505,7 +506,7 @@
           />
         </label>
         <label>
-          Method
+          <Term id="optimizer">Method</Term>
           <select
             value={options.method ?? "cma_es_then_nelder_mead"}
             disabled={running}

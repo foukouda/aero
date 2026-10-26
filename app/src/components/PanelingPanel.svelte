@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Term from "./Term.svelte";
   import type { GeometryView, PanelingOptions } from "../lib/bindings";
   import { app } from "../lib/state.svelte";
 
@@ -26,7 +27,7 @@
 </script>
 
 <section class="panel paneling" data-tour="paneling">
-  <h2>Paneling <span class="muted">(XFOIL PANGEN)</span></h2>
+  <h2><Term id="paneling">Paneling</Term> <span class="muted">(XFOIL PANGEN)</span></h2>
 
   <label>
     <span>Nodes <b class="mono">{p.n_nodes}</b></span>

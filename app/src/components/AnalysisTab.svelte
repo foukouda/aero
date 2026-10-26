@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Term from "./Term.svelte";
   import type { PlotCurve } from "./Plot.svelte";
   import PlotPanel from "./PlotPanel.svelte";
   import BoundaryLayerPanel from "./BoundaryLayerPanel.svelte";
@@ -102,7 +103,7 @@
         >
       </div>
       {#if mode === "alpha"}
-        <label for="alpha">Angle of attack α</label>
+        <label for="alpha"><Term id="alpha">Angle of attack α</Term></label>
         <input
           type="range"
           min="-15"
@@ -121,7 +122,7 @@
         />
         <span class="muted">°</span>
       {:else}
-        <label for="cl">Lift coefficient Cl</label>
+        <label for="cl"><Term id="cl">Lift coefficient Cl</Term></label>
         <input
           type="range"
           min="-1"
@@ -141,7 +142,7 @@
       {/if}
     </div>
     <div class="mach" data-tour="mach">
-      <label for="mach">Mach</label>
+      <label for="mach"><Term id="mach">Mach</Term></label>
       <input
         id="mach"
         type="number"
@@ -168,7 +169,7 @@
           checked={hasHinge}
           onchange={(e) => app.updateSettings({ flap_hinge: e.currentTarget.checked ? [0.75, 0] : null })}
         />
-        Flap hinge
+        <Term id="hinge">Flap hinge</Term>
       </label>
       {#if hinge}
         <label>x <input type="number" step="0.05" value={hinge[0]} onchange={(e) => setHinge(0, Number(e.currentTarget.value))} /></label>
@@ -182,23 +183,23 @@
       <thead>
         <tr>
           <th>Airfoil</th>
-          {#if mode === "cl"}<th title="Angle of attack found for the prescribed lift">α</th>{/if}
-          <th>Cl</th>
+          {#if mode === "cl"}<th title="Angle of attack found for the prescribed lift"><Term id="alpha">α</Term></th>{/if}
+          <th><Term id="cl">Cl</Term></th>
           {#if viscous}
-            <th>Cd</th>
-            <th>L/D</th>
+            <th><Term id="cd">Cd</Term></th>
+            <th><Term id="ld">L/D</Term></th>
           {/if}
-          <th>Cm c/4</th>
+          <th><Term id="cm">Cm c/4</Term></th>
           {#if viscous}
-            <th title="Transition x/c, top surface">Xtr top</th>
-            <th title="Transition x/c, bottom surface">Xtr bot</th>
-            <th title="Pressure drag / friction drag">Cdp / Cdf</th>
+            <th><Term id="transition">Xtr top</Term></th>
+            <th><Term id="transition">Xtr bot</Term></th>
+            <th><Term id="cdp-cdf">Cdp / Cdf</Term></th>
           {:else}
             <th>Cdp</th>
           {/if}
-          <th>Cp min</th>
+          <th><Term id="cp">Cp min</Term></th>
           {#if !viscous}<th>at x</th>{/if}
-          {#if hasHinge}<th title="Flap hinge moment coefficient, positive raising the flap trailing edge">Ch</th>{/if}
+          {#if hasHinge}<th><Term id="hinge">Ch</Term></th>{/if}
           <th></th>
         </tr>
       </thead>

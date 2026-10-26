@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Term from "./Term.svelte";
   import { app } from "../lib/state.svelte";
 
   let designation = $state("2412");
@@ -45,7 +46,7 @@
 
 <aside class="library panel">
   <form class="naca" onsubmit={generate} data-tour="naca">
-    <h2>New NACA airfoil</h2>
+    <h2>New <Term id="naca">NACA</Term> airfoil</h2>
     <div class="row">
       <input
         type="text"

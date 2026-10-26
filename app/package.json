@@ -9,6 +9,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "test": "vitest run",
     "tauri": "tauri",
+    "glossary": "cross-env AERO_UPDATE_GLOSSARY=1 vitest run src/lib/glossary.test.ts",
     "bindings": "cd .. && cross-env AERO_UPDATE_BINDINGS=1 cargo test -p aero-app bindings"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
     "@sveltejs/vite-plugin-svelte": "7.3.1",
     "@tauri-apps/cli": "2.12.4",
     "@tsconfig/svelte": "5.0.8",
+    "@types/node": "24.19.1",
     "cross-env": "10.1.0",
     "svelte": "5.57.2",
     "svelte-check": "4.7.7",

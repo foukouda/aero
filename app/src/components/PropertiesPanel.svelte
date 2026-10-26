@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Term from "./Term.svelte";
   import type { GeometryView } from "../lib/bindings";
   import { app } from "../lib/state.svelte";
   import { fixed, percent } from "../lib/format";
@@ -10,19 +11,19 @@
 <section class="panel props" data-tour="properties">
   <h2>{geometry.name}</h2>
   <dl class="mono">
-    <dt>Max thickness</dt>
+    <dt><Term id="thickness">Max thickness</Term></dt>
     <dd>{percent(p.max_thickness)} <span class="muted">at x/c {fixed(p.max_thickness_x, 3)}</span></dd>
-    <dt>Max camber</dt>
+    <dt><Term id="camber">Max camber</Term></dt>
     <dd>{percent(p.max_camber)} <span class="muted">at x/c {fixed(p.max_camber_x, 3)}</span></dd>
-    <dt>LE radius</dt>
+    <dt><Term id="le-radius">LE radius</Term></dt>
     <dd>{percent(p.le_radius, 3)}</dd>
-    <dt>TE angle</dt>
+    <dt><Term id="trailing-edge">TE angle</Term></dt>
     <dd>{fixed(p.te_angle_deg, 2)}°</dd>
-    <dt>TE thickness</dt>
+    <dt><Term id="trailing-edge">TE thickness</Term></dt>
     <dd>{percent(p.te_thickness, 3)}</dd>
     <dt>Area</dt>
     <dd>{fixed(p.area, 5)} c²</dd>
-    <dt>Chord</dt>
+    <dt><Term id="chord">Chord</Term></dt>
     <dd>{fixed(p.chord, 5)}</dd>
     <dt>Trailing edge</dt>
     <dd>{geometry.sharp_trailing_edge ? "sharp" : "blunt"}</dd>

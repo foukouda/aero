@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Term from "./Term.svelte";
   import { app } from "../lib/state.svelte";
   import { compactExp, parseNumber } from "../lib/format";
   import type { AmplificationModel, MachReynoldsVariation } from "../lib/bindings";
@@ -38,10 +39,10 @@
       {disabled}
       onchange={(e) => app.updateViscous({ enabled: e.currentTarget.checked })}
     />
-    Viscous
+    <Term id="viscous">Viscous</Term>
   </label>
   <label title="Chord Reynolds number, e.g. 1e6, 500k, 3 000 000">
-    Re
+    <Term id="reynolds">Re</Term>
     <input
       class="re"
       type="text"
@@ -53,7 +54,7 @@
     />
   </label>
   <label title="Critical amplification ratio of the eᴺ transition criterion (top / bottom); 9 = average wind tunnel">
-    Ncrit
+    <Term id="ncrit">Ncrit</Term>
     {#each [0, 1] as const as side (side)}
       <input
         class="small"
@@ -73,7 +74,7 @@
     {/each}
   </label>
   <label title="Forced transition (trip) x/c on the top / bottom surface; 1 = free transition">
-    Trip x/c
+    <Term id="trip">Trip x/c</Term>
     {#each [0, 1] as const as side (side)}
       <input
         class="small"
@@ -93,7 +94,7 @@
     {/each}
   </label>
   <label title="How the Mach and Reynolds numbers vary with the lift (XFOIL TYPE): 1 fixed chord and speed; 2 fixed wing loading (the values entered are at CL = 1); 3 fixed lift, varying chord">
-    M, Re
+    <Term id="mach-re-variation">M, Re</Term>
     <select
       value={v.variation}
       disabled={off}
@@ -105,7 +106,7 @@
     </select>
   </label>
   <label title="Amplification rate of the transition criterion: XFOIL's original envelope or the modified one of its DAMP command">
-    Ampl.
+    <Term id="amplification">Ampl.</Term>
     <select
       value={v.amplification}
       disabled={off}

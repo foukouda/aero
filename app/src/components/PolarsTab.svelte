@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Term from "./Term.svelte";
   import type { PlotCurve } from "./Plot.svelte";
   import PlotPanel from "./PlotPanel.svelte";
   import ViscousControls from "./ViscousControls.svelte";
@@ -142,7 +143,7 @@
         <label>Cl end <input type="number" step="0.1" value={clSweep.end} disabled={running} onchange={(e) => updateClSweep({ end: value(e) })} /></label>
         <label>step <input type="number" min="0.005" step="0.05" value={clSweep.step} disabled={running} onchange={(e) => updateClSweep({ step: value(e) })} /></label>
       {/if}
-      <label>Mach <input type="number" min="0" max="0.99" step="0.05" value={mach} disabled={running} onchange={(e) => app.updateSettings({ mach: Math.max(0, Math.min(0.99, value(e))) })} /></label>
+      <label><Term id="mach">Mach</Term> <input type="number" min="0" max="0.99" step="0.05" value={mach} disabled={running} onchange={(e) => app.updateSettings({ mach: Math.max(0, Math.min(0.99, value(e))) })} /></label>
       <ViscousControls disabled={running} />
     </div>
     <div class="row">

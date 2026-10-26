@@ -8,6 +8,7 @@
   import OptimizeTab from "./components/OptimizeTab.svelte";
   import Toasts from "./components/Toasts.svelte";
   import Tour from "./components/Tour.svelte";
+  import Glossary from "./components/Glossary.svelte";
   import { app, dialogs, type Tab } from "./lib/state.svelte";
 
   let dragging = $state(false);
@@ -79,6 +80,11 @@
       <button class="tour" onclick={() => app.startTour()} title="Guided tour of the application">
         ? Tour
       </button>
+      <button
+        data-tour="glossary"
+        onclick={() => app.openGlossary()}
+        title="What Cl, Cd, Re, transition… mean (also: click any dotted label)">Glossary</button
+      >
       <span class="project-actions" data-tour="project">
         <button onclick={() => app.newProject()} title="New project">New</button>
       <button onclick={() => app.openProject()} title="Open project (Ctrl+O)">Open…</button>
@@ -116,6 +122,7 @@
   {/if}
   <Toasts />
   <Tour />
+  <Glossary />
 </div>
 
 <style>

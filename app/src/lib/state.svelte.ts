@@ -144,6 +144,9 @@ class AppState {
   /** Current step of the guided tour, `null` when it is closed. */
   tourIndex = $state<number | null>(null);
   tourLang = $state<TourLang>(initialTourLang());
+  /** Glossary panel, and the entry to show. */
+  glossaryOpen = $state(false);
+  glossaryTerm = $state<string | null>(null);
 
   #nextToast = 1;
 
@@ -248,6 +251,15 @@ class AppState {
     this.tourIndex = i;
     const tab = TOUR_STEPS[i].tab;
     if (tab) this.tab = tab;
+  }
+
+  openGlossary(id: string | null = null) {
+    this.glossaryTerm = id;
+    this.glossaryOpen = true;
+  }
+
+  closeGlossary() {
+    this.glossaryOpen = false;
   }
 
   setTourLang(lang: TourLang) {

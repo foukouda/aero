@@ -39,6 +39,20 @@ export const TOUR_STEPS: TourStep[] = [
     },
   },
   {
+    id: "glossary",
+    target: "glossary",
+    text: {
+      en: {
+        title: "New to aerodynamics?",
+        body: "The Glossary button explains every quantity — Cl, Cd, L/D, Cm, Cp, the Reynolds number, transition, stall… — with typical values. Labels with a dotted underline open the matching explanation when you click them, and show a short definition when you hover them.",
+      },
+      fr: {
+        title: "Pas aérodynamicien ?",
+        body: "Le bouton Glossary explique chaque grandeur — Cl, Cd, finesse L/D, Cm, Cp, nombre de Reynolds, transition, décrochage… — avec des valeurs typiques. Les libellés soulignés en pointillés ouvrent l'explication correspondante quand tu cliques dessus, et montrent une définition courte au survol.",
+      },
+    },
+  },
+  {
     id: "naca",
     target: "naca",
     action: "generate-naca",
