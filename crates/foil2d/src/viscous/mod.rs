@@ -18,3 +18,5 @@
 mod blsys;
 #[allow(dead_code)]
 mod closure;
+#[allow(dead_code)]
+mod panels;

@@ -41,6 +41,8 @@ pub struct PanelGeometry {
     pub(crate) ny: Vec<f64>,
     pub(crate) apanel: Vec<f64>,
     pub(crate) le: [f64; 2],
+    /// Arc length of the leading edge (XFOIL `SLE`).
+    pub(crate) sle: f64,
     pub(crate) te: [f64; 2],
     pub(crate) chord: f64,
     pub(crate) te_panel: TrailingEdgePanel,
@@ -124,6 +126,7 @@ impl PanelGeometry {
             ny,
             apanel,
             le: [le.x, le.y],
+            sle: le.s,
             te,
             chord,
             te_panel: TrailingEdgePanel {

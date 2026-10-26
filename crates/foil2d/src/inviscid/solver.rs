@@ -245,13 +245,14 @@ pub struct InviscidSolver {
     options: InviscidOptions,
     aij: Mat<f64>,
     bij: OnceLock<Mat<f64>>,
+    dij: OnceLock<Mat<f64>>,
     lu: PartialPivLu<f64>,
     gamu: Mat<f64>,
 }
 
 /// Control point and bisector direction `(cos, sin)` of the sharp
 /// trailing-edge condition (XFOIL `GGCALC`), `None` for a blunt edge.
-fn te_bisector(geometry: &PanelGeometry) -> Option<(FieldPoint, f64, f64)> {
+pub(crate) fn te_bisector(geometry: &PanelGeometry) -> Option<(FieldPoint, f64, f64)> {
     if !geometry.te_panel.sharp {
         return None;
     }
@@ -376,6 +377,7 @@ impl InviscidSolver {
             options: *options,
             aij,
             bij: OnceLock::new(),
+            dij: OnceLock::new(),
             lu,
             gamu: rhs,
         })
@@ -414,6 +416,20 @@ impl InviscidSolver {
     pub fn source_influence_matrix(&self) -> MatRef<'_, f64> {
         self.bij
             .get_or_init(|| assemble_source_influence(&self.geometry))
+            .as_ref()
+    }
+
+    /// The `N×N` matrix `∂γ_i/∂σ_j` of the surface speeds with respect to the
+    /// airfoil mass defects, `AIJ⁻¹·BIJ` without its `ψ₀` row (XFOIL `DIJ`
+    /// for airfoil nodes, `QDCALC`). Computed on first access.
+    pub fn source_velocity_matrix(&self) -> MatRef<'_, f64> {
+        self.dij
+            .get_or_init(|| {
+                let n = self.len();
+                let mut x = self.source_influence_matrix().to_owned();
+                self.lu.solve_in_place(x.as_mut());
+                x.subrows(0, n).to_owned()
+            })
             .as_ref()
     }
 
@@ -602,16 +618,16 @@ fn atanc(y: f64, x: f64, thold: f64) -> f64 {
     thold + dthet - TAU * ((dthet + PI.copysign(dthet)) / TAU).trunc()
 }
 
-struct Coefficients {
-    cl: f64,
-    cm: f64,
-    cdp: f64,
-    cl_alpha: f64,
+pub(crate) struct Coefficients {
+    pub cl: f64,
+    pub cm: f64,
+    pub cdp: f64,
+    pub cl_alpha: f64,
 }
 
 /// XFOIL `CLCALC`: trapezoidal integration of the (compressible) surface
 /// pressures around the contour, trailing-edge gap segment included.
-fn clcalc(
+pub(crate) fn clcalc(
     x: &[f64],
     y: &[f64],
     gam: &[f64],
