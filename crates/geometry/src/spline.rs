@@ -84,6 +84,12 @@ impl Spline {
         d2val(t, &self.v, &self.d, &self.s)
     }
 
+    /// Finds `t` such that the spline equals `value`, by Newton iteration
+    /// from `guess` (XFOIL `SINVRT`). Returns `None` if it does not converge.
+    pub fn invert(&self, value: f64, guess: f64) -> Option<f64> {
+        sinvrt(guess, value, &self.v, &self.d, &self.s)
+    }
+
     /// Knot abscissas.
     pub fn knots(&self) -> &[f64] {
         &self.s

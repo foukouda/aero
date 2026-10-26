@@ -24,6 +24,10 @@ pub enum InverseError {
     #[error("the target segment cannot include the stagnation point")]
     StagnationInSegment,
 
+    /// The target speed has no stagnation point (no sign change).
+    #[error("the target speed distribution has no stagnation point")]
+    NoStagnationPoint,
+
     /// An option or the target is invalid.
     #[error("invalid inverse design input: {0}")]
     InvalidOption(String),
