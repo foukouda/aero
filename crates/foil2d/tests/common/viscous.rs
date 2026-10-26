@@ -508,12 +508,39 @@ pub fn line_difference(a: &str, b: &str) -> f64 {
     worst
 }
 
-/// Same line, or the same values with another variable named as the
-/// largest change: an exact tie (at the first station of the similarity
-/// solution, dθ/θ = dδ*/δ*) decided by the last bit, with no effect on the
-/// iterations.
+/// Lines that are equivalent for the computation:
+/// - the same values with another variable named as the largest change: an
+///   exact tie (at the first station of the similarity solution,
+///   dθ/θ = dδ*/δ*) decided by the last bit;
+/// - the same marching failure (routine, station, side) with residuals on
+///   the same side of 0.1. The residual of a local Newton iteration that
+///   failed after 25 steps is erratic; it only decides whether the station
+///   is extrapolated from upstream (above 0.1, then its value does not
+///   matter) or keeps its last iterate (below, then within 1 %).
 fn same_or_tie(a: &str, b: &str) -> bool {
-    a == b || line_difference(a, b) == 0.0
+    if a == b || line_difference(a, b) == 0.0 {
+        return true;
+    }
+    let failure = |l: &str| {
+        let l = l.trim_start();
+        (l.starts_with("MRCHUE: Convergence failed") || l.starts_with("MRCHDU: Convergence failed"))
+            .then(|| {
+                let (head, res) = l.rsplit_once('=')?;
+                Some((head.to_string(), real(res.trim())?))
+            })
+            .flatten()
+    };
+    match (failure(a), failure(b)) {
+        (Some((ha, ra)), Some((hb, rb))) if ha == hb => {
+            let garbage = |r: f64| r > 0.1 || r.is_nan();
+            match (garbage(ra), garbage(rb)) {
+                (true, true) => true,
+                (false, false) => (ra - rb).abs() <= 0.01 * ra.abs().max(rb.abs()),
+                _ => false,
+            }
+        }
+        _ => false,
+    }
 }
 
 /// Compares our console log with XFOIL's (exact ties aside); at the first

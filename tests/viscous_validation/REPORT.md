@@ -4,20 +4,20 @@
 
 34 cases agree with XFOIL on every point. In the other 15 cases the Newton iterations go through unstable phases (separated flows, unconverged points) where last-bit differences grow until the two codes follow different paths; for each of them our console output is identical to XFOIL's up to a first difference no larger than the change our own computation shows when its Reynolds number is perturbed by 1e-15 to 1e-11 (relative):
 
-- `naca_19_24008`: identical logs up to line 208, then `MRCHDU: Convergence failed at  46  side 2    Res =  0.2024E+04` vs XFOIL `MRCHDU: Convergence failed at  46  side 2    Res =  0.2022E+04` (relative difference 9.9e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to 4.9e-4)
+- `naca_19_24008`: identical logs up to line 377, then `22   rms: 0.1299E+01   max: 0.8916E+01   C at   38  2   RLX: 0.168` vs XFOIL `22   rms: 0.1299E+01   max: 0.8919E+01   C at   38  2   RLX: 0.168` (relative difference 3.4e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to 1.1e-4)
 - `uiuc_ah81k144wfklappe`: identical logs up to line 110, then `17   rms: 0.7548E-01   max: 0.6176E+00   T at   67  2` vs XFOIL `17   rms: 0.7548E-01   max: 0.6175E+00   T at   67  2` (relative difference 1.6e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to 1.6e-4)
 - `uiuc_bw3`: identical logs up to line 287, then `7   rms: 0.7204E-02   max: 0.7757E-01   D at   37  1` vs XFOIL `7   rms: 0.7204E-02   max: 0.7758E-01   D at   37  1` (relative difference 1.3e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to 0.0e0)
-- `uiuc_e211`: identical logs up to line 113, then `MRCHDU: Convergence failed at  26  side 2    Res =  0.2508E+01` vs XFOIL `MRCHDU: Convergence failed at  26  side 2    Res =  0.2515E+01` (relative difference 2.8e-3; perturbing our Re by 1e-15..1e-11 changes this line by up to 8.0e-4)
-- `uiuc_e342`: identical logs up to line 170, then `MRCHDU: Convergence failed at  49  side 2    Res =  0.1685E+01` vs XFOIL `MRCHDU: Convergence failed at  49  side 2    Res =  0.1679E+01` (relative difference 3.6e-3; perturbing our Re by 1e-15..1e-11 changes this line by up to 5.9e-4)
+- `uiuc_e211`: identical logs up to line 137, then `10   rms: 0.4626E+00   max: -.1537E+01   D at   50  2   RLX: 0.325` vs XFOIL `10   rms: 0.4572E+00   max: -.1571E+01   D at   53  2   RLX: 0.318` (relative difference inf; perturbing our Re by 1e-15..1e-11 changes this line by up to more (an earlier line already changes))
+- `uiuc_e342`: identical logs up to line 198, then `MRCHDU: Convergence failed at  85  side 2    Res =  0.2277E+00` vs XFOIL `MRCHDU: Convergence failed at  85  side 2    Res =  0.5716E-01` (relative difference 7.5e-1; perturbing our Re by 1e-15..1e-11 changes this line by up to 7.6e-1)
 - `uiuc_e748`: identical logs up to line 263, then `12   rms: 0.4887E+00   max: -.4994E+01   T at   52  2   RLX: 0.100` vs XFOIL `12   rms: 0.4885E+00   max: -.4993E+01   T at   52  2   RLX: 0.100` (relative difference 4.1e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to 2.0e-4)
 - `uiuc_fx6617a2`: identical logs up to line 743, then `14   rms: 0.6487E-01   max: -.3628E+00   T at   52  1` vs XFOIL `14   rms: 0.6487E-01   max: -.3627E+00   T at   52  1` (relative difference 2.8e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to more (an earlier line already changes))
 - `uiuc_goe366`: identical logs up to line 389, then `5   rms: 0.3433E+02   max: 0.1399E+03   D at   39  2   RLX: 0.005` vs XFOIL `5   rms: 0.3432E+02   max: 0.1399E+03   D at   39  2   RLX: 0.005` (relative difference 2.9e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to 2.9e-4)
 - `uiuc_goe546`: identical logs up to line 209, then `4   rms: 0.1503E+01   max: -.3200E+02   C at   68  2   RLX: 0.016` vs XFOIL `4   rms: 0.1503E+01   max: -.3201E+02   C at   68  2   RLX: 0.016` (relative difference 3.1e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to 3.1e-4)
 - `uiuc_lwk80080`: identical logs up to line 69, then `12   rms: 0.1440E+01   max: -.2994E+02   C at   25  2   RLX: 0.017` vs XFOIL `12   rms: 0.1440E+01   max: -.2992E+02   C at   25  2   RLX: 0.017` (relative difference 6.7e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to more (an earlier line already changes))
-- `uiuc_mrc16_95`: identical logs up to line 1308, then `MRCHDU: Convergence failed at  72  side 1    Res =  0.9582E+03` vs XFOIL `MRCHDU: Convergence failed at  72  side 1    Res =  0.9581E+03` (relative difference 1.0e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to 1.0e-4)
-- `uiuc_naca001034a08cli0_2`: identical logs up to line 162, then `MRCHDU: Convergence failed at 134  side 2    Res =  0.3259E-02` vs XFOIL `MRCHDU: Convergence failed at 134  side 2    Res =  0.3260E-02` (relative difference 3.1e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to 0.0e0)
+- `uiuc_mrc16_95`: identical logs up to line 1351, then `Side 1  free  transition at x/c =  0.1731   39` vs XFOIL `MRCHDU: Convergence failed at  69  side 1    Res =  0.4064E+00` (relative difference inf; perturbing our Re by 1e-15..1e-11 changes this line by up to more (an earlier line already changes))
+- `uiuc_naca001034a08cli0_2`: identical logs up to line 206, then `8   rms: 0.8094E+00   max: 0.4469E+01   T at   23  2   RLX: 0.208` vs XFOIL `8   rms: 0.8093E+00   max: 0.4468E+01   T at   23  2   RLX: 0.208` (relative difference 2.2e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to 1.2e-4)
 - `uiuc_naca1410`: identical logs up to line 233, then `4   rms: 0.7257E+00   max: -.8129E+01   C at   52  2   RLX: 0.062` vs XFOIL `4   rms: 0.7257E+00   max: -.8130E+01   C at   52  2   RLX: 0.062` (relative difference 1.2e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to 0.0e0)
-- `uiuc_sd6080`: identical logs up to line 316, then `MRCHDU: Convergence failed at 105  side 2    Res =  0.7272E+02` vs XFOIL `MRCHDU: Convergence failed at 105  side 2    Res =  0.7273E+02` (relative difference 1.4e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to 1.4e-4)
+- `uiuc_sd6080`: identical logs up to line 327, then `a = -6.000      CL = -2.7501` vs XFOIL `a = -6.000      CL = -2.7494` (relative difference 2.5e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to 1.1e-4)
 - `uiuc_wb140`: identical logs up to line 191, then `16   rms: 0.2479E-05   max: -.2798E-04   T at   39  2` vs XFOIL `16   rms: 0.2479E-05   max: -.2799E-04   T at   39  2` (relative difference 3.6e-4; perturbing our Re by 1e-15..1e-11 changes this line by up to 3.6e-4)
 
 Maximum differences per case: forces (CL, CM absolute, CD relative), transition x/c, boundary layer at every station (x, Cp absolute; θ, δ* relative to the largest θ; Cf relative to 0.01; N relative to 10; √Cτ relative to 0.1).
@@ -43,12 +43,12 @@ Maximum differences per case: forces (CL, CM absolute, CD relative), transition 
 | naca_16_5207 | NACA 5207 (open TE, random draw) | 1e6 | 0.2 | 9 / 8 | free | 2 | 3.0e-14 | 3.5e-14 | 6.5e-11 | ok |
 | naca_17_2512_sharp | NACA 2512 (closed TE, random draw) | 6e6 | 0 | 11 | free | 11 | 3.8e-13 | 1.3e-12 | 3.6e-11 | ok |
 | naca_18_21015_sharp | NACA 21015 (closed TE, random draw) | 1e5 | 0 | 4 / 12 | free | 12 | 1.2e-13 | 1.4e-13 | 7.9e-11 | ok |
-| naca_19_24008 | NACA 24008 (open TE, random draw) | 3e5 | 0.1 | 11 | free | 0 | 0.0e0 | 0.0e0 | 0.0e0 | round-off divergence (log line 208) |
+| naca_19_24008 | NACA 24008 (open TE, random draw) | 3e5 | 0.1 | 11 | free | 0 | 0.0e0 | 0.0e0 | 0.0e0 | round-off divergence (log line 377) |
 | uiuc_ah81k144wfklappe | uiuc_ah81k144wfklappe of ../validation (random draw) | 3e5 | 0 | 11 | free | 3 | 4.9e-2 | 8.8e-3 | 1.1e0 | round-off divergence (log line 110) |
 | uiuc_bw3 | uiuc_bw3 of ../validation (random draw) | 1e7 | 0.4 | 7 | free | 0 | 0.0e0 | 0.0e0 | 0.0e0 | round-off divergence (log line 287) |
 | uiuc_clarym18 | uiuc_clarym18 of ../validation (random draw) | 2e5 | 0 | 6 / 12 | 0.05 / 0.1 | 11 | 2.3e-14 | 0.0e0 | 4.4e-11 | ok |
-| uiuc_e211 | uiuc_e211 of ../validation (random draw) | 2e5 | 0 | 9 | free | 9 | 1.2e-6 | 3.1e-7 | 5.7e-5 | round-off divergence (log line 113) |
-| uiuc_e342 | uiuc_e342 of ../validation (random draw) | 5e5 | 0 | 7 | free | 20 | 1.8e-6 | 1.3e-6 | 1.2e-3 | round-off divergence (log line 170) |
+| uiuc_e211 | uiuc_e211 of ../validation (random draw) | 2e5 | 0 | 9 | free | 9 | 1.2e-6 | 3.1e-7 | 5.7e-5 | round-off divergence (log line 137) |
+| uiuc_e342 | uiuc_e342 of ../validation (random draw) | 5e5 | 0 | 7 | free | 20 | 1.8e-6 | 1.3e-6 | 1.2e-3 | round-off divergence (log line 198) |
 | uiuc_e343 | uiuc_e343 of ../validation (random draw) | 3e5 | 0 | 9 | free | 2 | 1.9e-14 | 1.8e-14 | 3.4e-11 | ok |
 | uiuc_e748 | uiuc_e748 of ../validation (random draw) | 3e5 | 0.1 | 9 / 12 | free | 0 | 0.0e0 | 0.0e0 | 0.0e0 | round-off divergence (log line 263) |
 | uiuc_fx05191 | uiuc_fx05191 of ../validation (random draw) | 1e6 | 0 | 5 | 0.3 / 0.5 | 24 | 9.2e-13 | 7.4e-13 | 1.3e-10 | ok |
@@ -64,12 +64,12 @@ Maximum differences per case: forces (CL, CM absolute, CD relative), transition 
 | uiuc_goe795 | uiuc_goe795 of ../validation (random draw) | 5e5 | 0 | 9 / 10 | 0.1 / 0.8 | 12 | 2.3e-13 | 1.2e-13 | 1.1e-10 | ok |
 | uiuc_lwk80080 | uiuc_lwk80080 of ../validation (random draw) | 6e6 | 0 | 6 / 10 | 0.8 / 0.8 | 0 | 0.0e0 | 0.0e0 | 0.0e0 | round-off divergence (log line 69) |
 | uiuc_marsden | uiuc_marsden of ../validation (random draw) | 2e6 | 0.2 | 9 / 10 | free | 0 | 0.0e0 | 0.0e0 | 0.0e0 | ok |
-| uiuc_mrc16_95 | uiuc_mrc16_95 of ../validation (random draw) | 1e5 | 0.3 | 9 / 8 | free | 20 | 9.3e-6 | 4.8e-6 | 2.1e-4 | round-off divergence (log line 1308) |
+| uiuc_mrc16_95 | uiuc_mrc16_95 of ../validation (random draw) | 1e5 | 0.3 | 9 / 8 | free | 20 | 9.3e-6 | 4.8e-6 | 2.1e-4 | round-off divergence (log line 1351) |
 | uiuc_n6h15 | uiuc_n6h15 of ../validation (random draw) | 5e5 | 0.3 | 5 | 0.1 / 0.3 | 10 | 4.2e-12 | 4.8e-13 | 4.1e-10 | ok |
-| uiuc_naca001034a08cli0_2 | uiuc_naca001034a08cli0_2 of ../validation (random draw) | 3e5 | 0 | 4 / 12 | free | 0 | 0.0e0 | 0.0e0 | 0.0e0 | round-off divergence (log line 162) |
+| uiuc_naca001034a08cli0_2 | uiuc_naca001034a08cli0_2 of ../validation (random draw) | 3e5 | 0 | 4 / 12 | free | 0 | 0.0e0 | 0.0e0 | 0.0e0 | round-off divergence (log line 206) |
 | uiuc_naca1410 | uiuc_naca1410 of ../validation (random draw) | 6e6 | 0.1 | 4 / 10 | free | 0 | 0.0e0 | 0.0e0 | 0.0e0 | round-off divergence (log line 233) |
 | uiuc_sc20412 | uiuc_sc20412 of ../validation (random draw) | 3e6 | 0.3 | 6 / 12 | free | 9 | 5.0e-10 | 1.5e-8 | 1.0e-7 | ok |
-| uiuc_sd6080 | uiuc_sd6080 of ../validation (random draw) | 5e5 | 0 | 5 | free | 10 | 2.6e-6 | 3.6e-5 | 5.3e-4 | round-off divergence (log line 316) |
+| uiuc_sd6080 | uiuc_sd6080 of ../validation (random draw) | 5e5 | 0 | 5 | free | 10 | 2.6e-6 | 3.6e-5 | 5.3e-4 | round-off divergence (log line 327) |
 | uiuc_tempest2 | uiuc_tempest2 of ../validation (random draw) | 1e7 | 0 | 11 | free | 11 | 1.9e-11 | 8.7e-10 | 1.4e-8 | ok |
 | uiuc_usa35a | uiuc_usa35a of ../validation (random draw) | 2e6 | 0 | 9 | free | 9 | 2.4e-13 | 1.5e-12 | 3.0e-11 | ok |
 | uiuc_wb140 | uiuc_wb140 of ../validation (random draw) | 2e5 | 0 | 9 / 10 | 0.8 / 1 | 23 | 3.4e-7 | 1.6e-5 | 1.9e-4 | round-off divergence (log line 191) |
