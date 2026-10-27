@@ -240,8 +240,10 @@ separation bubbles, also at prescribed CL), at Reynolds numbers from 2·10⁵ to
   cycle iteration by iteration;
 - forces, transition points and x, Cp, θ, δ*, Cf and N or √Cτ at every
   boundary-layer station agree with XFOIL's full-precision dump files to
-  10⁻¹⁰ on most points (10⁻⁵ at worst, on a point that needs all its Newton
-  iterations);
+  10⁻¹⁰ on most points; points that need all their Newton iterations differ
+  more (up to 4·10⁻⁴ on Cf at the transition point, depending on the
+  platform's math library), as much as our own results move when the
+  Reynolds number is perturbed by 10⁻¹⁵;
 - XFOIL's console output — the rms change of every Newton iteration, the
   transition points, the marching failures — is reproduced line by line: 15
   of the 20 sessions are identical over their whole length (thousands of

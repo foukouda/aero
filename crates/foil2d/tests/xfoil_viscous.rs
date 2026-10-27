@@ -24,8 +24,9 @@ use common::viscous::{
 /// Cases whose Newton iterations go through chaotic phases: which points
 /// converge depends on last-bit differences (perturbing our own Reynolds
 /// number by 1e-15 already changes it; see `tests/viscous/README.md`). They
-/// are accepted when the console logs are identical to XFOIL's up to a
-/// round-off divergence explained by our own sensitivity.
+/// are judged by their console logs alone, identical to XFOIL's up to a
+/// round-off divergence explained by our own sensitivity, whether or not
+/// they then converge the same points (which depends on the platform).
 const CHAOTIC: [&str; 1] = ["sd7037_cl"];
 
 #[test]
@@ -36,18 +37,26 @@ fn viscous_cases_match_xfoil() {
     let mut failures = Vec::new();
     for case in &cases {
         let (stats, f) = check_viscous_case(case);
-        if !f.is_empty() && CHAOTIC.contains(&case.name.as_str()) {
+        if CHAOTIC.contains(&case.name.as_str()) {
             for run in case.viscous_runs() {
                 let log = compare_logs(case, &run);
                 assert!(
-                    matches!(log, LogComparison::RoundOff { .. }),
+                    matches!(
+                        log,
+                        LogComparison::Identical { .. } | LogComparison::RoundOff { .. }
+                    ),
                     "{} {}: {log:?}",
                     case.name,
                     run.name
                 );
             }
+            let outcome = if f.is_empty() {
+                "the same points converge"
+            } else {
+                "the converged points differ"
+            };
             println!(
-                "{:16} chaotic: the converged points differ after a round-off divergence",
+                "{:16} chaotic: {outcome} after a round-off divergence",
                 case.name
             );
             continue;

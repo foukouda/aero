@@ -387,10 +387,14 @@ pub fn compare_viscous(s: &ViscousSolution, d: &DumpPoint, tag: &str, stats: &mu
 /// Largest accepted differences with the dump files (scaled as described
 /// in `ViscousStats`): forces, transition x/c, boundary layer. Most points
 /// agree with XFOIL to 1e-10 or better. Round-off differences (which also
-/// differ between debug and release builds) grow on points that need all
-/// their Newton iterations, and Cf right at the transition point follows the
-/// tiny shifts of the transition location.
-pub const TOLERANCES: [f64; 3] = [1.0e-6, 1.0e-5, 2.0e-4];
+/// differ between debug and release builds and between the math libraries
+/// of Windows, Linux and macOS) grow on points that need all their Newton
+/// iterations, and Cf right at the transition point follows the tiny shifts
+/// of the transition location. Perturbing our own Reynolds number by 1e-15
+/// or 1e-14 moves the polars of the non-chaotic cases from XFOIL's by up to
+/// 8.2e-6 (CD of NACA 0012 at 14°), 1.0e-6 (transition) and 3.7e-4 (Cf):
+/// the bounds are these sensitivities with a margin.
+pub const TOLERANCES: [f64; 3] = [2.0e-5, 1.0e-5, 1.0e-3];
 
 /// Half a unit of the last printed digit, plus round-off.
 const PRINTED_4: f64 = 5.1e-5;

@@ -34,7 +34,9 @@ changes the number of converged points of the polar (15 unperturbed; 12, 14
 and 13 at +10⁻¹⁵, −10⁻¹⁵ and +10⁻¹⁴; 2 at +10⁻¹², where the sweep stops after
 four failures); XFOIL converges 14, all of them among ours. The test accepts
 it only because the console logs are identical to XFOIL's up to a round-off
-divergence (line 390, an iteration still far from convergence), and
+divergence (line 390, an iteration still far from convergence), and judges
+it by these logs alone even where the math library of the platform leads it
+to the same 14 points as XFOIL (macOS);
 `chaotic_cases_are_sensitive_to_round_off` checks the sensitivity itself.
 At such Reynolds numbers a single unconverged point of a polar says little
 about the airfoil.
