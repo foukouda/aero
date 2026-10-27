@@ -38,10 +38,9 @@ the application):
 
 Up to about 7° the drag is within 10 % at Re = 200 000; the largest drag
 differences are at the onset of stall. The maximum lift is over-predicted by
-about 10 %, which is why the wing estimate of `aero-mission` takes 90 % of
-the airfoil's maximum lift by default.
+about 10 %.
 
 At 60 000 the report shows hysteresis (table B1, runs 31 and 32): with
 decreasing angle the lift drops from 0.985 to 0.672 between 6.48° and 6.44°
 when the laminar separation bubble bursts. Predictions at such Reynolds
-numbers are less reliable, and the application says so.
+numbers are less reliable.
